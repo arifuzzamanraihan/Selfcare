@@ -163,7 +163,7 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
     }
     $h .= $field('reference', 'Your reference', 'text', [], old('reference', (string) ($pre['reference'] ?? ''))) . $field('note', 'Note (printed)', 'text', [], old('note'), true) . '</div>';
     $h .= '<div class="d-totals"><div><span>Subtotal</span><b data-out="sub">0.00</b></div>' . (!empty($cfg['discount']) ? '<div><span>Discount</span><b data-out="disc">0.00</b></div>' : '') . (!empty($cfg['tax']) ? '<div><span>Tax</span><b data-out="tax">0.00</b></div>' : '') . '<div class="big"><span>Total</span><b data-out="total">0.00</b></div>' . ($kind === 'invoice' ? '<div><span>Balance due</span><b data-out="due">0.00</b></div>' : '') . '</div>';
-    $h .= '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save and open ' . e(strtolower((string) $cfg['label'])) . '</button><a class="d-btn d-btn-soft" href="' . e(url('portal/billing')) . '">Cancel</a></div></form>';
+    $h .= '<div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/billing')) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">Save and open ' . e(strtolower((string) $cfg['label'])) . '</button></div></form>';
     clear_old();
     $dash($p, 'billing', 'New ' . strtolower((string) $cfg['label']), $card('', $h), ['sub' => 'Number: ' . $billing->prefix($p->tenantId, $type) . '(next free number). You can change the prefix under Bills and legal details.']);
 };
@@ -236,9 +236,9 @@ $app->router->get('/portal/billing/{id}', static function (array $a) use ($app, 
     $extra = '';
     if ($p->writable() && $inv['status'] !== 'void') {
         if ($cfg['kind'] === 'invoice' && (float) $inv['balance'] > 0) {
-            $extra .= $card('Record a payment (due ' . Billing::fmt((float) $inv['balance'], (string) $inv['currency']) . ')', '<form class="d-form" method="post" action="' . e(url('portal/billing/' . $inv['id'] . '/pay')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'required' => true], (string) $inv['balance']) . Crud::field('method', ['label' => 'Method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], 'Cash') . Crud::field('reference', ['label' => 'Reference', 'max' => 120], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save payment</button></div></form>');
+            $extra .= $card('Record a payment (due ' . Billing::fmt((float) $inv['balance'], (string) $inv['currency']) . ')', '<form class="d-form" method="post" action="' . e(url('portal/billing/' . $inv['id'] . '/pay')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'required' => true], (string) $inv['balance']) . Crud::field('method', ['label' => 'Method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], 'Cash') . Crud::field('reference', ['label' => 'Reference', 'max' => 120], '') . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/documents')) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">Save payment</button></div></form>');
         }
-        $extra .= $card('Cancel this document', '<form class="d-form" method="post" action="' . e(url('portal/billing/' . $inv['id'] . '/void')) . '" data-confirm="Cancel (void) this document? Stock is put back and it stays in the list as VOID.">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reason', 'required' => true, 'max' => 200], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Void document</button></div></form>');
+        $extra .= $card('Cancel this document', '<form class="d-form" method="post" action="' . e(url('portal/billing/' . $inv['id'] . '/void')) . '" data-confirm="Cancel (void) this document? Stock is put back and it stays in the list as VOID.">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reason', 'required' => true, 'max' => 200], '') . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-danger" type="submit">Void document</button></div></form>');
     }
     $dash($p, 'billing', (string) $inv['invoice_no'], $bar . Documents::html($billing->invoiceModel($app, $inv, $p->user)) . $extra);
 });
@@ -348,7 +348,7 @@ $app->router->get('/portal/documents/{type}/new', static function (array $a) use
     $type = (string) $a['type'];
     $h = '<form class="d-form" method="post" action="' . e(url('portal/documents/' . $type . '/save')) . '" autocomplete="off">' . csrf_field() . '<div class="d-form-grid">'
         . $field('party_name', (string) $form['party'] . ' name', 'text', [], old('party_name')) . $field('party_phone', 'Phone', 'tel', [], old('party_phone')) . $field('doc_date', 'Date', 'date', [], old('doc_date', date('Y-m-d'))) . $field('patient_ref', 'Patient ID / file no', 'text', [], old('patient_ref')) . '</div>'
-        . $formInputs($p, $type, $form, []) . '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save and open</button><a class="d-btn d-btn-soft" href="' . e(url('portal/documents')) . '">Cancel</a></div></form>';
+        . $formInputs($p, $type, $form, []) . '<div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save and open</button></div></form>';
     clear_old();
     $dash($p, 'documents', (string) $form['label'], $card('', $h), ['sub' => 'Fill in what applies. Empty fields stay blank on the printout.']);
 });
@@ -516,7 +516,7 @@ $app->router->get('/portal/settings', static function () use ($app, $dash, $card
     foreach ($invCatalog($p) + $billing->catalog((string) $p->type['slug'], $p->family)['forms'] as $k => $c) {
         $h .= Crud::field('prefix_' . $k, ['label' => (string) $c['label'], 'max' => 12], $billing->prefix($t, $k));
     }
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save</button></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/stock')) . '">Back</a><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save</button></div></form>';
     $dash($p, 'settings', 'Bills and legal details', $card('', $h));
 });
 $app->router->post('/portal/settings', static function () use ($app, $billing, $invCatalog, $back, $cur): void {
@@ -635,7 +635,7 @@ $app->router->get('/portal/stock/{id}/adjust', $stockPage(static function (Porta
         . Crud::field('change', ['label' => 'Add or remove', 'type' => 'number', 'step' => '0.01', 'required' => true, 'help' => 'Use a minus sign to take stock out, for example -5.'], old('change', ''))
         . Crud::field('reason', ['label' => 'Reason', 'type' => 'select', 'options' => $stockReasons, 'required' => true], old('reason', 'received'))
         . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], old('note', ''))
-        . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e(url('portal/stock')) . '">Back</a></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
     clear_old();
     $dash($p, 'stock', 'Adjust stock', $card('', $f), ['sub' => 'The change is written to the stock movements list.']);
 }));

@@ -61,7 +61,7 @@ $app->router->get('/admin/role-templates', static function () use ($app, $tplAdm
     }
     $h .= '</tbody></table></div>';
     $out = $card($type['name'] . ': roles', $h);
-    $new = '<form class="d-form" method="post" action="' . e(url('admin/role-templates/new')) . '">' . csrf_field() . '<input type="hidden" name="type" value="' . e($slug) . '"><div class="d-grid2"><div class="d-field"><label for="tn">Role name</label><input id="tn" name="name" maxlength="40" required placeholder="e.g. Cashier"></div><div class="d-field"><label for="td">What is it for?</label><input id="td" name="description" maxlength="250"></div></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Add role to this template</button></div></form>';
+    $new = '<form class="d-form" method="post" action="' . e(url('admin/role-templates/new')) . '">' . csrf_field() . '<input type="hidden" name="type" value="' . e($slug) . '"><div class="d-grid2"><div class="d-field"><label for="tn">Role name</label><input id="tn" name="name" maxlength="40" required placeholder="e.g. Cashier"></div><div class="d-field"><label for="td">What is it for?</label><input id="td" name="description" maxlength="250"></div></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Add role to this template</button></div></form>';
     $out .= $card('Add a role that every new ' . $type['name'] . ' vendor gets', $new);
     if ($sel !== '' && !$a->full($sel)) {
         $t = $a->templateFor($slug, $fam, $sel);
@@ -73,8 +73,8 @@ $app->router->get('/admin/role-templates', static function () use ($app, $tplAdm
             $m .= '<div class="d-field"><label for="td2">What is it for?</label><input id="td2" name="description" maxlength="250" value="' . e((string) ($customT[$sel]['description'] ?? '')) . '"></div>';
         }
         $m .= RoleUi::grid($a, $shown, $t['perms'], $t['actions'], static fn () => null, static fn () => false);
-        $m .= '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save template</button></div></form>';
-        $m .= '<div class="d-form-actions"><form class="d-inline" method="post" action="' . e(url('admin/role-templates/' . ($isC ? 'delete' : 'reset'))) . '" data-confirm="' . ($isC ? 'Remove this role from the template? Vendors that already have it keep it.' : 'Go back to the built-in setting for this role?') . '">' . csrf_field() . '<input type="hidden" name="type" value="' . e($slug) . '"><input type="hidden" name="role" value="' . e($sel) . '"><button class="d-btn" type="submit">' . ($isC ? 'Remove from template' : 'Reset to built-in') . '</button></form></div>';
+        $m .= '<div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save template</button></div></form>';
+        $m .= '<div class="d-form-actions d-form-actions-sticky"><form class="d-inline" method="post" action="' . e(url('admin/role-templates/' . ($isC ? 'delete' : 'reset'))) . '" data-confirm="' . ($isC ? 'Remove this role from the template? Vendors that already have it keep it.' : 'Go back to the built-in setting for this role?') . '">' . csrf_field() . '<input type="hidden" name="type" value="' . e($slug) . '"><input type="hidden" name="role" value="' . e($sel) . '"><button class="d-btn" type="submit">' . ($isC ? 'Remove from template' : 'Reset to built-in') . '</button></form></div>';
         $out .= '<div id="matrix">' . $card('Template of "' . e($a->roleLabel($sel, $fam)) . '" for ' . e((string) $type['name']), $m) . '</div>';
     }
     $n = (int) $app->db->val("SELECT COUNT(*) FROM sc_vendors WHERE type_slug = ? AND deleted_at IS NULL", [$slug]);

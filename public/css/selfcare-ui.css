@@ -109,3 +109,20 @@ html:not(.js) .rv{opacity:1;transform:none}
 
 /* Public site header: collapse to the menu button earlier so long menus never overflow tablets */
 @media (max-width:1000px){.sc-burger{display:block}.sc-nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;align-items:stretch;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px 18px;margin:0;max-height:calc(100dvh - 70px);overflow-y:auto}.sc-nav.is-open{display:flex}.sc-theme{align-self:flex-start}}
+
+
+/* ---- UI/UX pass: public and vendor header CTAs, touch targets, register footer ---- */
+.sc-head-in{position:relative}
+.sc-btn-soft{background:var(--bg2);color:var(--ink)}
+.sc-btn,.sc-btn-sm,.sc-btn-lg{min-height:44px;box-sizing:border-box}
+.sc-burger,.sc-theme{min-height:44px;min-width:44px;box-sizing:border-box}
+.sc-nav-cta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:4px}
+.sc-nav-cta .sc-btn-primary ~ .sc-btn-primary{background:var(--bg2);border-color:var(--line);color:var(--ink)}
+.sc-nav-cta .sc-btn-primary ~ .sc-btn-primary::after{display:none}
+html{scroll-padding-bottom:96px}
+.sc-form-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px;position:sticky;bottom:0;z-index:10;background:var(--bg);border-top:1px solid var(--line);padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 16px color-mix(in srgb,var(--bg) 80%,transparent)}
+.sc-form-actions .sc-btn-primary{margin-left:auto}
+@media (max-width:1000px){
+  .sc-nav-cta{flex-direction:column;align-items:stretch;margin:8px 0 0}
+  .sc-nav-cta .sc-btn{width:100%}
+}

@@ -85,7 +85,8 @@ final class Listing
             $h .= '<label class="d-search">' . icon('search', 18) . '<input type="search" name="q" value="' . e($q) . '" placeholder="' . e((string) ($c['search_hint'] ?? 'Search')) . '" aria-label="Search"></label>';
         }
         foreach ($c['filters'] ?? [] as $name => $f) {
-            $h .= '<label class="d-filter"><span>' . e($f['label']) . '</span><select name="f_' . e($name) . '" data-autosubmit><option value="">All</option>';
+            $search = count($f['options'] ?? []) > 12 ? ' data-searchable' : '';
+            $h .= '<label class="d-filter"><span>' . e($f['label']) . '</span><select name="f_' . e($name) . '" data-autosubmit' . $search . ' aria-label="' . e($f['label']) . '"><option value="">All</option>';
             foreach ($f['options'] as $v => $lab) {
                 $h .= '<option value="' . e((string) $v) . '"' . (($activeFilters[$name] ?? '') === (string) $v ? ' selected' : '') . '>' . e((string) $lab) . '</option>';
             }
@@ -134,17 +135,32 @@ final class Listing
             }
             if (!empty($c['actions'])) {
                 $h .= '<td class="d-actions" data-label="Actions">';
+                $vis = [];
                 foreach ($c['actions'] as $a) {
                     if (isset($a['if']) && !$a['if']($row)) {
                         continue;
                     }
+                    $vis[] = $a;
+                }
+                $draw = static function (array $a, array $row): string {
                     $url = (string) $a['url']($row);
                     $cls = 'd-act' . (!empty($a['danger']) ? ' is-danger' : '');
                     if (($a['method'] ?? 'get') === 'post') {
-                        $h .= '<form method="post" action="' . e($url) . '" class="d-inline"' . (!empty($a['confirm']) ? ' data-confirm="' . e($a['confirm']) . '"' : '') . '>' . csrf_field() . '<button class="' . $cls . '" type="submit" title="' . e($a['label']) . '">' . icon($a['icon'] ?? 'check', 16) . '<span>' . e($a['label']) . '</span></button></form>';
-                    } else {
-                        $h .= '<a class="' . $cls . '" href="' . e($url) . '" title="' . e($a['label']) . '">' . icon($a['icon'] ?? 'eye', 16) . '<span>' . e($a['label']) . '</span></a>';
+                        return '<form method="post" action="' . e($url) . '" class="d-inline"' . (!empty($a['confirm']) ? ' data-confirm="' . e($a['confirm']) . '"' : '') . '>' . csrf_field() . '<button class="' . $cls . '" type="submit" title="' . e($a['label']) . '">' . icon($a['icon'] ?? 'check', 16) . '<span>' . e($a['label']) . '</span></button></form>';
                     }
+                    return '<a class="' . $cls . '" href="' . e($url) . '" title="' . e($a['label']) . '">' . icon($a['icon'] ?? 'eye', 16) . '<span>' . e($a['label']) . '</span></a>';
+                };
+                if (count($vis) <= 2) {
+                    foreach ($vis as $a) {
+                        $h .= $draw($a, $row);
+                    }
+                } else {
+                    $h .= $draw($vis[0], $row);
+                    $h .= '<div class="d-more"><button type="button" class="d-act d-more-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">' . icon('more', 16) . '</button><div class="d-more-menu" hidden>';
+                    foreach (array_slice($vis, 1) as $a) {
+                        $h .= $draw($a, $row);
+                    }
+                    $h .= '</div></div>';
                 }
                 $h .= '</td>';
             }

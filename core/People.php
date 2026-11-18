@@ -143,7 +143,7 @@ final class People
             }
             $h .= '</div></fieldset>';
         }
-        $h .= '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">' . ($id ? 'Save changes' : 'Add') . '</button><a class="d-btn d-btn-soft" href="' . e(url('portal/' . $kind)) . '">Cancel</a></div></form>';
+        $h .= '<div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/' . $kind)) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">' . ($id ? 'Save changes' : 'Add') . '</button></div></form>';
         clear_old();
         return $h;
     }
@@ -454,7 +454,7 @@ final class People
         return '<div class="d-alert is-danger"><b>Delete ' . e($name) . '?</b><p style="margin:6px 0 0">They are hidden from every list and cannot sign in. Nothing is erased and you can restore them later from the list, State = Deleted.</p></div>'
             . '<form class="d-form" method="post" action="' . e(url('portal/' . $kind . '/' . $id . '/delete')) . '" autocomplete="off">' . csrf_field() . '<div class="d-form-grid">'
             . Crud::field('confirm', ['label' => 'Type their email ' . $row['email'] . ' to confirm', 'required' => true, 'max' => 191, 'wide' => true], '')
-            . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Delete</button><a class="d-btn d-btn-soft" href="' . e(url('portal/' . $kind . '/' . $id . '/view')) . '">Keep</a></div></form>';
+            . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/' . $kind . '/' . $id . '/view')) . '">Keep</a><button class="d-btn d-btn-danger" type="submit">Delete</button></div></form>';
     }
 
     public function softDelete(string $kind, int $id, string $confirm): ?string

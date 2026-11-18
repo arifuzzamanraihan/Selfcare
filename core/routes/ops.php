@@ -302,7 +302,7 @@ $formPage = static function (Portal $p, array $m, string $key, ?array $row) use 
         }
         $f .= Crud::field($n, $fs, old($n, $cur));
     }
-    $f .= '</div><div class="d-form-actions">' . ($p->writable() ? '<button class="d-btn d-btn-primary" type="submit">Save</button>' : '') . '<a class="d-btn d-btn-soft" href="' . e(Ops::url($m['_key'])) . '">Back</a></div></form>';
+    $f .= '</div><div class="d-form-actions d-form-actions-sticky">' . ($p->writable() ? '<button class="d-btn d-btn-primary" type="submit">Save</button>' : '') . '<a class="d-btn d-btn-soft" href="' . e(Ops::url($m['_key'])) . '">Back</a></div></form>';
     clear_old();
     $h .= $card($id ? 'Details' : 'New ' . $m['singular'], $f);
     if ($row) {
@@ -520,7 +520,7 @@ $flowForm = static function (array $a) use ($app, $boot, $load, $dash, $card, $f
         $cur = $n === 'notes' ? '' : (string) ($row[$n] ?? ($fs['default'] ?? ''));
         $h .= Crud::field($n, $fs, old($n, $cur));
     }
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">' . e($f[0]) . '</button><a class="d-btn d-btn-soft" href="' . e(Ops::url($key, (string) $row['id'])) . '">Back</a></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(Ops::url($key, (string) $row['id'])) . '">Back</a><button class="d-btn d-btn-primary" type="submit">' . e($f[0]) . '</button></div></form>';
     clear_old();
     $dash($p, 'ops-' . $key, $f[0] . ': ' . ($row['code'] ?: $row['title']), $card('', $h), ['sub' => (string) $row['title']]);
 };

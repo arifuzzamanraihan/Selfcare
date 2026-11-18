@@ -147,7 +147,7 @@ $formHtml = static function (Portal $p, array $cfg, ?array $row, array $items, a
     if ($hits) {
         $h .= '<div class="d-alert is-danger" style="margin-top:14px"><b>Check before you issue:</b><ul style="margin:6px 0 0 18px">' . implode('', array_map(static fn ($x) => '<li>' . e($x) . '</li>', $hits)) . '</ul><label class="d-check" style="margin-top:8px"><input type="checkbox" name="ack_allergy" value="1"><span>I have checked the allergy warning and want to issue this prescription.</span></label></div>';
     }
-    $h .= '<div class="d-form-actions"><button class="d-btn d-btn-soft" type="submit" name="action" value="draft">Save draft</button><button class="d-btn d-btn-primary" type="submit" name="action" value="issue">Save and issue</button><a class="d-btn d-btn-soft" href="' . e(url('portal/prescriptions')) . '">Cancel</a></div></form>';
+    $h .= '<div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/prescriptions')) . '">Cancel</a><button class="d-btn d-btn-soft" type="submit" name="action" value="draft">Save draft</button><button class="d-btn d-btn-primary" type="submit" name="action" value="issue">Save and issue</button></div></form>';
     return $h;
 };
 
@@ -537,7 +537,7 @@ $app->router->get('/portal/prescriptions/{id}', static function (array $a) use (
     $info = '<p class="d-help">' . $badge((string) $r['status']) . ' Written ' . e(dt((string) $r['created_at'], 'd M Y H:i')) . ($r['issued_at'] ? ' · issued ' . e(dt((string) $r['issued_at'], 'd M Y H:i')) : '') . ($r['parent_id'] ? ' · copied from <a href="' . e(url('portal/prescriptions/' . $r['parent_id'])) . '">an earlier prescription</a>' : '') . '</p>';
     $extra = '';
     if ($w && $r['status'] === 'issued') {
-        $extra = $card('Cancel this prescription', '<form class="d-form" method="post" action="' . e(url('portal/prescriptions/' . $r['id'] . '/cancel')) . '" data-confirm="Cancel this prescription? It stays in the register.">' . csrf_field() . '<div class="d-field"><label for="f_reason">Reason</label><input id="f_reason" name="reason" maxlength="240" required></div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Cancel prescription</button></div></form>');
+        $extra = $card('Cancel this prescription', '<form class="d-form" method="post" action="' . e(url('portal/prescriptions/' . $r['id'] . '/cancel')) . '" data-confirm="Cancel this prescription? It stays in the register.">' . csrf_field() . '<div class="d-field"><label for="f_reason">Reason</label><input id="f_reason" name="reason" maxlength="240" required></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-danger" type="submit">Cancel prescription</button></div></form>');
     }
     $page($p, (string) $r['rx_no'], $bar . $alerts . $info . Documents::html($modelFor($p, $cfg, $r)) . $extra);
 });

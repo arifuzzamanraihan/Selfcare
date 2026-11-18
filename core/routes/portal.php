@@ -189,7 +189,7 @@ $app->router->get('/portal/requests/new', static function () use ($app, $dash, $
     foreach ($reqFields() as $n => $f) {
         $h .= Crud::field($n, $f, old($n, (string) ($f['default'] ?? '')));
     }
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e(url('portal/requests')) . '">Cancel</a></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/requests')) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
     clear_old();
     $dash($p, 'requests', 'Add ' . rtrim(strtolower($p->label('requests', 'request')), 's'), $card('', $h), ['sub' => 'For people who phone or walk in. It joins the same list as website requests.']);
 });
@@ -245,7 +245,7 @@ $app->router->get('/portal/requests/{id}', static function (array $a) use ($app,
     }
     $h = '<div class="d-grid d-g2">' . $card('Request #' . $id, $dl . ($acts ? '<p style="margin-top:14px">' . $acts . '</p>' : ''));
     if ($w && $r['status'] === 'new') {
-        $h .= $card('Reject with a reason', '<p class="d-help">The reason is saved and emailed to ' . e($r['name']) . ' when they gave an email.</p><form class="d-form" method="post" action="' . e(url('portal/requests/' . $id . '/reject')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reason', 'type' => 'textarea', 'required' => true, 'max' => 240, 'rows' => 3], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Reject</button></div></form>');
+        $h .= $card('Reject with a reason', '<p class="d-help">The reason is saved and emailed to ' . e($r['name']) . ' when they gave an email.</p><form class="d-form" method="post" action="' . e(url('portal/requests/' . $id . '/reject')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reason', 'type' => 'textarea', 'required' => true, 'max' => 240, 'rows' => 3], '') . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" target="_blank" rel="noopener" href="' . e($app->tenant->siteUrl((string) $p->vendor['slug'])) . '">View my website</a><button class="d-btn d-btn-danger" type="submit">Reject</button></div></form>');
     }
     $h .= '</div>';
     $dash($p, 'requests', 'Request from ' . $r['name'], $h, ['actions' => $btn('Back to the list', url('portal/requests'), 'd-btn-soft')]);
@@ -404,7 +404,7 @@ $app->router->get('/portal/website', static function () use ($app, $dash, $card,
     foreach (['sat' => 'Saturday', 'sun' => 'Sunday', 'mon' => 'Monday', 'tue' => 'Tuesday', 'wed' => 'Wednesday', 'thu' => 'Thursday', 'fri' => 'Friday'] as $k => $lab) {
         $h .= Crud::field('hours_' . $k, ['label' => $lab, 'max' => 60, 'placeholder' => '09:00 - 17:00'], old('hours_' . $k, $app->site->get($t, 'hours_' . $k)));
     }
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save changes</button><a class="d-btn d-btn-soft" target="_blank" rel="noopener" href="' . e($app->tenant->siteUrl((string) $p->vendor['slug'])) . '">View my website</a></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save changes</button></div></form>';
     clear_old();
     $dash($p, 'website', 'Profile and hours', $card('', $h), ['sub' => 'What visitors see at the top of your website.']);
 });
@@ -662,7 +662,7 @@ $app->router->get('/portal/access', static function () use ($app, $dash, $card, 
                 $copy .= '<option value="' . e($r) . '">' . e($a->roleLabel($r, $p->family)) . '</option>';
             }
         }
-        $n = '<form class="d-form" method="post" action="' . e(url('portal/access/new')) . '">' . csrf_field() . '<div class="d-grid2"><div class="d-field"><label for="nr_name">Role name</label><input id="nr_name" name="name" maxlength="40" required placeholder="e.g. Cashier, Ward clerk, Night supervisor"></div><div class="d-field"><label for="nr_copy">Start from</label><select id="nr_copy" name="copy">' . $copy . '</select></div></div><div class="d-field"><label for="nr_desc">What is this role for? (optional)</label><input id="nr_desc" name="description" maxlength="250"></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Create role</button></div><p class="d-help">You then choose its modules and what it can do on the next screen. A new role never gets more than you have yourself.</p></form>';
+        $n = '<form class="d-form" method="post" action="' . e(url('portal/access/new')) . '">' . csrf_field() . '<div class="d-grid2"><div class="d-field"><label for="nr_name">Role name</label><input id="nr_name" name="name" maxlength="40" required placeholder="e.g. Cashier, Ward clerk, Night supervisor"></div><div class="d-field"><label for="nr_copy">Start from</label><select id="nr_copy" name="copy">' . $copy . '</select></div></div><div class="d-field"><label for="nr_desc">What is this role for? (optional)</label><input id="nr_desc" name="description" maxlength="250"></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Create role</button></div><p class="d-help">You then choose its modules and what it can do on the next screen. A new role never gets more than you have yourself.</p></form>';
         $out .= $card('Make a new role', $n);
     }
     if ($sel !== '' && !$a->full($sel)) {
@@ -675,7 +675,7 @@ $app->router->get('/portal/access', static function () use ($app, $dash, $card, 
         }
         $extra = array_values(array_diff($cur, $shown));
         $m .= RoleUi::grid($a, array_merge($shown, $extra), $cur, $a->actionMap($t, $sel, $p->family), $viewLock, $actLock);
-        $m .= '<div class="d-field" style="margin-top:14px"><label for="reason">Why are you changing this? (kept in the log)</label><input id="reason" name="reason" maxlength="250"></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save role</button></div></form>';
+        $m .= '<div class="d-field" style="margin-top:14px"><label for="reason">Why are you changing this? (kept in the log)</label><input id="reason" name="reason" maxlength="250"></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save role</button></div></form>';
         $out .= '<div id="matrix">' . $card('What "' . e($isCustom ? $sel : $a->roleLabel($sel, $p->family)) . '" can do', $m) . '</div>';
     }
     $log = $app->db->all('SELECT l.*, u.first_name, u.last_name FROM permission_change_log l LEFT JOIN users u ON u.id = l.actor_id WHERE l.tenant_id = ? ORDER BY l.id DESC LIMIT 15', [$t]);
@@ -825,7 +825,7 @@ $app->router->get('/portal/account', static function () use ($app, $dash, $card)
         . '</div><h3 style="margin-top:24px">Change password</h3><div class="d-form-grid">'
         . Crud::field('current', ['label' => 'Current password', 'type' => 'password', 'autocomplete' => 'current-password'], '')
         . Crud::field('password', ['label' => 'New password', 'type' => 'password', 'autocomplete' => 'new-password', 'help' => 'At least 8 characters. Leave empty to keep your password.'], '')
-        . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
     clear_old();
     $dash($p, 'account', 'My account', $card('', $h));
 });

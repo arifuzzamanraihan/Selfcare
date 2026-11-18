@@ -20,8 +20,11 @@ $app = \Selfcare\app(); $pick = old('type', $pick); ?>
       <label>Password <small>at least 8 characters</small><input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
       <label>Repeat the password<input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
     </div>
-    <button class="sc-btn sc-btn-primary sc-btn-lg" type="submit">Create my account</button>
     <p class="d-mute" style="font-size:.85rem;margin:0">By registering you agree to the <a href="<?= e($app->tenant->mainUrl('terms')) ?>">terms</a> and <a href="<?= e($app->tenant->mainUrl('privacy')) ?>">privacy policy</a>.</p>
+    <div class="sc-form-actions">
+      <a class="sc-btn sc-btn-soft" href="<?= e($app->tenant->mainUrl('')) ?>">Cancel</a>
+      <button class="sc-btn sc-btn-primary" type="submit">Create my account</button>
+    </div>
   </form>
 </div></section>
 <?php \Selfcare\clear_old(); ?>

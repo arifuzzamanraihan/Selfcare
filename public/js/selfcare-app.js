@@ -78,6 +78,81 @@
     f.addEventListener('submit', function (e) { if (f._ok) return; e.preventDefault(); ask(f.getAttribute('data-confirm'), function () { f._ok = true; f.submit(); }); });
   });
   $$('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+
+  // overflow menu: first row action stays visible, the rest open from the kebab
+  function closeMenus(keep) {
+    $$('.d-more').forEach(function (m) {
+      if (m === keep) return;
+      var menu = m.querySelector('.d-more-menu');
+      var b = m.querySelector('.d-more-btn');
+      if (menu) menu.hidden = true;
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function placeMenu(btn, menu) {
+    var r = btn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = Math.round(r.bottom + 4) + 'px';
+    menu.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    menu.style.left = 'auto';
+    menu.style.zIndex = '200';
+  }
+  d.addEventListener('click', function (e) {
+    var btn = e.target.closest('.d-more-btn');
+    if (btn) {
+      e.preventDefault();
+      var wrap = btn.closest('.d-more');
+      var menu = wrap && wrap.querySelector('.d-more-menu');
+      if (!menu) return;
+      var open = menu.hidden;
+      closeMenus(wrap);
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) placeMenu(btn, menu);
+      return;
+    }
+    closeMenus();
+  });
+  d.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
+  window.addEventListener('resize', function () { closeMenus(); });
+
+  // long lists: a search box filters the options without losing the current value
+  $$('select[data-searchable]').forEach(function (sel) {
+    if (sel.dataset.searchReady) return;
+    sel.dataset.searchReady = '1';
+    var wrap = d.createElement('div');
+    wrap.className = 'd-combo';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    var q = d.createElement('input');
+    q.type = 'search';
+    q.className = 'd-combo-q';
+    q.setAttribute('aria-label', 'Search this list');
+    q.placeholder = 'Search…';
+    q.autocomplete = 'off';
+    wrap.insertBefore(q, sel);
+    var all = [];
+    Array.prototype.forEach.call(sel.options, function (o) {
+      all.push({ value: o.value, text: o.text, disabled: o.disabled });
+    });
+    q.addEventListener('input', function () {
+      var cur = sel.value;
+      var n = q.value.trim().toLowerCase();
+      sel.innerHTML = '';
+      all.forEach(function (o) {
+        var hit = !n || o.text.toLowerCase().indexOf(n) !== -1 || String(o.value).toLowerCase().indexOf(n) !== -1;
+        if (!hit && o.value !== cur) return;
+        var opt = d.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.text;
+        opt.disabled = !!o.disabled;
+        if (o.value === cur) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+    });
+  });
+
   // web address field follows the name until the person types in it
   $$('[data-slug-from]').forEach(function (inp) {
     var src = document.getElementById(inp.getAttribute('data-slug-from'));

@@ -126,7 +126,7 @@ $app->router->get('/portal/accounts/cashbook', static function () use ($app, $bo
     if ($tot['methods']) {
         $meth = $card('By payment method', $table([['Method'], ['In', 'R'], ['Out', 'R']], array_map(static fn ($k, $v) => [e((string) $k), $m($v['in']), $m($v['out'])], array_keys($tot['methods']), $tot['methods']), ''));
     }
-    $open_form = $p->writable() ? $card('Opening cash balance', '<form class="d-form" method="post" action="' . e(url('portal/accounts/opening')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('opening', ['label' => 'Cash and bank you had before you started using Self Care', 'type' => 'number', 'step' => '0.01'], (string) $acc->opening($p->tenantId)) . '</div><div class="d-form-actions"><button class="d-btn d-btn-soft" type="submit">Save</button></div></form>') : '';
+    $open_form = $p->writable() ? $card('Opening cash balance', '<form class="d-form" method="post" action="' . e(url('portal/accounts/opening')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('opening', ['label' => 'Cash and bank you had before you started using Self Care', 'type' => 'number', 'step' => '0.01'], (string) $acc->opening($p->tenantId)) . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-soft" type="submit">Save</button></div></form>') : '';
     $dash($p, 'accounts', 'Cash book', $tabs('cashbook') . $card('', $form) . $sum . $card('Day by day', $table([['Date'], ['Entries', 'R'], ['Money in', 'R'], ['Money out', 'R'], ['Cash at end of day', 'R']], $rows, 'No money moved in this period')) . $meth . $open_form, ['sub' => 'Every day with the money received and paid. Open a day for the daily cash summary.']);
 });
 $app->router->post('/portal/accounts/opening', static function () use ($app, $boot, $billing, $audit): void {
@@ -253,7 +253,7 @@ $entryForm = static function (Portal $p, string $kind, ?array $row) use ($app, $
         }
         $f .= Crud::field($n, $fs, old($n, $cur));
     }
-    $f .= '</div><div class="d-form-actions">' . ($p->writable() ? '<button class="d-btn d-btn-primary" type="submit">Save</button>' : '') . '<a class="d-btn d-btn-soft" href="' . e(url('portal/accounts/entries', ['kind' => $kind])) . '">Back</a></div></form>';
+    $f .= '</div><div class="d-form-actions d-form-actions-sticky">' . ($p->writable() ? '<button class="d-btn d-btn-primary" type="submit">Save</button>' : '') . '<a class="d-btn d-btn-soft" href="' . e(url('portal/accounts/entries', ['kind' => $kind])) . '">Back</a></div></form>';
     clear_old();
     $h .= $card($id ? 'Details' : 'New ' . $kind, $f);
     $dash($p, 'accounts', $id ? ucfirst($kind) . ' ' . $row['code'] : 'Add ' . $kind, $tabs('entries') . '<div class="d-grid d-g2">' . $h . '</div>', ['sub' => $kind === 'income' ? 'Money received that did not come from an invoice.' : 'Money paid out, or a bill to pay later.']);
@@ -336,7 +336,7 @@ $app->router->get('/portal/accounts/entries/{id}/pay', static function (array $a
     }
     $h = '<form class="d-form" method="post" action="' . e(url('portal/accounts/entries/' . $row['id'] . '/pay')) . '">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('method', ['label' => 'Paid by', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], old('method', 'Cash'))
-        . Crud::field('reference', ['label' => 'Reference (cheque, transaction id)', 'max' => 120], old('reference')) . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Pay ' . e(money((float) $row['amount'])) . '</button><a class="d-btn d-btn-soft" href="' . e(url('portal/accounts/dues')) . '">Back</a></div></form>';
+        . Crud::field('reference', ['label' => 'Reference (cheque, transaction id)', 'max' => 120], old('reference')) . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/accounts/dues')) . '">Back</a><button class="d-btn d-btn-primary" type="submit">Pay ' . e(money((float) $row['amount'])) . '</button></div></form>';
     clear_old();
     $dash($p, 'accounts', 'Pay ' . $row['code'], $tabs('dues') . $card((string) $row['category'] . ($row['party'] ? ' to ' . $row['party'] : ''), $h), ['sub' => 'The payment goes into the cash book today.']);
 });

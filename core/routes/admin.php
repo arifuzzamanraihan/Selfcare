@@ -177,7 +177,7 @@ $app->router->get('/admin/vendors/new', static function () use ($app, $adminUser
         $field = Crud::field($k, $f, old($k, $def));
         $h .= $k === 'slug' ? str_replace('name="slug"', 'name="slug" data-slug-from="f_name"', $field) : $field;
     }
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Create vendor</button><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors')) . '">Cancel</a></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors')) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">Create vendor</button></div></form>';
     clear_old();
     $page($u, 'vendors', 'Add a vendor', $card('', $h), ['sub' => 'Creates the website, the portal, the roles and the vendor admin account. The admin gets an email to set a password.']);
 });
@@ -299,14 +299,14 @@ $app->router->get('/admin/vendors/{id}', static function (array $a) use ($app, $
     }
     $addAdmin = $deleted ? '' : '<h4 style="margin:18px 0 8px">Add another admin</h4><form class="d-form" method="post" action="' . e(url('admin/vendors/' . $t . '/admins/add')) . '" autocomplete="off">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('first_name', ['label' => 'First name', 'required' => true, 'max' => 120], '') . Crud::field('last_name', ['label' => 'Last name', 'max' => 120], '') . Crud::field('email', ['label' => 'Email', 'type' => 'email', 'required' => true, 'max' => 191], '') . Crud::field('phone', ['label' => 'Phone', 'type' => 'tel', 'max' => 40], '')
-        . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Add admin and email a set-password link</button></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors/' . $t)) . '">Keep it</a><button class="d-btn d-btn-primary" type="submit">Add admin and email a set-password link</button></div></form>';
     $h .= $card('Admin accounts', '<div class="d-table-wrap"><table class="d-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>State</th><th>Last sign in</th><th class="r">Actions</th></tr></thead><tbody>' . $rows . '</tbody></table></div>' . $addAdmin);
 
     // plan + history + invoices
     $h .= '<div class="d-grid d-g2">';
     if (!$deleted) {
         $h .= $card('Give or change the plan', '<form class="d-form" method="post" action="' . e(url('admin/vendors/' . $t . '/assign')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pl">Plan</label><select id="pl" name="plan_id" required>' . $opts . '</select></div>'
-            . Crud::field('days', ['label' => 'Length in days (0 = never expires, empty = the plan length)', 'type' => 'number', 'min' => 0, 'step' => '1'], '') . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save plan</button></div></form>');
+            . Crud::field('days', ['label' => 'Length in days (0 = never expires, empty = the plan length)', 'type' => 'number', 'min' => 0, 'step' => '1'], '') . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], '') . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save plan</button></div></form>');
     }
     $hist = $app->db->all('SELECT s.*, p.name FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id WHERE s.tenant_id = ? ORDER BY s.id DESC LIMIT 12', [$t]);
     $l = '';
@@ -329,7 +329,7 @@ $app->router->get('/admin/vendors/{id}', static function (array $a) use ($app, $
             $f .= Crud::field($k, $fd, old($k, $cur[$k] ?? ''));
         }
         clear_old();
-        $h .= '<div id="edit">' . $card('Edit vendor profile', $f . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save changes</button></div></form>') . '</div>';
+        $h .= '<div id="edit">' . $card('Edit vendor profile', $f . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save changes</button></div></form>') . '</div>';
     }
     $page($u, 'vendors', (string) $v['hospital_name'], $h, ['sub' => $app->typeRow((string) $v['type_slug'])['name'] . ' · ' . $v['tenant_username'], 'actions' => $deleted ? '' : $form('open-portal', 'Open portal', '', 'd-btn-primary')]);
 });
@@ -515,7 +515,7 @@ $app->router->get('/admin/vendors/{id}/delete', static function (array $a) use (
     $h = '<div class="d-alert is-danger"><b>Delete ' . e($v['hospital_name']) . '?</b><p style="margin:6px 0 0">Its website disappears, its staff cannot sign in and it is hidden from every list and the public directory. Nothing is erased: you can restore it later from Vendors, State = Deleted.</p></div>'
         . '<form class="d-form" method="post" action="' . e(url('admin/vendors/' . $t . '/delete')) . '" autocomplete="off">' . csrf_field()
         . '<div class="d-form-grid">' . Crud::field('confirm', ['label' => 'Type the web address ' . $v['tenant_username'] . ' to confirm', 'required' => true, 'max' => 60, 'wide' => true], '') . '</div>'
-        . '<div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Delete this vendor</button><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors/' . $t)) . '">Keep it</a></div></form>';
+        . '<div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-danger" type="submit">Delete this vendor</button></div></form>';
     $page($u, 'vendors', 'Delete vendor', $card('', $h));
 });
 $app->router->post('/admin/vendors/{id}/delete', static function (array $a) use ($app, $adminUser): void {
@@ -559,7 +559,7 @@ $app->router->get('/admin/vendors/{id}/purge', static function (array $a) use ($
         . '<form class="d-form" method="post" action="' . e(url('admin/vendors/' . $t . '/purge')) . '" autocomplete="off">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('confirm', ['label' => 'Step 1: type the web address ' . $v['tenant_username'], 'required' => true, 'max' => 60, 'wide' => true], '')
         . Crud::field('confirm2', ['label' => 'Step 2: type ERASE in capital letters', 'required' => true, 'max' => 10, 'wide' => true], '')
-        . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Erase for good</button><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors/' . $t)) . '">Cancel</a></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('admin/vendors/' . $t)) . '">Cancel</a><button class="d-btn d-btn-danger" type="submit">Erase for good</button></div></form>';
     $page($u, 'vendors', 'Erase vendor for good', $card('', $h));
 });
 $app->router->post('/admin/vendors/{id}/purge', static function (array $a) use ($app, $adminUser): void {
@@ -685,7 +685,7 @@ $app->router->get('/admin/requests/{id}', static function (array $a) use ($app, 
         $h .= $card('Decide', '<p class="d-help">Approving creates the tenant, the website, the roles, the plan and the vendor admin account, then emails the vendor.</p><p>'
             . '<form class="d-inline" method="post" action="' . e(url('admin/requests/' . $id . '/approve')) . '" data-confirm="Approve this registration?">' . csrf_field() . '<button class="d-btn d-btn-primary" type="submit">Approve</button></form> '
             . '<form class="d-inline" method="post" action="' . e(url('admin/requests/' . $id . '/cancel')) . '" data-confirm="Cancel this request?">' . csrf_field() . '<button class="d-btn d-btn-soft" type="submit">Cancel request</button></form></p>'
-            . '<form class="d-form" method="post" action="' . e(url('admin/requests/' . $id . '/reject')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reject with a reason (sent to the vendor)', 'type' => 'textarea', 'required' => true, 'max' => 240, 'rows' => 3], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Reject</button></div></form>');
+            . '<form class="d-form" method="post" action="' . e(url('admin/requests/' . $id . '/reject')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reject with a reason (sent to the vendor)', 'type' => 'textarea', 'required' => true, 'max' => 240, 'rows' => 3], '') . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e($app->tenant->mainUrl('')) . '" target="_blank" rel="noopener">View the site</a><button class="d-btn d-btn-danger" type="submit">Reject</button></div></form>');
     } elseif (in_array($r['status'], ['rejected', 'cancelled'], true)) {
         $h .= $card('Clean up', '<form class="d-inline" method="post" action="' . e(url('admin/requests/' . $id . '/delete')) . '" data-confirm="Delete this request for good?">' . csrf_field() . '<button class="d-btn d-btn-danger" type="submit">Delete request</button></form>');
     }
@@ -697,7 +697,7 @@ $app->router->get('/admin/requests/{id}', static function (array $a) use ($app, 
         foreach ($f as $k => $fd) {
             $form .= Crud::field($k, $fd, old($k, (string) ($r[$k] ?? '')));
         }
-        $form .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save changes</button></div></form>';
+        $form .= '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save changes</button></div></form>';
         clear_old();
         $h .= $card('Edit the details before approving', $form);
     } else {
@@ -933,7 +933,7 @@ $app->router->get('/admin/content', static function () use ($app, $adminUser, $p
         $h .= Crud::field($k, ['label' => $l, 'type' => 'textarea', 'rows' => 6, 'max' => 20000], old($k, $app->site->get(null, $k)));
     }
     $h .= Crud::field('footer_json', ['label' => 'Footer links (advanced, JSON). Empty = default columns from core/config/site.php', 'type' => 'textarea', 'rows' => 8, 'max' => 6000, 'help' => 'Example: {"Product":[["Features","/#features"],["Pricing","/#pricing"]]}'], old('footer_json', $app->site->get(null, 'footer_json')));
-    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e($app->tenant->mainUrl('')) . '" target="_blank" rel="noopener">View the site</a></div></form>';
+    $h .= '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
     clear_old();
     $page($u, 'content', 'Site content and footer', $card('', $h), ['sub' => 'Hero, headings, contact line, social links, logo, SEO, legal text and footer. Features, steps, questions and testimonials are in the Website menu.']);
 });
@@ -1041,7 +1041,7 @@ $app->router->get('/admin/account', static function () use ($app, $adminUser, $p
     $h = '<form class="d-form" method="post" action="' . e(url('admin/account')) . '" autocomplete="off">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('first_name', ['label' => 'First name', 'required' => true], old('first_name', (string) $u['first_name'])) . Crud::field('last_name', ['label' => 'Last name'], old('last_name', (string) $u['last_name']))
         . Crud::field('current', ['label' => 'Current password', 'type' => 'password', 'autocomplete' => 'current-password'], '') . Crud::field('password', ['label' => 'New password (empty = keep)', 'type' => 'password', 'autocomplete' => 'new-password'], '')
-        . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('admin/billing')) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
     clear_old();
     $page($u, 'account', 'My account', $card('', $h));
 });
@@ -1089,7 +1089,7 @@ $app->router->get('/admin/billing/new', static function () use ($app, $adminUser
         . Crud::field('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'required' => true, 'help' => 'Leave empty to use the monthly price of the plan.', 'null' => true], old('amount'))
         . Crud::field('tax_pct', ['label' => 'Tax %', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], old('tax_pct', '0')) . Crud::field('discount', ['label' => 'Discount amount', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], old('discount', '0'))
         . Crud::field('paid_now', ['label' => 'Paid now (invoices only)', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], old('paid_now', '0')) . Crud::field('payment_method', ['label' => 'Payment method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], old('payment_method', 'Bank transfer'))
-        . Crud::field('reference', ['label' => 'Reference', 'max' => 120], old('reference')) . Crud::field('note', ['label' => 'Note (printed)', 'max' => 200], old('note')) . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save and open</button><a class="d-btn d-btn-soft" href="' . e(url('admin/billing')) . '">Cancel</a></div></form>';
+        . Crud::field('reference', ['label' => 'Reference', 'max' => 120], old('reference')) . Crud::field('note', ['label' => 'Note (printed)', 'max' => 200], old('note')) . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save and open</button></div></form>';
     clear_old();
     $page($u, 'billing', 'New subscription document', $card('', $h));
 });
@@ -1132,7 +1132,7 @@ $app->router->get('/admin/billing/{id}', static function (array $a) use ($app, $
     $extra = '';
     $cfg = $billing->config()['invoices'][$inv['doc_type']];
     if ($inv['status'] !== 'void' && $cfg['kind'] === 'invoice' && (float) $inv['balance'] > 0) {
-        $extra .= $card('Record a payment (due ' . Billing::fmt((float) $inv['balance'], (string) $inv['currency']) . ')', '<form class="d-form" method="post" action="' . e(url('admin/billing/' . $inv['id'] . '/pay')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'required' => true], (string) $inv['balance']) . Crud::field('method', ['label' => 'Method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], 'Bank transfer') . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save payment</button></div></form>');
+        $extra .= $card('Record a payment (due ' . Billing::fmt((float) $inv['balance'], (string) $inv['currency']) . ')', '<form class="d-form" method="post" action="' . e(url('admin/billing/' . $inv['id'] . '/pay')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'required' => true], (string) $inv['balance']) . Crud::field('method', ['label' => 'Method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], 'Bank transfer') . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save payment</button></div></form>');
     }
     $page($u, 'billing', (string) $inv['invoice_no'], $bar . Documents::html($billing->invoiceModel($app, $inv, $u)) . $extra);
 });
@@ -1200,5 +1200,5 @@ $mount('/admin/currencies', $currencyMod, 'currencies', static function () use (
     foreach (\Selfcare\Currency::all(true) as $c => $r) {
         $o .= '<option value="' . e($c) . '"' . ($c === \Selfcare\Currency::platform() ? ' selected' : '') . '>' . e($r['name'] . ' (' . trim((string) $r['symbol']) . ')') . '</option>';
     }
-    return $card('Platform currency', '<p class="d-help">Used for the plans on the website and for subscription invoices. Each vendor picks its own currency for its own bills under Bills and legal details. Example: ' . e(\Selfcare\Currency::fmt(1250000.5)) . ' and in words: ' . e(\Selfcare\Currency::words(1250.5)) . '.</p><form class="d-form" method="post" action="' . e(url('admin/currencies/default')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pc">Default currency</label><select id="pc" name="currency">' . $o . '</select></div></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save default</button></div></form>');
+    return $card('Platform currency', '<p class="d-help">Used for the plans on the website and for subscription invoices. Each vendor picks its own currency for its own bills under Bills and legal details. Example: ' . e(\Selfcare\Currency::fmt(1250000.5)) . ' and in words: ' . e(\Selfcare\Currency::words(1250.5)) . '.</p><form class="d-form" method="post" action="' . e(url('admin/currencies/default')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pc">Default currency</label><select id="pc" name="currency">' . $o . '</select></div></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save default</button></div></form>');
 });

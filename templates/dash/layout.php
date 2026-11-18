@@ -35,14 +35,15 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
   <div>
     <header class="d-top">
       <button class="d-burger" type="button" data-side-toggle aria-label="Open the menu" aria-expanded="false" aria-controls="d-side"><?= icon('menu', 20) ?></button>
-      <h1><?= e((string) $title) ?></h1><span class="sp"></span>
+      <div class="d-top-title"><h1><?= e((string) $title) ?></h1><?php if (!empty($sub)): ?><p class="d-top-sub"><?= e((string) $sub) ?></p><?php endif; ?></div>
+      <span class="sp"></span>
+      <?php if (!empty($actions)): ?><div class="d-top-actions"><?= $actions ?></div><?php endif; ?>
       <button class="sc-theme" type="button" data-theme-toggle aria-label="Switch light or dark mode"><span class="i-moon"><?= icon('moon', 18) ?></span><span class="i-sun"><?= icon('sun', 18) ?></span></button>
       <div class="d-me"><i><?= e(initials(trim($user['first_name'] . ' ' . $user['last_name']))) ?></i><span><b><?= e(trim($user['first_name'] . ' ' . $user['last_name'])) ?></b><br><small class="d-mute"><?= e((string) $roleLabel) ?></small></span></div>
     </header>
     <main class="d-main" id="main">
       <?php if ($flash): ?><div class="d-flash <?= e($flash['t']) ?>" role="status"><?= e($flash['m']) ?></div><?php endif; ?>
       <?php if (!empty($banner)): ?><div class="d-banner" role="alert"><?= $banner ?></div><?php endif; ?>
-      <?php if (!empty($sub) || !empty($actions)): ?><div class="d-phead"><div><?php if (!empty($sub)): ?><p style="margin:0"><?= e((string) $sub) ?></p><?php endif; ?></div><div><?= $actions ?? '' ?></div></div><?php endif; ?>
       <?= $content ?>
     </main>
   </div>

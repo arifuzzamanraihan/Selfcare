@@ -39,12 +39,14 @@ $flash = \Selfcare\flash();
       <a href="<?= e($app->tenant->mainUrl('free-services')) ?>">Free services</a>
       <a href="<?= e($app->tenant->mainUrl('') . '#pricing') ?>">Pricing</a>
       <button class="sc-theme" type="button" data-theme-toggle aria-label="Switch light or dark mode"><span class="i-moon"><?= icon('moon', 18) ?></span><span class="i-sun"><?= icon('sun', 18) ?></span></button>
+      <div class="sc-nav-cta">
       <?php if (!empty($user)): ?>
         <a class="sc-btn sc-btn-primary sc-btn-sm" href="<?= e($app->home($user)) ?>">Open dashboard</a>
       <?php else: ?>
-        <a href="<?= e($app->tenant->mainUrl('login')) ?>">Sign in</a>
+        <a class="sc-btn sc-btn-soft sc-btn-sm" href="<?= e($app->tenant->mainUrl('login')) ?>">Sign in</a>
         <a class="sc-btn sc-btn-primary sc-btn-sm" href="<?= e($app->tenant->mainUrl('register')) ?>">Register</a>
       <?php endif; ?>
+      </div>
     </nav>
   </div>
 </header>

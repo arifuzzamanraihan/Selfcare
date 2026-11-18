@@ -186,6 +186,7 @@ html,body{max-width:100%}
 }
 @media (prefers-reduced-motion:reduce){.d-side,.d-scrim{transition:none!important}}
 
+
 /* Work-list queue (drag-and-drop day list) and FDI tooth chart */
 .d-queue { margin: 0; }
 .d-queue-toolbar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin:0 0 14px; }
@@ -223,3 +224,43 @@ html,body{max-width:100%}
 .d-tooth.is-on span, .d-tooth:has(input:checked) span { background:#0f766e; color:#fff; border-color:#0f766e; }
 .d-tooth:focus-within span { outline:2px solid #0f766e; outline-offset:1px; }
 @media (max-width:560px) { .d-teeth { grid-template-columns:1fr; } }
+
+
+/* ---- UI/UX pass: header actions, touch targets, sticky form bar, overflow menu ---- */
+.d-top{flex-wrap:wrap}
+.d-top-title{min-width:0;flex:1 1 auto}
+.d-top-title h1{font-size:1.15rem;margin:0;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-top-sub{margin:2px 0 0;color:var(--mute);font-size:.82rem;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.d-top-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.d-top-actions .d-btn-primary ~ .d-btn-primary,
+.d-top-actions .sc-btn-primary ~ .sc-btn-primary{background:var(--bg2);border-color:var(--line);color:var(--ink)}
+.d-btn,.d-burger,.sc-theme{min-height:44px;box-sizing:border-box}
+.d-burger,.sc-theme{min-width:44px}
+.d-field input,.d-field select,.d-in,.d-filter select,.d-search input,.d-combo-q{min-height:44px;box-sizing:border-box}
+.d-field textarea{min-height:88px;box-sizing:border-box}
+.d-form-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:20px;flex-wrap:wrap}
+.d-form-actions .d-btn-primary,.d-form-actions .sc-btn-primary{margin-left:auto}
+.d-main{scroll-padding-bottom:96px}
+.d-form-actions-sticky{position:sticky;bottom:0;z-index:15;background:var(--card);border-top:1px solid var(--line);padding:12px 0;margin-top:24px;box-shadow:0 -8px 16px color-mix(in srgb,var(--card) 80%,transparent)}
+.d-modal-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
+.d-modal-actions [data-yes],.d-modal-actions .d-btn-danger,.d-modal-actions .d-btn-primary{margin-left:auto}
+.d-more{position:relative;display:inline-flex;vertical-align:middle}
+.d-more-btn{min-width:44px}
+.d-more-menu{min-width:200px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;display:flex;flex-direction:column;gap:2px}
+.d-more-menu[hidden]{display:none!important}
+.d-more-menu .d-act,.d-more-menu .d-inline{display:flex;width:100%;margin:0}
+.d-more-menu .d-inline .d-act{width:100%}
+.d-combo{display:flex;flex-direction:column;gap:6px;min-width:min(100%,220px)}
+.d-combo-q{width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+.d-filter{align-items:flex-start}
+.d-tools{align-items:flex-end}
+@media (max-width:980px){
+  .d-top-actions{flex:1 0 100%;order:5;justify-content:flex-end;padding-top:4px}
+  .d-act,.d-more-btn{min-height:44px}
+  .d-form-actions-sticky{padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px))}
+}
+@media print{
+  .d-form-actions-sticky{position:static;border:0;padding:0}
+  .d-more-menu{display:none!important}
+}
+

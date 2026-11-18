@@ -92,7 +92,7 @@ final class Crud
             $val = old($name, (string) $val);
             $h .= self::field($name, $f, $val);
         }
-        $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">' . ($id ? 'Save changes' : 'Add ' . strtolower($this->m['singular'])) . '</button><a class="d-btn d-btn-soft" href="' . e($this->url()) . '">Cancel</a></div></form>';
+        $h .= '</div><div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e($this->url()) . '">Cancel</a><button class="d-btn d-btn-primary" type="submit">' . ($id ? 'Save changes' : 'Add ' . strtolower($this->m['singular'])) . '</button></div></form>';
         clear_old();
         return $h;
     }
@@ -114,7 +114,8 @@ final class Crud
                 break;
             case 'select':
                 $extra = !empty($f['fill']) ? ' data-fill-' . e((string) $f['fill']) : '';
-                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . $extra . '>';
+                $search = count($f['options'] ?? []) > 12 ? ' data-searchable' : '';
+                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . $extra . $search . '>';
                 if (empty($f['required']) || ($f['blank'] ?? false)) {
                     $in .= '<option value="">' . e((string) ($f['blank_label'] ?? 'Choose…')) . '</option>';
                 }

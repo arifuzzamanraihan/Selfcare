@@ -170,7 +170,7 @@ final class Domains
         $h .= '</tbody></table></div>';
         $h .= '<h3 style="margin-top:22px">Add your own domain</h3><form class="d-form" method="post" action="' . e(url($postBase . '/add')) . '">' . csrf_field()
             . '<div class="d-form-grid">' . Crud::field('host', ['label' => 'Domain name', 'max' => 190, 'required' => true, 'placeholder' => 'care.yourname.com', 'help' => 'A name you own. Use a sub domain such as care.yourname.com or a full domain.'], '') . '</div>'
-            . '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Add domain</button></div></form>';
+            . '<div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Add domain</button></div></form>';
         $h .= '<div class="d-note" style="margin-top:18px"><b>Then set one of these at your domain provider (DNS):</b><ul style="margin:8px 0 0 18px"><li><b>A record:</b> name = your domain (or the sub domain), value = <code>' . e($this->serverIp()) . '</code></li><li><b>or CNAME record</b> (sub domains only): value = <code>' . e($this->cnameTarget($slug)) . '</code></li></ul><p class="d-help" style="margin:8px 0 0">DNS can take from a few minutes up to a few hours. We check it every few minutes and then get a free HTTPS certificate on our own. Press "Check DNS now" to check at once.</p></div>';
         return $h;
     }
