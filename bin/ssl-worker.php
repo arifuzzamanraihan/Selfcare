@@ -87,19 +87,39 @@ $fail = static function (array $d, string $msg) use ($db, $log): void {
     $log("{$d['host']}: $msg");
 };
 
-// removed addresses: drop their virtual host
-foreach ($db->all("SELECT * FROM sc_domains WHERE status = 'removed' AND kind = 'custom'") as $d) {
-    $f = $confPath((string) $d['host']);
-    if (is_file($f)) {
-        $bak = file_get_contents($f);
-        @unlink($f);
-        $sh($apachectl . ' -t', $code);
-        if ($code === 0) {
-            $sh($apachectl . ' graceful');
-            $log("removed virtual host of {$d['host']}");
-        } else {
-            file_put_contents($f, $bak);
-        }
+// Orphans: a virtual host written by this worker whose address is gone (removed domain, purged vendor) is deleted.
+// Only files named 0.sc-<host>.conf are touched. The certificate is dropped too when nothing else uses it.
+foreach (glob($vhostDir . '/0.sc-*.conf') ?: [] as $f) {
+    if (!preg_match('#/0\.sc-([a-z0-9.-]+)\.conf$#', $f, $m)) {
+        continue;
+    }
+    $host = $m[1];
+    if ($db->val("SELECT COUNT(*) FROM sc_domains WHERE host = ? AND status <> 'removed'", [$host]) > 0) {
+        continue;
+    }
+    $bak = file_get_contents($f);
+    @unlink($f);
+    $sh($apachectl . ' -t', $code);
+    if ($code !== 0) {
+        file_put_contents($f, $bak);
+        continue;
+    }
+    $sh($apachectl . ' graceful');
+    $log("removed virtual host of $host");
+}
+
+// Certificates of vendor sub domains that no address uses any more (never the main host's, never other sites').
+$suffix = (string) $env->get('TENANT_SUFFIX');
+$mainHost = (string) $env->get('MAIN_HOST');
+foreach ($suffix !== '' ? (glob($certDir . '/*' . $suffix) ?: []) : [] as $dir) {
+    $host = basename($dir);
+    if ($host === $mainHost || !preg_match('/^[a-z0-9.-]+$/', $host) || !is_file($dir . '/.sc-worker') || !is_dir('/root/.acme.sh/' . $host . '_ecc')) { // only certificates this worker installed (marker file)
+        continue;
+    }
+    if ($db->val("SELECT COUNT(*) FROM sc_domains WHERE (cert_name = ? OR host = ?) AND status <> 'removed'", [$host, $host]) == 0) {
+        $sh(escapeshellarg($acme) . ' --remove --ecc -d ' . escapeshellarg($host));
+        $sh('rm -rf ' . escapeshellarg('/root/.acme.sh/' . $host . '_ecc') . ' ' . escapeshellarg($dir));
+        $log("dropped the unused certificate of $host");
     }
 }
 
@@ -137,7 +157,11 @@ $issue = static function (array $hosts) use ($acme, $docroot, $certDir, $apachec
     @mkdir($certDir . '/' . $main, 0700, true);
     $reload = escapeshellarg($apachectl . ' -t && ' . $apachectl . ' graceful');
     $sh(escapeshellarg($acme) . ' --install-cert --ecc -d ' . escapeshellarg($main) . ' --key-file ' . escapeshellarg($certDir . '/' . $main . '/privkey.pem') . ' --fullchain-file ' . escapeshellarg($certDir . '/' . $main . '/fullchain.pem') . ' --reloadcmd ' . $reload, $code);
-    return is_file($certDir . '/' . $main . '/fullchain.pem') ? [true, ''] : [false, 'Certificate could not be installed.'];
+    if (!is_file($certDir . '/' . $main . '/fullchain.pem')) {
+        return [false, 'Certificate could not be installed.'];
+    }
+    @file_put_contents($certDir . '/' . $main . '/.sc-worker', date('c') . "\n"); // marks it as ours for the clean-up below
+    return [true, ''];
 };
 
 $markActive = static function (array $d, string $certName) use ($db): void {
