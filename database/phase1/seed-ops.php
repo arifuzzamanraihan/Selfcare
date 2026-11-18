@@ -41,6 +41,17 @@ $data['pharmacy'] = [
     ],
 ];
 
+$samples = [
+    ['title' => 'Farhana Akter', 'phone' => '01711220011', 'party' => 'Dr Salma', 'cat' => 'Complete blood count (CBC)', 'place_a' => 'Blood', 'date1' => $day(0), 'amount' => 6.0, 'status' => 'collected', 'notes' => null],
+    ['title' => 'Mahbub Alam', 'phone' => '01822330022', 'party' => 'Dr Rahman', 'cat' => 'Lipid profile', 'place_a' => 'Blood', 'date1' => $day(0), 'amount' => 14.0, 'status' => 'processing', 'notes' => null],
+    ['title' => 'Shirin Sultana', 'phone' => '01933440033', 'party' => 'Walk-in', 'cat' => 'Urine routine exam', 'place_a' => 'Urine', 'date1' => $day(-1), 'date2' => $day(0), 'amount' => 3.5, 'status' => 'reported', 'notes' => "Colour: pale yellow\nProtein: nil\nSugar: nil\nPus cells: 2-3 /HPF\nImpression: within normal limits"],
+    ['title' => 'Rubel Hossain', 'phone' => '01644550044', 'party' => 'Dr Hasan', 'cat' => 'HbA1c', 'place_a' => 'Blood', 'date1' => $day(-3), 'date2' => $day(-2), 'amount' => 11.0, 'status' => 'delivered', 'notes' => "HbA1c: 6.1 %\nImpression: pre-diabetic range, advise diet control and repeat in 3 months"],
+    ['title' => 'Tania Rahman', 'phone' => '01555660055', 'party' => 'Dr Karim', 'cat' => 'Thyroid profile (TSH)', 'place_a' => 'Blood', 'date1' => $day(-4), 'date2' => $day(-3), 'amount' => 12.0, 'status' => 'delivered', 'notes' => "TSH: 2.4 mIU/L (0.4 - 4.0)\nImpression: normal"],
+    ['title' => 'Imran Kabir', 'phone' => '01766770066', 'party' => 'Dr Nahar', 'cat' => 'Stool routine exam', 'place_a' => 'Stool', 'date1' => $day(-2), 'amount' => 3.0, 'status' => 'rejected', 'notes' => 'Container leaked in transit. Please give a new sample.'],
+];
+$data['laboratory'] = ['samples' => $samples];
+$data['diagnostic-center'] = ['samples' => array_slice($samples, 0, 4)];
+
 $seeded = [];
 foreach ($data as $type => $modules) {
     $tenant = $demo[$type] ?? null;
