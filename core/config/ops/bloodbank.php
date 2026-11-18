@@ -83,6 +83,8 @@ return [
             'fulfil' => ['Mark as given', 'pending', 'fulfilled', 'check', 'confirm' => 'You have issued the blood for this order?'],
             'reject' => ['Could not give', 'pending', 'rejected', 'x', 'ask' => ['notes' => ['label' => 'Why not?', 'type' => 'textarea', 'rows' => 3, 'required' => true, 'max' => 500, 'wide' => true, 'placeholder' => 'No stock of this group…']]],
         ],
+        'intake' => true,
+        'bill' => ['type' => 'blood_issue_invoice', 'when' => ['fulfilled'], 'item' => '{cat} {qty} unit(s) processing', 'price' => 'amount', 'x' => ['blood_group' => 'cat', 'hospital' => 'party']],
         'search' => ['code', 'title', 'party', 'cat', 'phone'],
         'kpis' => [['Blood orders waiting', "SELECT COUNT(*) " . $rec('bloodreq') . " AND status = 'pending'", 'cal', 'for blood', 'bloodreq', ['f_status' => 'pending']]],
     ],

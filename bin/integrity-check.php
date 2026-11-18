@@ -96,6 +96,9 @@ if (isset($mods['vehicles'])) {
     $check('trips on the road name a vehicle that exists', "SELECT t.id, t.cat FROM sc_records t LEFT JOIN sc_records v ON v.tenant_id = t.tenant_id AND v.module = 'vehicles' AND v.code = t.cat WHERE t.module = 'trips' AND t.status IN ('dispatched','onroute') AND t.deleted_at IS NULL AND v.id IS NULL");
     $check('a vehicle on a trip has a trip on the road', "SELECT v.id, v.code FROM sc_records v WHERE v.module = 'vehicles' AND v.status = 'on_trip' AND v.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM sc_records t WHERE t.tenant_id = v.tenant_id AND t.module = 'trips' AND t.cat = v.code AND t.status IN ('dispatched','onroute') AND t.deleted_at IS NULL)");
 }
+$check('records point to an invoice of the same vendor', 'SELECT r.id, r.invoice_id FROM sc_records r LEFT JOIN sc_invoices i ON i.id = r.invoice_id WHERE r.invoice_id IS NOT NULL AND (i.id IS NULL OR i.tenant_id <> r.tenant_id)');
+$check('history lines belong to a record of the same vendor and list', 'SELECT e.id FROM sc_record_events e LEFT JOIN sc_records r ON r.id = e.record_id WHERE r.id IS NULL OR r.tenant_id <> e.tenant_id OR r.module <> e.module');
+$check('every record has a history', 'SELECT r.id FROM sc_records r WHERE NOT EXISTS (SELECT 1 FROM sc_record_events e WHERE e.record_id = r.id)', true);
 $check('plate numbers / codes are unique per vendor and list', "SELECT tenant_id, module, code, COUNT(*) n FROM sc_records WHERE code IS NOT NULL AND code <> '' AND deleted_at IS NULL GROUP BY tenant_id, module, code HAVING n > 1");
 
 echo "audit\n";

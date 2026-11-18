@@ -107,9 +107,17 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
     $cfg = $cat[$type];
     $kind = (string) $cfg['kind'];
     $currency = $cur($p);
-    $h = '<form class="d-form" method="post" action="' . e(url('portal/billing/save')) . '" data-invoice data-currency="' . e($currency) . '" autocomplete="off">' . csrf_field() . '<input type="hidden" name="doc_type" value="' . e($type) . '"><div class="d-form-grid">';
-    $h .= $field('party_name', (string) $cfg['party'] . ' name', 'text', [], old('party_name'), false);
-    $h .= $field('party_phone', 'Phone', 'tel', [], old('party_phone'));
+    // a bill made from a work-list record (trip, sample, order): fill in what we already know
+    $pre = [];
+    $rr = null;
+    if (!empty($_GET['rec']) && !empty($_GET['mod'])) {
+        $om = \Selfcare\Ops::find($p, (string) $_GET['mod']);
+        $rr = $om !== null && !empty($om['bill']) && $om['bill']['type'] === $type ? $app->db->one('SELECT * FROM sc_records WHERE id = ? AND tenant_id = ? AND module = ? AND deleted_at IS NULL AND invoice_id IS NULL', [(int) $_GET['rec'], $p->tenantId, (string) $_GET['mod']]) : null;
+        $pre = $rr !== null ? \Selfcare\Ops::billPrefill($om, $rr) : [];
+    }
+    $h = '<form class="d-form" method="post" action="' . e(url('portal/billing/save')) . '" data-invoice data-currency="' . e($currency) . '" autocomplete="off">' . csrf_field() . '<input type="hidden" name="doc_type" value="' . e($type) . '">' . ($rr !== null ? '<input type="hidden" name="rec" value="' . (int) $rr['id'] . '"><input type="hidden" name="mod" value="' . e((string) $rr['module']) . '">' : '') . '<div class="d-form-grid">';
+    $h .= $field('party_name', (string) $cfg['party'] . ' name', 'text', [], old('party_name', (string) ($pre['party_name'] ?? '')), false);
+    $h .= $field('party_phone', 'Phone', 'tel', [], old('party_phone', (string) ($pre['party_phone'] ?? '')));
     $h .= $field('party_address', 'Address', 'text', [], old('party_address'), true);
     if ($p->can('manage_patients') && $cfg['party'] === 'Patient') {
         $pts = $app->db->all('SELECT p.id, u.first_name, u.last_name, p.patient_unique_id FROM patients p JOIN users u ON u.id = p.user_id WHERE p.tenant_id = ? ORDER BY u.first_name LIMIT 300', [$p->tenantId]);
@@ -128,13 +136,13 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
         $h .= $field('due_date', 'Due date (optional)', 'date', [], old('due_date'));
     }
     foreach ($cfg['x'] as $x) {
-        $h .= $field('x_' . $x[0], (string) $x[1], $x[2] ?? 'text', $x[3] ?? [], old('x_' . $x[0]), ($x[2] ?? '') === 'textarea');
+        $h .= $field('x_' . $x[0], (string) $x[1], $x[2] ?? 'text', $x[3] ?? [], old('x_' . $x[0], (string) ($pre['x_' . $x[0]] ?? '')), ($x[2] ?? '') === 'textarea');
     }
     if ($kind === 'credit') {
         $inv = $app->db->all("SELECT id, invoice_no, party_name, balance FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status <> 'void' AND doc_type NOT IN ('credit_note','refund_receipt','sales_return','advance_receipt') ORDER BY id DESC LIMIT 80", [$p->tenantId]);
         $h .= Crud::field('related_id', ['label' => 'Against invoice (optional)', 'type' => 'select', 'options' => array_column(array_map(fn ($r) => ['k' => $r['id'], 'v' => $r['invoice_no'] . ' - ' . $r['party_name']], $inv), 'v', 'k'), 'help' => 'The credit reduces the amount still due on that invoice.'], old('related_id', (string) ($_GET['against'] ?? '')));
     }
-    $h .= '</div><h3 style="margin-top:24px">' . e(ucfirst((string) $cfg['item'])) . ' lines</h3><div class="d-table-wrap" style="overflow:visible"><table class="d-items"><thead><tr><th>' . e((string) $cfg['item']) . '</th><th>Qty</th><th>Rate</th>' . (!empty($cfg['tax']) ? '<th>Tax %</th>' : '') . '<th style="text-align:right">Amount</th><th></th></tr></thead><tbody data-rows>' . $itemRow($cfg, $picks($p, $cfg)) . '</tbody></table></div>';
+    $h .= '</div><h3 style="margin-top:24px">' . e(ucfirst((string) $cfg['item'])) . ' lines</h3><div class="d-table-wrap" style="overflow:visible"><table class="d-items"><thead><tr><th>' . e((string) $cfg['item']) . '</th><th>Qty</th><th>Rate</th>' . (!empty($cfg['tax']) ? '<th>Tax %</th>' : '') . '<th style="text-align:right">Amount</th><th></th></tr></thead><tbody data-rows>' . $itemRow($cfg, $picks($p, $cfg), $pre['item'] ?? []) . '</tbody></table></div>';
     $h .= '<template>' . $itemRow($cfg, $picks($p, $cfg)) . '</template><p style="margin-top:10px"><button type="button" class="d-btn d-btn-soft" data-add>' . icon('plus', 14) . ' Add a line</button></p>';
     $h .= '<div class="d-form-grid" style="margin-top:14px">';
     if (!empty($cfg['discount'])) {
@@ -146,7 +154,7 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
     if ($kind !== 'order') {
         $h .= Crud::field('payment_method', ['label' => $kind === 'credit' ? 'Refunded by' : 'Payment method', 'type' => 'select', 'options' => array_combine(Billing::METHODS, Billing::METHODS), 'required' => true], old('payment_method', 'Cash')) . $field('payment_ref', 'Payment reference (cheque, transaction id)', 'text', [], old('payment_ref'));
     }
-    $h .= $field('reference', 'Your reference', 'text', [], old('reference')) . $field('note', 'Note (printed)', 'text', [], old('note'), true) . '</div>';
+    $h .= $field('reference', 'Your reference', 'text', [], old('reference', (string) ($pre['reference'] ?? ''))) . $field('note', 'Note (printed)', 'text', [], old('note'), true) . '</div>';
     $h .= '<div class="d-totals"><div><span>Subtotal</span><b data-out="sub">0.00</b></div>' . (!empty($cfg['discount']) ? '<div><span>Discount</span><b data-out="disc">0.00</b></div>' : '') . (!empty($cfg['tax']) ? '<div><span>Tax</span><b data-out="tax">0.00</b></div>' : '') . '<div class="big"><span>Total</span><b data-out="total">0.00</b></div>' . ($kind === 'invoice' ? '<div><span>Balance due</span><b data-out="due">0.00</b></div>' : '') . '</div>';
     $h .= '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save and open ' . e(strtolower((string) $cfg['label'])) . '</button><a class="d-btn d-btn-soft" href="' . e(url('portal/billing')) . '">Cancel</a></div></form>';
     clear_old();
@@ -190,6 +198,14 @@ $app->router->post('/portal/billing/save', static function () use ($app, $billin
         $back('', url('portal/billing/new/' . $type), $e->getMessage());
     }
     clear_old();
+    if (!empty($_POST['rec']) && !empty($_POST['mod'])) {
+        $om = \Selfcare\Ops::find($p, (string) $_POST['mod']);
+        $rr = $om !== null && !empty($om['bill']) && $om['bill']['type'] === $type ? $app->db->one('SELECT id, status FROM sc_records WHERE id = ? AND tenant_id = ? AND module = ? AND deleted_at IS NULL AND invoice_id IS NULL', [(int) $_POST['rec'], $p->tenantId, (string) $_POST['mod']]) : null;
+        if ($rr !== null) {
+            $app->db->run('UPDATE sc_records SET invoice_id = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?', [$id, $rr['id'], $p->tenantId]);
+            \Selfcare\Ops::event($app->db, $p->tenantId, (int) $rr['id'], (string) $_POST['mod'], 'billed', (string) $rr['status'], (string) $rr['status'], (int) $p->user['id'], 'Invoice ' . (string) $app->db->val('SELECT invoice_no FROM sc_invoices WHERE id = ?', [$id]));
+        }
+    }
     $back('Saved.', url('portal/billing/' . $id));
 });
 

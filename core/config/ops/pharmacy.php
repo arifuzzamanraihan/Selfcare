@@ -26,6 +26,8 @@ return [
             'dispense' => ['Dispense', 'verified', 'dispensed', 'check'],
             'cancel' => ['Cancel', ['received', 'verified'], 'cancelled', 'x', 'confirm' => 'Cancel this order?'],
         ],
+        'intake' => true,
+        'bill' => ['type' => 'sales_invoice', 'when' => ['verified', 'dispensed'], 'x' => ['prescriber' => 'party', 'rx_no' => 'code']],
         'search' => ['code', 'title', 'party', 'phone'],
         'kpis' => [
             ['Waiting to verify', "SELECT COUNT(*) " . $rec('rx') . " AND status = 'received'", 'file', 'prescriptions to check', 'rx', ['f_status' => 'received']],

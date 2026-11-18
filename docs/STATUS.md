@@ -7,7 +7,7 @@ Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): webs
 | Wave 1 | Pharmacy | stock, expiry, batches, sales/POS, suppliers | done | done | **done**: prescription orders (verify, dispense), suppliers, stock alerts (low, expiring, expired), stock movement ledger with adjust, overview tiles and charts | done | **live** |
 | Wave 1 | Pathology laboratory | samples, test catalogue, results, reports | done | done | **done**: samples workflow (collected, testing, result entered, delivered, rejected with reason), printable result report, overview tiles and charts (diagnostic centers get the same Samples list) | done | **live** |
 | Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | **done**: donor eligibility (90-day rest, record donation, then add the bag), blood units (screening, release, reserve, issue to a named recipient, discard with reason, automatic expiry by component), blood orders (given or could not give), overview tiles and charts by blood group | done | **live** |
-| Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | **done**: vehicles (plate, type, driver, service and papers due, workshop in and out), trips (priority Emergency/Urgent/Routine, made from a website request, dispatch only with a free vehicle plus crew note, picked up, completed with km and fare, cancel frees the vehicle), "Make invoice" from a completed trip (pre-filled, linked both ways, paid with the normal payment), history with times on every record, average dispatch time tile | done | **live** |
 | Wave 2 | Hospital | OPD/IPD, beds, doctors, wards | done | done | pending | generic done, type-specific pending | pending |
 | Wave 2 | Clinic | appointments, doctors, billing | done | done | pending | generic done, type-specific pending | pending |
 | Wave 2 | Specialty clinic | appointments, procedures | done | done | pending | generic done, type-specific pending | pending |
@@ -61,9 +61,15 @@ Legend: **Y** works end to end today, **P** partly, **-** missing. Intake = regi
 | Pathology lab | Y | Y | n/a | Y | - | Y | Y | test catalogue with ranges, validation, critical values, accounts |
 | Pharmacy | Y | Y | Y (orders) | Y | - | Y | Y | batch FEFO, purchase/GRN, controlled-drug register, accounts |
 | Blood bank | Y | Y | n/a | Y | - | Y | Y | TTI results, crossmatch, reaction log, accounts |
-| Ambulance | Y | in progress | n/a | Y | - | P | Y | priority and timestamps, crew, run sheet, accounts |
+| Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y (from trip) | - | Y (history with times) | Y | crew roster, run sheet, maintenance log, accounts |
 | Telemedicine | Y | - | P | Y | - | P | Y | slots and video link, prescription, accounts |
 | Home care | Y | - | n/a | Y | - | P | Y | visit schedule, caregiver roster, accounts |
 | Equipment supplier | Y | - | n/a | Y | - | P | Y | rentals and orders, service log, accounts |
 
 Cross-cutting gaps, built in this order: (1) Accounts for every kind, (2) structured Prescriptions with PDF and history, (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
+
+## Shared work-list features added with ambulance
+
+- **History with times** on every work-list record (`sc_record_events`, removed with the record): added, each step, deleted, brought back, invoice made, with who and the time since the step before. Existing records got a first line on deploy.
+- **Make invoice** from a record: ambulance trip, lab sample, blood order, pharmacy prescription order. The invoice form is pre-filled (name, phone, reference, trip fields, first line), the record keeps the invoice id and shows it with Paid/Unpaid. Another vendor's record cannot be used to pre-fill or link (tested in the isolation run).
+- **Make trip / order / sample from a website request** on the request page, with name, phone, date and note already filled in.

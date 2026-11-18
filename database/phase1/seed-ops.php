@@ -90,6 +90,25 @@ $orders = [
 ];
 $data['blood-bank'] = ['donors' => $donors, 'units' => $units, 'bloodreq' => $orders];
 
+$data['ambulance'] = [
+    'vehicles' => [
+        ['code' => 'DHAKA-METRO-DA-11-2041', 'title' => 'Toyota HiAce ICU', 'cat' => 'ICU', 'party' => 'Karim Uddin', 'phone' => '01711234001', 'date1' => $day(40), 'date2' => $day(200), 'status' => 'on_trip'],
+        ['code' => 'DHAKA-METRO-DA-13-5532', 'title' => 'Toyota HiAce ALS', 'cat' => 'Advanced life support', 'party' => 'Jamal Hossain', 'phone' => '01711234002', 'date1' => $day(9), 'date2' => $day(120), 'status' => 'available'],
+        ['code' => 'DHAKA-METRO-CHA-11-7710', 'title' => 'Nissan Urvan BLS', 'cat' => 'Basic life support', 'party' => 'Rashed Mia', 'phone' => '01711234003', 'date1' => $day(60), 'date2' => $day(10), 'status' => 'available'],
+        ['code' => 'DHAKA-METRO-DA-15-0987', 'title' => 'Neonatal transport unit', 'cat' => 'Neonatal', 'party' => 'Sohel Rana', 'phone' => '01711234004', 'date1' => $day(-2), 'date2' => $day(300), 'status' => 'maintenance', 'notes' => 'Brake pads being changed.'],
+        ['code' => 'DHAKA-METRO-THA-12-3344', 'title' => 'Old Mitsubishi Delica', 'cat' => 'Patient transport', 'party' => '', 'phone' => '', 'date1' => null, 'date2' => $day(-90), 'status' => 'retired'],
+    ],
+    'trips' => [
+        ['title' => 'Abdul Malek', 'phone' => '01811000101', 'party' => 'Son: Rubel', 'place_a' => 'Mirpur 10, Dhaka', 'place_b' => 'Dhaka Medical College Hospital', 'date1' => $day(0), 'tag' => 'Emergency', 'cat' => 'DHAKA-METRO-DA-11-2041', 'status' => 'onroute', 'notes' => 'Chest pain. Oxygen on board.'],
+        ['title' => 'Rokeya Khatun', 'phone' => '01811000102', 'party' => 'Husband', 'place_a' => 'Uttara Sector 7', 'place_b' => 'Square Hospital, Panthapath', 'date1' => $day(0), 'tag' => 'Urgent', 'status' => 'requested', 'notes' => 'Post-surgery transfer, needs a stretcher.'],
+        ['title' => 'Baby of Nasrin', 'phone' => '01811000103', 'party' => 'Nasrin', 'place_a' => 'Narayanganj Sadar', 'place_b' => 'Shishu Hospital, Sher-e-Bangla Nagar', 'date1' => $day(0), 'tag' => 'Emergency', 'status' => 'requested'],
+        ['title' => 'Hasina Akter', 'phone' => '01811000104', 'party' => 'Self', 'place_a' => 'Dhanmondi 27', 'place_b' => 'Evercare Hospital, Bashundhara', 'date1' => $day(-1), 'tag' => 'Routine', 'cat' => 'DHAKA-METRO-DA-13-5532', 'status' => 'completed', 'qty' => 18.5, 'amount' => 45, 'notes' => 'Dialysis transfer.'],
+        ['title' => 'Mofizul Islam', 'phone' => '01811000105', 'party' => 'Daughter', 'place_a' => 'Gazipur', 'place_b' => 'Dhaka Medical College Hospital', 'date1' => $day(-2), 'tag' => 'Urgent', 'cat' => 'DHAKA-METRO-DA-11-2041', 'status' => 'completed', 'qty' => 32, 'amount' => 80],
+        ['title' => 'Shirin Begum', 'phone' => '01811000106', 'party' => 'Neighbour', 'place_a' => 'Savar', 'place_b' => 'CMH Dhaka', 'date1' => $day(-3), 'tag' => 'Routine', 'status' => 'cancelled', 'notes' => 'Family arranged a private car.'],
+        ['title' => 'Ibrahim Khalil', 'phone' => '01811000107', 'party' => 'Self', 'place_a' => 'Banani', 'place_b' => 'Airport', 'date1' => $day(-6), 'tag' => 'Routine', 'cat' => 'DHAKA-METRO-CHA-11-7710', 'status' => 'completed', 'qty' => 14, 'amount' => 35, 'notes' => 'Medical evacuation flight.'],
+    ],
+];
+
 $seeded = [];
 foreach ($data as $type => $modules) {
     $tenant = $demo[$type] ?? null;
@@ -108,7 +127,8 @@ foreach ($data as $type => $modules) {
             if ($prefix !== '' && empty($r['code'])) {
                 $r['code'] = \Selfcare\Ops::code($db, $tenant, $module, $prefix);
             }
-            $db->insert('sc_records', $r + ['tenant_id' => $tenant, 'module' => $module, 'created_at' => $now, 'updated_at' => $now]);
+            $rid = $db->insert('sc_records', $r + ['tenant_id' => $tenant, 'module' => $module, 'created_at' => $now, 'updated_at' => $now]);
+            \Selfcare\Ops::event($db, $tenant, (int) $rid, $module, 'created', null, (string) $r['status'], null);
         }
         $seeded[] = "$tenant/$module=" . count($rows);
     }

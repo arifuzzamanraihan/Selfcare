@@ -218,6 +218,12 @@ $app->router->get('/portal/requests/{id}', static function (array $a) use ($app,
             $acts .= $form('done', 'Mark done', 'd-btn-primary');
         }
         if (in_array($r['status'], ['new', 'confirmed'], true)) {
+            foreach (\Selfcare\Ops::forPortal($p) as $ok => $om) {
+                if (!empty($om['intake'])) {
+                    $acts .= '<a class="d-btn d-btn-soft" href="' . e(\Selfcare\Ops::url($ok, 'new', array_intersect_key(['title' => (string) $r['name'], 'phone' => (string) $r['phone'], 'date1' => (string) $r['preferred_date'], 'notes' => (string) $r['message']], array_flip($om['intake'] === true ? ['title', 'phone', 'date1', 'notes'] : (array) $om['intake'])))) . '">Make ' . e((string) $om['singular']) . '</a> ';
+                    break;
+                }
+            }
             $acts .= $form('cancel', 'Cancel', 'd-btn-soft', 'Cancel this request?');
         }
         if (in_array($r['status'], ['rejected', 'cancelled', 'done'], true)) {

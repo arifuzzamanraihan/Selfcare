@@ -94,7 +94,7 @@ $app->router->get('/portal/ops/{m}', static function (array $a) use ($app, $boot
 });
 
 // ---------------------------------------------------------------- form
-$formPage = static function (Portal $p, array $m, string $key, ?array $row) use ($dash, $card, $flowAllowed): void {
+$formPage = static function (Portal $p, array $m, string $key, ?array $row) use ($app, $dash, $card, $flowAllowed): void {
     $id = $row ? (int) $row['id'] : null;
     $fields = Ops::fields($p, $m, $m['fields'], $row);
     $h = '';
@@ -120,6 +120,16 @@ $formPage = static function (Portal $p, array $m, string $key, ?array $row) use 
         if (!empty($m['print']) && in_array($row['status'], ['reported', 'delivered'], true)) {
             $acts .= '<a class="d-btn d-btn-soft" target="_blank" rel="noopener" href="' . e(Ops::url($m['_key'], $row['id'] . '/print')) . '">Print report</a>';
         }
+        $bill = Ops::billType($p, $m, $row);
+        if ($bill !== null && $p->writable()) {
+            $acts .= ' <a class="d-btn d-btn-soft" href="' . e(url('portal/billing/new/' . $bill, ['rec' => (string) $row['id'], 'mod' => $key])) . '">Make invoice</a>';
+        }
+        if (!empty($row['invoice_id']) && $p->can('manage_invoices')) {
+            $inv = $app->db->one('SELECT id, invoice_no, status FROM sc_invoices WHERE id = ? AND tenant_id = ?', [(int) $row['invoice_id'], $p->tenantId]);
+            if ($inv !== null) {
+                $dl = str_replace('</dl>', '<dt>Invoice</dt><dd><a href="' . e(url('portal/billing/' . $inv['id'])) . '"><b>' . e((string) $inv['invoice_no']) . '</b></a> ' . ($inv['status'] === 'paid' ? '<span class="d-badge is-ok">Paid</span>' : ($inv['status'] === 'void' ? '<span class="d-badge is-mute">Void</span>' : '<span class="d-badge is-warn">Unpaid</span>')) . '</dd></dl>', $dl);
+            }
+        }
         $h .= $card('Progress', $dl . ($acts !== '' ? '<p style="margin-top:14px">' . $acts . '</p>' : ''));
     }
     $f = '<form class="d-form" method="post" action="' . e(Ops::url($m['_key'], 'save')) . '">' . csrf_field() . ($id ? '<input type="hidden" name="id" value="' . $id . '">' : '') . '<div class="d-form-grid">';
@@ -133,6 +143,9 @@ $formPage = static function (Portal $p, array $m, string $key, ?array $row) use 
     $f .= '</div><div class="d-form-actions">' . ($p->writable() ? '<button class="d-btn d-btn-primary" type="submit">Save</button>' : '') . '<a class="d-btn d-btn-soft" href="' . e(Ops::url($m['_key'])) . '">Back</a></div></form>';
     clear_old();
     $h .= $card($id ? 'Details' : 'New ' . $m['singular'], $f);
+    if ($row) {
+        $h .= $card('History', Ops::timeline($app->db, $p->tenantId, $m, (int) $row['id']));
+    }
     $dash($p, 'ops-' . $key, $id ? ucfirst($m['singular']) . ' ' . ($row['code'] ?: $row['title']) : 'Add ' . $m['singular'], '<div class="d-grid d-g2">' . $h . '</div>', ['sub' => (string) $m['sub']]);
 };
 $app->router->get('/portal/ops/{m}/new', static function (array $a) use ($boot, $formPage): void {
@@ -177,6 +190,7 @@ $app->router->post('/portal/ops/{m}/save', static function (array $a) use ($app,
         }
         $d += ['tenant_id' => $p->tenantId, 'module' => $key, 'created_by' => (int) $p->user['id'], 'created_at' => $now, 'updated_at' => $now];
         $id = $app->db->insert('sc_records', $d);
+        Ops::event($app->db, $p->tenantId, $id, $key, 'created', null, (string) $d['status'], (int) $p->user['id']);
         $audit($p, $key . '_added', null, ['id' => $id, 'code' => $d['code'] ?? null]);
     } else {
         $d['updated_at'] = $now;
@@ -275,6 +289,7 @@ $app->router->post('/portal/ops/{m}/{id}/do/{a}', static function (array $a) use
         $app->db->rollBack();
         throw $e;
     }
+    Ops::event($app->db, $p->tenantId, (int) $row['id'], $key, (string) $a['a'], (string) $row['status'], (string) $f[2], (int) $p->user['id'], isset($f['ask']) ? ($upd['notes'] ?? ($upd['cat'] ?? null)) : null);
     $audit($p, $key . '_' . $a['a'], ['id' => (int) $row['id'], 'status' => $row['status']], ['status' => $f[2]]);
     flash($f[0] . ': done.', 'ok');
     if (!empty($f['then'])) {
@@ -299,6 +314,7 @@ $app->router->post('/portal/ops/{m}/{id}/delete', static function (array $a) use
         if ($key === 'trips' && in_array($row['status'], ['dispatched', 'onroute'], true) && $row['cat']) {
             $app->db->run("UPDATE sc_records SET status = 'available' WHERE tenant_id = ? AND module = 'vehicles' AND code = ? AND status = 'on_trip'", [$p->tenantId, $row['cat']]);
         }
+        Ops::event($app->db, $p->tenantId, (int) $row['id'], $key, 'deleted', (string) $row['status'], (string) $row['status'], (int) $p->user['id']);
         $audit($p, $key . '_deleted', ['id' => (int) $row['id']], null);
         flash('Deleted. You can bring it back from the deleted list.', 'ok');
     }
@@ -311,6 +327,7 @@ $app->router->post('/portal/ops/{m}/{id}/restore', static function (array $a) us
     $row = $load($p, $key, (int) $a['id']);
     if ($row !== null && $row['deleted_at']) {
         $app->db->update('sc_records', ['deleted_at' => null], 'id = ? AND tenant_id = ?', [$row['id'], $p->tenantId]);
+        Ops::event($app->db, $p->tenantId, (int) $row['id'], $key, 'restored', (string) $row['status'], (string) $row['status'], (int) $p->user['id']);
         $audit($p, $key . '_restored', null, ['id' => (int) $row['id']]);
         flash('Brought back.', 'ok');
     }

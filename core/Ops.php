@@ -87,6 +87,79 @@ final class Ops
         return $fields;
     }
 
+    /** Invoice type to offer on a record ("Make invoice"), or null when billing is not possible now. */
+    public static function billType(Portal $p, array $m, array $row): ?string
+    {
+        $b = $m['bill'] ?? null;
+        if ($b === null || !empty($row['invoice_id']) || !empty($row['deleted_at']) || !in_array($row['status'], (array) $b['when'], true) || !$p->can('manage_invoices') || !$p->module('billing')) {
+            return null;
+        }
+        $billing = new Billing(app()->db);
+        $cat = $billing->catalog((string) $p->type['slug'], $p->family)['invoices'];
+        return isset($cat[$b['type']]) && $p->module($billing->module((string) $b['type'])) ? (string) $b['type'] : null;
+    }
+
+    /** Values to put on a new invoice from a record: party, reference, extra header fields and the first line. @return array<string,mixed> */
+    public static function billPrefill(array $m, array $row): array
+    {
+        $b = $m['bill'];
+        $x = [];
+        foreach ($b['x'] ?? [] as $name => $col) {
+            $x['x_' . $name] = (string) ($row[$col] ?? '');
+        }
+        $name = str_replace(['{code}', '{cat}', '{qty}'], [(string) $row['code'], (string) $row['cat'], rtrim(rtrim(number_format((float) $row['qty'], 2, '.', ''), '0'), '.')], (string) ($b['item'] ?? ''));
+        return ['party_name' => (string) $row['title'], 'party_phone' => (string) $row['phone'], 'reference' => (string) $row['code']] + (isset($b['item']) ? ['item' => ['item_name' => $name, 'qty' => 1, 'price' => (float) ($row[$b['price'] ?? 'amount'] ?? 0)]] : []) + $x;
+    }
+
+    /** Writes one line of the history of a record (who changed what, when). */
+    public static function event(Database $db, string $tenant, int $recordId, string $module, string $action, ?string $from, ?string $to, ?int $userId, ?string $note = null): void
+    {
+        $db->insert('sc_record_events', ['tenant_id' => $tenant, 'record_id' => $recordId, 'module' => $module, 'action' => $action, 'from_status' => $from, 'to_status' => $to, 'note' => $note !== null ? mb_substr($note, 0, 500) : null, 'user_id' => $userId, 'created_at' => date('Y-m-d H:i:s')]);
+    }
+
+    /** History of one record as an HTML list, with the time since the step before. */
+    public static function timeline(Database $db, string $tenant, array $m, int $recordId): string
+    {
+        $rows = $db->all('SELECT e.*, u.first_name, u.last_name FROM sc_record_events e LEFT JOIN users u ON u.id = e.user_id WHERE e.tenant_id = ? AND e.record_id = ? ORDER BY e.id', [$tenant, $recordId]);
+        if (!$rows) {
+            return '<p class="d-help">No history yet.</p>';
+        }
+        $h = '<ol class="d-timeline" style="list-style:none;margin:0;padding:0">';
+        $prev = null;
+        foreach ($rows as $r) {
+            $t = strtotime((string) $r['created_at']);
+            $gap = $prev !== null ? self::span($t - $prev) : '';
+            $label = match ($r['action']) {
+                'created' => 'Added',
+                'deleted' => 'Deleted',
+                'restored' => 'Brought back',
+                'billed' => 'Invoice made',
+                default => (string) ($m['flow'][$r['action']][0] ?? ucfirst(str_replace('_', ' ', (string) $r['action']))),
+            };
+            $who = trim((string) $r['first_name'] . ' ' . (string) $r['last_name']);
+            $h .= '<li style="padding:8px 0;border-bottom:1px solid var(--d-line,#e5e7eb)"><b>' . e($label) . '</b>'
+                . ($r['to_status'] && $r['action'] !== 'created' && isset($m['status'][$r['to_status']]) ? ' ' . self::badge($m, (string) $r['to_status']) : '')
+                . '<div class="d-help">' . e(dt((string) $r['created_at'], 'd M Y H:i')) . ($who !== '' ? ' · ' . e($who) : '') . ($gap !== '' ? ' · ' . e($gap) . ' after the step before' : '') . '</div>'
+                . ($r['note'] ? '<div class="d-help">' . e((string) $r['note']) . '</div>' : '') . '</li>';
+            $prev = $t;
+        }
+        return $h . '</ol>';
+    }
+
+    public static function span(int $sec): string
+    {
+        if ($sec < 90) {
+            return max(0, $sec) . ' s';
+        }
+        if ($sec < 5400) {
+            return (int) round($sec / 60) . ' min';
+        }
+        if ($sec < 172800) {
+            return round($sec / 3600, 1) . ' h';
+        }
+        return (int) round($sec / 86400) . ' days';
+    }
+
     /** Next code such as SMP-0007 (unique per vendor and module). */
     public static function code(Database $db, string $tenant, string $module, string $prefix): string
     {

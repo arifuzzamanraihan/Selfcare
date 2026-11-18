@@ -28,6 +28,8 @@ return [
             'deliver' => ['Mark delivered', 'reported', 'delivered', 'send'],
             'reject' => ['Reject sample', ['collected', 'processing'], 'rejected', 'x', 'ask' => ['notes' => ['label' => 'Why is it rejected?', 'type' => 'textarea', 'rows' => 3, 'required' => true, 'max' => 500, 'wide' => true, 'placeholder' => 'Haemolysed, too little, wrong tube…']]],
         ],
+        'intake' => ['title', 'phone', 'date1'],
+        'bill' => ['type' => 'test_invoice', 'when' => ['collected', 'processing', 'reported', 'delivered'], 'item' => '{cat}', 'price' => 'amount', 'x' => ['referred_by' => 'party', 'sample_id' => 'code']],
         'search' => ['code', 'title', 'cat', 'phone', 'party'],
         'kpis' => [
             ['Samples today', "SELECT COUNT(*) " . $rec('samples') . " AND date1 = CURDATE()", 'flask', 'collected today', 'samples', []],

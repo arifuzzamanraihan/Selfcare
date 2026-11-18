@@ -457,6 +457,8 @@ CREATE TABLE IF NOT EXISTS sc_records (
   date2 DATE NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'new',
   notes TEXT NULL,
+  tag VARCHAR(40) NULL COMMENT 'priority or label, set by the module',
+  invoice_id BIGINT UNSIGNED NULL COMMENT 'sc_invoices.id of the bill made from this record',
   created_by BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NULL DEFAULT NULL,
   updated_at TIMESTAMP NULL DEFAULT NULL,
@@ -465,6 +467,23 @@ CREATE TABLE IF NOT EXISTS sc_records (
   KEY sc_rec_code (tenant_id, module, code),
   KEY sc_rec_d1 (tenant_id, module, date1),
   KEY sc_rec_d2 (tenant_id, module, date2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Who did what to a work-list record and when (state changes, created, deleted). Removed with the record.
+CREATE TABLE IF NOT EXISTS sc_record_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  record_id BIGINT UNSIGNED NOT NULL,
+  module VARCHAR(30) NOT NULL,
+  action VARCHAR(40) NOT NULL,
+  from_status VARCHAR(20) NULL,
+  to_status VARCHAR(20) NULL,
+  note VARCHAR(500) NULL,
+  user_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  KEY sc_re_rec (record_id, id),
+  KEY sc_re_tenant (tenant_id, module, action, created_at),
+  CONSTRAINT sc_re_rec_fk FOREIGN KEY (record_id) REFERENCES sc_records (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sc_stock_moves (
