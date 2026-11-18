@@ -75,16 +75,143 @@ final class Ops
         return '<span class="d-badge is-' . e($tone) . '">' . e($label) . '</span>';
     }
 
-    /** Fields with dynamic option lists resolved (for example the free vehicles). @return array<string,array<string,mixed>> */
+    /** Fields with dynamic option lists resolved (vehicles, registered patients, doctors). @return array<string,array<string,mixed>> */
     public static function fields(Portal $p, array $m, array $fields, ?array $row = null): array
     {
         foreach ($fields as $k => $f) {
             if (isset($f['options']) && is_string($f['options'])) {
-                $fn = $m['dynamic'][$f['options']] ?? null;
-                $fields[$k]['options'] = $fn ? $fn($p, $row, true) : [];
+                $name = (string) $f['options'];
+                $fn = $m['dynamic'][$name] ?? null;
+                if ($fn) {
+                    $fields[$k]['options'] = $fn($p, $row, true);
+                } elseif ($name === 'patients' || $name === 'doctors') {
+                    [$opts, $meta] = self::peopleMeta($p, $name, $row);
+                    $fields[$k]['options'] = $opts;
+                    $fields[$k]['option_meta'] = $meta;
+                    if ($name === 'patients') {
+                        $fields[$k]['fill'] = 'patient';
+                    }
+                } else {
+                    $fields[$k]['options'] = [];
+                }
             }
         }
         return $fields;
+    }
+
+    /** Registered patients or doctors of this vendor, plus the current row's choice if it was later removed. @return array<string,string> */
+    public static function people(Portal $p, string $kind, ?array $row = null): array
+    {
+        $db = app()->db;
+        if ($kind === 'doctors') {
+            $rows = $db->all("SELECT d.id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, d.specialist FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.tenant_id = ? AND u.status = 1 AND u.deleted_at IS NULL ORDER BY u.first_name, u.last_name", [$p->tenantId]);
+            $col = 'staff_id';
+        } else {
+            $rows = $db->all("SELECT p.id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, p.patient_unique_id, u.phone FROM patients p JOIN users u ON u.id = p.user_id WHERE p.tenant_id = ? AND u.status = 1 AND u.deleted_at IS NULL ORDER BY u.first_name, u.last_name", [$p->tenantId]);
+            $col = 'person_id';
+        }
+        $o = [];
+        foreach ($rows as $r) {
+            $lab = (string) $r['n'];
+            if ($kind === 'doctors' && $r['specialist']) {
+                $lab .= ' · ' . $r['specialist'];
+            } elseif ($kind !== 'doctors' && !empty($r['patient_unique_id'])) {
+                $lab .= ' · ' . $r['patient_unique_id'];
+            }
+            $o[(string) $r['id']] = $lab;
+        }
+        if ($row && !empty($row[$col]) && !isset($o[(string) $row[$col]])) {
+            $o[(string) $row[$col]] = 'Previously selected (#' . (int) $row[$col] . ')';
+        }
+        return $o;
+    }
+
+    /** @return array{0:array<string,string>,1:array<string,array{name:string,phone:string}>} */
+    public static function peopleMeta(Portal $p, string $kind, ?array $row = null): array
+    {
+        $opts = self::people($p, $kind, $row);
+        $meta = [];
+        if ($kind === 'patients') {
+            $rows = app()->db->all("SELECT p.id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, u.phone FROM patients p JOIN users u ON u.id = p.user_id WHERE p.tenant_id = ?", [$p->tenantId]);
+            foreach ($rows as $r) {
+                $meta[(string) $r['id']] = ['name' => (string) $r['n'], 'phone' => (string) ($r['phone'] ?? '')];
+            }
+        }
+        return [$opts, $meta];
+    }
+
+    /** Phone and display name of a registered patient of this vendor, or null. @return ?array{name:string,phone:string} */
+    public static function patientInfo(Portal $p, int $id): ?array
+    {
+        $r = app()->db->one("SELECT TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, u.phone FROM patients p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.tenant_id = ?", [$id, $p->tenantId]);
+        return $r ? ['name' => (string) $r['n'], 'phone' => (string) ($r['phone'] ?? '')] : null;
+    }
+
+    /** Display name of a doctor of this vendor, or null. */
+    public static function doctorName(Portal $p, int $id): ?string
+    {
+        $n = app()->db->val("SELECT TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.id = ? AND d.tenant_id = ?", [$id, $p->tenantId]);
+        return $n ? (string) $n : null;
+    }
+
+    /** Columns that may be written on sc_records. @return list<string> */
+    public static function cols(): array
+    {
+        return ['code', 'title', 'party', 'phone', 'cat', 'place_a', 'place_b', 'qty', 'amount', 'date1', 'date2', 'status', 'notes', 'tag', 'invoice_id', 'sort_order', 'meta', 'person_id', 'staff_id'];
+    }
+
+    /** Moves fields marked store=meta into the JSON column and drops unknown keys. @param array<string,mixed> $d */
+    public static function pack(array $fields, array $d, ?array $old = null): array
+    {
+        $meta = $old && !empty($old['meta']) ? (json_decode((string) $old['meta'], true) ?: []) : [];
+        foreach ($fields as $n => $f) {
+            if (($f['store'] ?? '') === 'meta' && array_key_exists($n, $d)) {
+                $meta[$n] = $d[$n];
+                unset($d[$n]);
+            }
+        }
+        $d['meta'] = $meta === [] ? null : json_encode($meta, JSON_UNESCAPED_UNICODE);
+        $ok = array_flip(self::cols());
+        foreach (array_keys($d) as $k) {
+            if (!isset($ok[$k])) {
+                unset($d[$k]);
+            }
+        }
+        return $d;
+    }
+
+    /** Puts JSON extras back onto the row so forms and prints can read them as ordinary fields. @param array<string,mixed> $row */
+    public static function unpack(array $row): array
+    {
+        if (!empty($row['meta'])) {
+            $meta = json_decode((string) $row['meta'], true);
+            if (is_array($meta)) {
+                foreach ($meta as $k => $v) {
+                    if (!array_key_exists($k, $row) || $row[$k] === null || $row[$k] === '') {
+                        $row[$k] = is_scalar($v) || $v === null ? $v : json_encode($v);
+                    }
+                }
+            }
+        }
+        return $row;
+    }
+
+    /** Next daily number such as 12, unique per vendor, list and date. */
+    public static function dailyCode(Database $db, string $tenant, string $module, string $date): string
+    {
+        $n = (int) $db->val('SELECT COALESCE(MAX(CAST(code AS UNSIGNED)), 0) FROM sc_records WHERE tenant_id = ? AND module = ? AND date1 = ? AND code REGEXP ?', [$tenant, $module, $date, '^[0-9]+$']);
+        return (string) ($n + 1);
+    }
+
+    /** Next queue position for a day (or the list as a whole when the date is empty). */
+    public static function nextSort(Database $db, string $tenant, string $module, ?string $date): int
+    {
+        if ($date) {
+            $n = (int) $db->val('SELECT COALESCE(MAX(sort_order), 0) FROM sc_records WHERE tenant_id = ? AND module = ? AND date1 <=> ? AND deleted_at IS NULL', [$tenant, $module, $date]);
+        } else {
+            $n = (int) $db->val('SELECT COALESCE(MAX(sort_order), 0) FROM sc_records WHERE tenant_id = ? AND module = ? AND deleted_at IS NULL', [$tenant, $module]);
+        }
+        return $n + 1;
     }
 
     /** Invoice type to offer on a record ("Make invoice"), or null when billing is not possible now. */
@@ -107,7 +234,11 @@ final class Ops
         foreach ($b['x'] ?? [] as $name => $col) {
             $x['x_' . $name] = (string) ($row[$col] ?? '');
         }
-        $name = str_replace(['{code}', '{cat}', '{qty}'], [(string) $row['code'], (string) $row['cat'], rtrim(rtrim(number_format((float) $row['qty'], 2, '.', ''), '0'), '.')], (string) ($b['item'] ?? ''));
+        $name = str_replace(
+            ['{code}', '{cat}', '{qty}', '{title}', '{party}', '{place_a}', '{place_b}'],
+            [(string) $row['code'], (string) $row['cat'], rtrim(rtrim(number_format((float) $row['qty'], 2, '.', ''), '0'), '.'), (string) $row['title'], (string) ($row['party'] ?? ''), (string) ($row['place_a'] ?? ''), (string) ($row['place_b'] ?? '')],
+            (string) ($b['item'] ?? '')
+        );
         return ['party_name' => (string) $row['title'], 'party_phone' => (string) $row['phone'], 'reference' => (string) $row['code']] + (isset($b['item']) ? ['item' => ['item_name' => $name, 'qty' => 1, 'price' => (float) ($row[$b['price'] ?? 'amount'] ?? 0)]] : []) + $x;
     }
 
@@ -203,12 +334,14 @@ final class Ops
         $db->run("UPDATE sc_records SET status = ?, updated_at = NOW() WHERE tenant_id = ? AND module = ? AND deleted_at IS NULL AND status IN ($in) AND {$e['col']} IS NOT NULL AND {$e['col']} < CURDATE()", array_merge([$e['to'], $tenant, $key], $e['status']));
     }
 
-    /** Donors who finished resting can give again. */
+    /** Time-based state changes for this vendor (donor rest, expired bags, overdue rentals, …). */
     public static function refresh(Database $db, Portal $p): void
     {
         if ((string) $p->type['slug'] === 'blood-bank') {
             $db->run("UPDATE sc_records SET status = 'eligible', updated_at = NOW() WHERE tenant_id = ? AND module = 'donors' AND deleted_at IS NULL AND status = 'resting' AND date2 IS NOT NULL AND date2 <= CURDATE()", [$p->tenantId]);
-            if (isset(self::all()['units'])) { self::expire($db, $p->tenantId, self::all()['units'], 'units'); }
+        }
+        foreach (self::forPortal($p) as $key => $m) {
+            self::expire($db, $p->tenantId, $m, $key);
         }
     }
 

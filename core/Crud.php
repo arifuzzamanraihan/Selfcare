@@ -104,7 +104,7 @@ final class Crud
         $label = e($f['label'] ?? ucfirst($name));
         $req = !empty($f['required']) ? ' required' : '';
         $help = !empty($f['help']) ? '<small class="d-help">' . e($f['help']) . '</small>' : '';
-        $wide = in_array($type, ['textarea', 'checks', 'image'], true) || !empty($f['wide']) ? ' is-wide' : '';
+        $wide = in_array($type, ['textarea', 'checks', 'image', 'teeth'], true) || !empty($f['wide']) ? ' is-wide' : '';
         $star = !empty($f['required']) ? ' <span class="d-req" aria-hidden="true">*</span>' : '';
         $id = 'f_' . $name;
         $in = '';
@@ -113,12 +113,17 @@ final class Crud
                 $in = '<textarea id="' . $id . '" name="' . e($name) . '" rows="' . (int) ($f['rows'] ?? 4) . '"' . $req . (isset($f['max']) ? ' maxlength="' . (int) $f['max'] . '"' : '') . '>' . e($val) . '</textarea>';
                 break;
             case 'select':
-                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . '>';
+                $extra = !empty($f['fill']) ? ' data-fill-' . e((string) $f['fill']) : '';
+                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . $extra . '>';
                 if (empty($f['required']) || ($f['blank'] ?? false)) {
                     $in .= '<option value="">' . e((string) ($f['blank_label'] ?? 'Choose…')) . '</option>';
                 }
                 foreach ($f['options'] as $k => $lab) {
-                    $in .= '<option value="' . e((string) $k) . '"' . ((string) $k === $val ? ' selected' : '') . '>' . e((string) $lab) . '</option>';
+                    $dm = '';
+                    foreach (($f['option_meta'][(string) $k] ?? []) as $ak => $av) {
+                        $dm .= ' data-' . e((string) $ak) . '="' . e((string) $av) . '"';
+                    }
+                    $in .= '<option value="' . e((string) $k) . '"' . ((string) $k === $val ? ' selected' : '') . $dm . '>' . e((string) $lab) . '</option>';
                 }
                 $in .= '</select>';
                 break;
@@ -137,6 +142,24 @@ final class Crud
                 $cur = $val !== '' ? '<img class="d-thumb" src="' . e(base_path() . '/' . ltrim($val, '/')) . '" alt="">' : '';
                 $in = $cur . '<input id="' . $id . '" type="file" name="' . e($name) . '" accept="image/jpeg,image/png,image/webp"><input type="hidden" name="' . e($name) . '_keep" value="' . e($val) . '">';
                 break;
+            case 'teeth':
+                $set = array_filter(array_map('trim', explode(',', $val)));
+                $arch = static function (string $title, array $nums) use ($name, $set): string {
+                    $h = '<div class="d-teeth-arch"><span class="d-teeth-lab">' . e($title) . '</span><div class="d-teeth-row">';
+                    foreach ($nums as $n) {
+                        $on = in_array((string) $n, $set, true);
+                        $h .= '<label class="d-tooth' . ($on ? ' is-on' : '') . '"><input type="checkbox" name="' . e($name) . '[]" value="' . $n . '"' . ($on ? ' checked' : '') . '><span>' . $n . '</span></label>';
+                    }
+                    return $h . '</div></div>';
+                };
+                $in = '<div class="d-teeth" role="group" aria-label="' . $label . '">'
+                    . $arch('Upper right', [18, 17, 16, 15, 14, 13, 12, 11])
+                    . $arch('Upper left', [21, 22, 23, 24, 25, 26, 27, 28])
+                    . $arch('Lower left', [31, 32, 33, 34, 35, 36, 37, 38])
+                    . $arch('Lower right', [48, 47, 46, 45, 44, 43, 42, 41])
+                    . '</div>';
+                $label = '<span>' . $label . '</span>';
+                return '<div class="d-field' . $wide . '"><div class="d-label">' . $label . $star . '</div>' . $in . $help . '</div>';
             default:
                 $attrs = '';
                 if ($type === 'number') {
@@ -166,6 +189,14 @@ final class Crud
                 case 'checks':
                     $vals = is_array($raw) ? array_values(array_intersect(array_map('strval', $raw), array_map('strval', array_keys($f['options'])))) : [];
                     $data[$name] = implode(',', $vals);
+                    break;
+                case 'teeth':
+                    $allow = ['11','12','13','14','15','16','17','18','21','22','23','24','25','26','27','28','31','32','33','34','35','36','37','38','41','42','43','44','45','46','47','48'];
+                    $vals = is_array($raw) ? array_values(array_intersect(array_map('strval', $raw), $allow)) : [];
+                    $data[$name] = implode(',', $vals);
+                    if ($data[$name] === '' && !empty($f['required'])) {
+                        return [$data, $label . ' is required.'];
+                    }
                     break;
                 case 'number':
                     $s = trim((string) $raw);

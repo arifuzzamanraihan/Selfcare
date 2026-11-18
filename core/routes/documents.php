@@ -434,7 +434,7 @@ $app->router->post('/portal/documents/{type}/{id}/void', static function (array 
 $reportList = static function (Portal $p) use ($billing): array {
     $out = [];
     foreach (Reports::forFamily($p->family, (string) $p->type['slug']) as $k) {
-        $out[$k] = Reports::META[$k];
+        $out[$k] = Reports::info($k);
     }
     foreach ($billing->catalog((string) $p->type['slug'], $p->family)['forms'] as $k => $f) {
         if (!empty($f['register']) && $p->can((string) $f['perm'])) {

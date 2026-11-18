@@ -463,6 +463,10 @@ CREATE TABLE IF NOT EXISTS sc_records (
   notes TEXT NULL,
   tag VARCHAR(40) NULL COMMENT 'priority or label, set by the module',
   invoice_id BIGINT UNSIGNED NULL COMMENT 'sc_invoices.id of the bill made from this record',
+  sort_order INT NOT NULL DEFAULT 0 COMMENT 'position in the day queue, 1 is first',
+  meta TEXT NULL COMMENT 'JSON extras for the module (tooth chart, refraction, vitals)',
+  person_id INT UNSIGNED NULL COMMENT 'patients.id of the same vendor, when the record is for a registered patient',
+  staff_id BIGINT UNSIGNED NULL COMMENT 'doctors.id of the same vendor, when a named doctor or specialist is set',
   created_by BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NULL DEFAULT NULL,
   updated_at TIMESTAMP NULL DEFAULT NULL,
@@ -470,7 +474,10 @@ CREATE TABLE IF NOT EXISTS sc_records (
   KEY sc_rec_mod (tenant_id, module, status),
   KEY sc_rec_code (tenant_id, module, code),
   KEY sc_rec_d1 (tenant_id, module, date1),
-  KEY sc_rec_d2 (tenant_id, module, date2)
+  KEY sc_rec_d2 (tenant_id, module, date2),
+  KEY sc_rec_sort (tenant_id, module, date1, sort_order),
+  KEY sc_rec_person (tenant_id, person_id),
+  KEY sc_rec_staff (tenant_id, staff_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Accounts: expenses and other income that are typed in (invoice payments come from billing). Cash basis, see core/Accounts.php.

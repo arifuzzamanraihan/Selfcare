@@ -72,7 +72,30 @@ final class Reports
         if (in_array($typeSlug, ['hospital', 'maternity-center', 'mental-health'], true)) {
             $extra = array_merge($extra, ['admission_register', 'discharge_register', 'census', 'bed_occupancy']);
         }
+        foreach (Ops::all() as $m) {
+            if (in_array($typeSlug, $m['types'], true) && !empty($m['reports'])) {
+                $extra = array_merge($extra, array_keys($m['reports']));
+            }
+        }
         return array_merge(self::COMMON, $extra);
+    }
+
+    /** Title, description and tables for a report key (built-in or a work-list register). @return array{0:string,1:string,2:string} */
+    public static function info(string $key): array
+    {
+        if (isset(self::META[$key])) {
+            return self::META[$key];
+        }
+        foreach (Ops::all() as $mod => $m) {
+            if (isset($m['reports'][$key])) {
+                $r = $m['reports'][$key];
+                if (isset($r[0])) {
+                    return [(string) $r[0], (string) ($r[1] ?? ''), (string) ($r[2] ?? 'sc_records')];
+                }
+                return [(string) ($r['label'] ?? $key), (string) ($r['desc'] ?? ''), 'sc_records'];
+            }
+        }
+        return [$key, '', ''];
     }
 
     /** @return list<string> */
@@ -348,6 +371,48 @@ final class Reports
                 $rows = Currency::normalize($rows, ['total', 'paid', 'balance'], $currency);
                 $out = array_map(fn ($r) => [(string) $r['invoice_no'], dt((string) $r['invoice_date']), (string) $r['hospital_name'], $fm($r['total']), $fm($r['paid']), $fm($r['balance'])], $rows);
                 return $res([['Invoice', 1.6], ['Date', 1.2], ['Vendor', 3], ['Total', 1.2, 'R'], ['Paid', 1.2, 'R'], ['Due', 1.2, 'R']], $out, [['Outstanding', $fm(array_sum(array_column($rows, 'balance')))]]);
+        }
+        foreach (Ops::all() as $mod => $m) {
+            if (!isset($m['reports'][$key]) || $tid === null || $tid === '') {
+                continue;
+            }
+            $spec = $m['reports'][$key];
+            $colsSpec = $spec['cols'] ?? null;
+            if (!$colsSpec) {
+                $colsSpec = [];
+                foreach (Ops::columns($m) as $ck => [$lab, $type]) {
+                    $colsSpec[$ck] = [$lab, $type];
+                }
+            }
+            $dateCol = (string) ($spec['date'] ?? 'date1');
+            if (!preg_match('/^[a-z0-9_]+$/', $dateCol)) {
+                $dateCol = 'date1';
+            }
+            $rows = $db->all("SELECT * FROM sc_records WHERE tenant_id = ? AND module = ? AND deleted_at IS NULL AND $dateCol BETWEEN ? AND ? ORDER BY $dateCol, sort_order, id", [$tid, $mod, $from, $to]);
+            $out = [];
+            foreach ($rows as $r) {
+                $r = Ops::unpack($r);
+                $line = [];
+                foreach ($colsSpec as $ck => $ci) {
+                    $type = is_array($ci) ? (string) ($ci[1] ?? 'text') : 'text';
+                    $val = (string) ($r[$ck] ?? '');
+                    if ($type === 'date') {
+                        $val = $val !== '' ? dt($val) : '';
+                    } elseif ($type === 'money') {
+                        $val = $val !== '' ? $fm((float) $val) : '';
+                    } elseif ($ck === 'status' && isset($m['status'][$val])) {
+                        $val = (string) $m['status'][$val][0];
+                    }
+                    $line[] = $val;
+                }
+                $out[] = $line;
+            }
+            $cols = [];
+            foreach ($colsSpec as $ci) {
+                $lab = is_array($ci) ? (string) $ci[0] : (string) $ci;
+                $cols[] = [$lab, 1.4];
+            }
+            return $res($cols, $out, [['Records', (string) count($out)]]);
         }
         // form registers: key "reg-<form>"
         if (str_starts_with($key, 'reg-')) {

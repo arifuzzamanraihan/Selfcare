@@ -21,3 +21,23 @@ Added or tightened:
 - Vendor settings: country and time zone. `/pricing?cur=` is kept on redirect.
 
 Tests: `tests/currency.php`, `tests/currency_web.py` (set `SELFCARE_ROOT` and `SCPORT` when running from a worktree).
+## 2026-11-18 – Wave 2 work-list engine and type-specific lists (Builder C)
+### Engine (`sc_records`, `core/Ops.php`, `core/routes/ops.php`)
+- Additive migration `database/phase1/migrate-20261118-225200-wave2-ops.sql`: `sort_order`, `meta` (JSON), `person_id` (patients.id), `staff_id` (doctors.id). Hooked from `schema.sql` and `install.php` after `migrate-r4.sql`.
+- Daily numeric codes (`number => daily`) for token-style lists; empty codes autogenerate from the prefix or the daily serial.
+- Queue view: today's list, drag-and-drop, ↑/↓, Alt+Up/Down, Call next, now-serving board (token + doctor, no patient names, 15s refresh). Nested forms were removed from the queue table so action buttons stay valid HTML. Reorder POST sends `_csrf`.
+- Generic asset lock (`need` / `to`) so a machine or caregiver cannot be double-booked.
+- `refresh()` expires every module that declares `expire` (not only blood units) — rentals become overdue past the due date.
+- Field types: `teeth` (FDI 11–48 odontogram in `core/Crud.php`); dynamic `patients` / `doctors` options with fill-in of name and phone.
+- `billPrefill` placeholders: `{title}`, `{party}`, `{place_a}`, `{place_b}` as well as `{code}`, `{cat}`, `{qty}`.
+- Generic HTML print (letterhead, chosen rows, notes, sign box). Flow steps pack `meta` so ask-fields do not hit unknown columns.
+- Reports: `Reports::forFamily` merges ops registers; `run()` can print any `sc_records` register a module declares.
+- Integrity: records must point at a patient or doctor of the same vendor when those ids are set.
+- Layout: `templates/dash/layout.php` gained an optional `$head` slot (board refresh) and loads `public/js/ops-queue.js`. Queue/board/odontogram styles live in `public/css/selfcare-dash.css`.
+
+### Type configs (`core/config/ops/*.php`) and demo seed
+New modules (37 keys globally unique; pharmacy, laboratory samples, blood bank and ambulance unchanged): `tokens`, `procedures`, `txplans`, `eyexams`, `optical`, `catalogue`, `studies`, `dmachines`, `dsessions`, `anc`, `vaccines`, `deliveries`, `mhsessions`, `mhplans`, `consults`, `remedies`, `residents`, `ncare`, `mar`, `incidents`, `rhplans`, `rhsessions`, `rhpacks`, `tlsessions`, `caregivers`, `hcvisits`, `eqitems`, `rentals`, `service`.
+Permissions reused only (`manage_appointments`, `manage_prescriptions`, `manage_catalog`, `manage_medicines`). Demo rows added in `database/phase1/seed-ops.php` for every demo vendor of those kinds.
+
+### Out of scope in this change
+Hospital departments (OPD/IPD/ICU/OT/wards/beds), doctor portal, patient portal and booking remain Builder A follow-up. UI button pass remains Builder B.

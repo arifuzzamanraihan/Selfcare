@@ -100,6 +100,8 @@ $check('records point to an invoice of the same vendor', 'SELECT r.id, r.invoice
 $check('history lines belong to a record of the same vendor and list', 'SELECT e.id FROM sc_record_events e LEFT JOIN sc_records r ON r.id = e.record_id WHERE r.id IS NULL OR r.tenant_id <> e.tenant_id OR r.module <> e.module');
 $check('every record has a history', 'SELECT r.id FROM sc_records r WHERE NOT EXISTS (SELECT 1 FROM sc_record_events e WHERE e.record_id = r.id)', true);
 $check('plate numbers / codes are unique per vendor and list', "SELECT tenant_id, module, code, COUNT(*) n FROM sc_records WHERE code IS NOT NULL AND code <> '' AND deleted_at IS NULL GROUP BY tenant_id, module, code HAVING n > 1");
+$check('records point to a patient of the same vendor', 'SELECT r.id FROM sc_records r LEFT JOIN patients p ON p.id = r.person_id WHERE r.person_id IS NOT NULL AND (p.id IS NULL OR p.tenant_id <> r.tenant_id)');
+$check('records point to a doctor of the same vendor', 'SELECT r.id FROM sc_records r LEFT JOIN doctors d ON d.id = r.staff_id WHERE r.staff_id IS NOT NULL AND (d.id IS NULL OR d.tenant_id <> r.tenant_id)');
 
 echo "accounts\n";
 $check('ledger entries belong to a vendor', 'SELECT l.id FROM sc_ledger l LEFT JOIN sc_vendors v ON v.tenant_id = l.tenant_id WHERE v.tenant_id IS NULL');
