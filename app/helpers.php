@@ -78,7 +78,7 @@ function getLoggedinPatient()
  */
 function getAvatarUrl()
 {
-    return 'https://ui-avatars.com/api/';
+    return '';
 }
 
 /**

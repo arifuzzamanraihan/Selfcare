@@ -27,7 +27,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <a href="https://developers.zoom.us/docs/integrations/create/" class="text-start text-decoration-none pt-1 pb-1" target="_blank">How to generate OAuth Credentials ?</a>
+                    <a href="" class="text-start text-decoration-none pt-1 pb-1" target="_blank">How to generate OAuth Credentials ?</a>
                 </div>
                 <div class="modal-footer p-0">
                     {{ Form::button(__('messages.common.save'), ['type' => 'submit','class' => 'btn btn-primary','id' => 'btnZoomSave','data-loading-text' => "<span class='spinner-border spinner-border-sm'></span> Processing..."]) }}

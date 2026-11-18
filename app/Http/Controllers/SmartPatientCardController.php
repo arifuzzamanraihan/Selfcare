@@ -162,8 +162,8 @@ class SmartPatientCardController extends AppBaseController
         $url = $patient->patientUser->image_url;
         $arrUrl = explode('/', trim($url))[2];
 
-        if ($arrUrl == "ui-avatars.com") {
-            $avatarUrl = "https://ui-avatars.com/api/?name=" . urlencode($patient->patientUser->full_name) . "&size=100&rounded=true&color=fff&background=fc6369";
+        if ($arrUrl == "") {
+            $avatarUrl = "?name=" . urlencode($patient->patientUser->full_name) . "&size=100&rounded=true&color=fff&background=fc6369";
             $avatarData = file_get_contents($avatarUrl);
             $data['profile'] = base64_encode($avatarData);
         } else {

@@ -26,7 +26,7 @@ class PatientPaystackController extends AppBaseController
 
         config(['paystack.publicKey' => getSelectedPaymentGateway('paystack_public_key'),
             'paystack.secretKey' => getSelectedPaymentGateway('paystack_secret_key'),
-            'paystack.paymentUrl' => 'https://api.paystack.co',
+            'paystack.paymentUrl' => '',
         ]);
     }
 

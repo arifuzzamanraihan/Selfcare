@@ -12,7 +12,7 @@ This is a step-by-step guide for running Self Care on a local machine. The short
 ## 1. Clone
 
 ```bash
-git clone https://github.com/zenderfox20904/Selfcare.git
+git clone https://github.com/arifuzzamanraihan/Selfcare.git
 cd Selfcare
 ```
 

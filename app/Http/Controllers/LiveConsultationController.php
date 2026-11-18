@@ -254,7 +254,7 @@ class LiveConsultationController extends AppBaseController
         }
         $clientID = $userZoomCredential->zoom_api_key;
         $callbackURL = config('app.zoom_callback');
-        $url = "https://zoom.us/oauth/authorize?client_id=$clientID&response_type=code&redirect_uri=$callbackURL";
+        $url = "?client_id=$clientID&response_type=code&redirect_uri=$callbackURL";
 
         return redirect($url);
     }

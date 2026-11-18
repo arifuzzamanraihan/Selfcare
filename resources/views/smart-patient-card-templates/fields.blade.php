@@ -147,7 +147,7 @@
                         <div class="w-25">
                             <div class="text-end mb-5">
                                 <div class="qr-code ms-auto">
-                                    {!! QrCode::size(90)->generate('https://selfcare.easybzi.com/h/sims/patient-details/700XYs') !!}
+                                    {!! QrCode::size(90)->generate('https://selfcare.test/h/sims/patient-details/700XYs') !!}
                                 </div>
                                 <h6 class="text-primary text-end mt-5" id="patientUniqueID">{{ __('messages.lunch_break.id') }}:1001</h6>
                             </div>
@@ -225,7 +225,7 @@
                         <div class="w-25">
                             <div class="text-end mb-5">
                                 <div class="qr-code ms-auto">
-                                    {!! QrCode::size(90)->generate('https://selfcare.easybzi.com/h/sims/patient-details/700XYs') !!}
+                                    {!! QrCode::size(90)->generate('https://selfcare.test/h/sims/patient-details/700XYs') !!}
                                 </div>
                                 <h6 class="text-primary text-end mt-5" id="patientUniqueID">
                                     {{ __('messages.lunch_break.id') }}:1001</h6>

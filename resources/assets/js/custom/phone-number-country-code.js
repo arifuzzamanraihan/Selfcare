@@ -33,7 +33,7 @@ function loadPhoneNumberCountryCodeData(){
         initialCountry: defaultCountryCodeValue,
         separateDialCode: true,
         geoIpLookup: function (success, failure) {
-            $.get('https://ipinfo.io', function () {
+            $.get('', function () {
             }, 'jsonp').always(function (resp) {
                 var countryCode = (resp && resp.country)
                     ? resp.country

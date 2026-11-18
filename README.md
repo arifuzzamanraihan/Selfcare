@@ -46,7 +46,7 @@ A longer version of these steps is in [docs/localhost-setup.md](docs/localhost-s
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/zenderfox20904/Selfcare.git
+git clone https://github.com/arifuzzamanraihan/Selfcare.git
 cd Selfcare
 ```
 

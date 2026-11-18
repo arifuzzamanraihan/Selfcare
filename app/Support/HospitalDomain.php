@@ -11,7 +11,7 @@ class HospitalDomain
     {
         $domain = strtolower(trim((string) config('hospitals.base_domain')));
 
-        return $domain !== '' ? $domain : 'selfcare.easybzi.com';
+        return $domain !== '' ? $domain : 'selfcare.test';
     }
 
     public static function isCentralHost(string $host): bool

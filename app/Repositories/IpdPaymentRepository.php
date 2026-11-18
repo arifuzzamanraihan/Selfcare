@@ -283,7 +283,7 @@ class IpdPaymentRepository extends BaseRepository
         $merchantId = getPaymentCredentials('phonepe_merchant_id');
         $merchantUserId = getPaymentCredentials('phonepe_merchant_id');
         $merchantTransactionId = getPaymentCredentials('phonepe_merchant_transaction_id');
-        $baseUrl = getPaymentCredentials('phonepe_env') == 'production' ? 'https://api.phonepe.com/apis/hermes' : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
+        $baseUrl = getPaymentCredentials('phonepe_env') == 'production' ? '' : '';
         $saltKey = getPaymentCredentials('phonepe_salt_key');
         $saltIndex = getPaymentCredentials('phonepe_salt_index');
         $callbackurl = route('ipd.phonepe.callback'). '?' . http_build_query(['input' => $input]);

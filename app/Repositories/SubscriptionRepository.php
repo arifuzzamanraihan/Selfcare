@@ -407,7 +407,7 @@ class SubscriptionRepository extends BaseRepository
         $merchantId = getSuperAdminPaymentCredentials('phonepe_merchant_id');
         $merchantUserId = getSuperAdminPaymentCredentials('phonepe_merchant_id');
         $merchantTransactionId = getSuperAdminPaymentCredentials('phonepe_merchant_transaction_id');
-        $baseUrl = getSuperAdminPaymentCredentials('phonepe_env') == 'production' ? 'https://api.phonepe.com/apis/hermes' : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
+        $baseUrl = getSuperAdminPaymentCredentials('phonepe_env') == 'production' ? '' : '';
         $saltKey = getSuperAdminPaymentCredentials('phonepe_salt_key');
         $saltIndex = getSuperAdminPaymentCredentials('phonepe_salt_index');
         $callbackurl = route('subscription.phonepe.callback'). '?' . http_build_query(['input' => $input]);

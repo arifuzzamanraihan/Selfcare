@@ -33,7 +33,7 @@ class PaystackController extends Controller
     {
         config(['paystack.publicKey' => getSuperAdminPaymentCredentials('paystack_key'),
             'paystack.secretKey' => getSuperAdminPaymentCredentials('paystack_secret'),
-            'paystack.paymentUrl' => 'https://api.paystack.co',
+            'paystack.paymentUrl' => '',
         ]);
     }
 

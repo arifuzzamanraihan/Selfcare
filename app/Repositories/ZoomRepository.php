@@ -34,7 +34,7 @@ class ZoomRepository
             return Flash::error(__('messages.new_change.add_credential'));
         }
 
-        $client = new Client(['base_uri' => 'https://zoom.us']);
+        $client = new Client(['base_uri' => '']);
         $response = $client->request('POST', '/oauth/token', [
             "headers" => [
                 "Authorization" => "Basic " . base64_encode($clientID . ':' . $secret)
@@ -67,7 +67,7 @@ class ZoomRepository
 
     public function updateZoomMeeting($data,$liveConsultation)
     {
-        $client = new Client(['base_uri' => 'https://api.zoom.us']);
+        $client = new Client(['base_uri' => '']);
 
         $zoomOAuth = ZoomOAuth::where('user_id', Auth::id())->first();
 
@@ -107,7 +107,7 @@ class ZoomRepository
 
     public function createZoomMeeting($data)
     {
-        $client = new Client(['base_uri' => 'https://api.zoom.us']);
+        $client = new Client(['base_uri' => '']);
         $zoomOAuth = ZoomOAuth::where('user_id', Auth::id())->first();
 
         try {
@@ -142,7 +142,7 @@ class ZoomRepository
                     throw new UnprocessableEntityHttpException(__('messages.new_change.add_credential'));
                 }
                 $refresh_token = $zoomOAuth->refresh_token;
-                $client = new Client(['base_uri' => 'https://zoom.us']);
+                $client = new Client(['base_uri' => '']);
                 $response = $client->request('POST', '/oauth/token', [
                     "headers" => [
                         "Authorization" => "Basic " . base64_encode($clientID . ':' . $secret)
@@ -181,7 +181,7 @@ class ZoomRepository
         try{
             $liveCunsultation = LiveConsultation::whereMeetingId($id)->first();
             $liveMeeting = LiveMeeting::whereMeetingId($id)->first();
-            $client = new Client(['base_uri' => 'https://api.zoom.us']);
+            $client = new Client(['base_uri' => '']);
             if(isset($liveCunsultation)){
                 $zoomOAuth = ZoomOAuth::where('user_id', $liveCunsultation->created_by)->first();
             }
@@ -209,7 +209,7 @@ class ZoomRepository
         $clientID = config('app.zoom_api_key');
         $secret = config('app.zoom_api_secret');
 
-        $client = new Client(['base_uri' => 'https://api.zoom.us']);
+        $client = new Client(['base_uri' => '']);
 
         $zoomOAuth = ZoomOAuth::where('user_id', Auth::id())->first();
 

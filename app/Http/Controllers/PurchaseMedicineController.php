@@ -257,7 +257,7 @@ class PurchaseMedicineController extends AppBaseController
     {
         config(['paystack.publicKey' => getPaymentCredentials('paystack_public_key'),
             'paystack.secretKey' => getPaymentCredentials('paystack_secret_key'),
-            'paystack.paymentUrl' => 'https://api.paystack.co',
+            'paystack.paymentUrl' => '',
         ]);
     }
 

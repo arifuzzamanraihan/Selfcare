@@ -5,11 +5,11 @@ return [
     /*
     | Hospital sites are served at {username}.{base_domain}.
     | Local: city.localhost:8000
-    | Live:  city.selfcare.easybzi.com
+    | Live:  city.selfcare.test
     */
-    'base_domain' => env('HOSPITAL_BASE_DOMAIN', 'selfcare.easybzi.com'),
+    'base_domain' => env('HOSPITAL_BASE_DOMAIN', 'selfcare.test'),
 
-    // Turn on after *.selfcare.easybzi.com DNS points at this server.
+    // Turn on after *.selfcare.test DNS points at this server.
     'redirect_legacy' => env('HOSPITAL_SUBDOMAIN_REDIRECT', false),
 
     'reserved' => [

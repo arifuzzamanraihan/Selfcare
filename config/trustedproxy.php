@@ -45,7 +45,7 @@ return [
      * - 'HEADER_FORWARDED' (use the FORWARDED header to establish trust)
      * - 'HEADER_X_FORWARDED_AWS_ELB' (If you are using AWS Elastic Load Balancer)
      *
-     * @link https://symfony.com/doc/current/deployment/proxies.html
+     * @link 
      */
     'headers' => Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_HOST | Request::HEADER_X_FORWARDED_PORT | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_AWS_ELB,
 
