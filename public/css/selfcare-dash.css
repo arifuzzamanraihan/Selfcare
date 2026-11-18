@@ -313,6 +313,7 @@ html,body{max-width:100%}
   .d-table td::before{text-align:left;max-width:none}
   .d-table td.d-actions{display:flex;justify-content:flex-start;flex-wrap:wrap;grid-template-columns:none}
   .d-imp{padding:4px 10px}
+}
 
 /* Doctor workspace: queue on the left, patient and prescription on the right (stacks on small screens, action bar stays in reach) */
 .ws-grid { display:grid; grid-template-columns:minmax(300px,380px) minmax(0,1fr); gap:16px; align-items:start; }
