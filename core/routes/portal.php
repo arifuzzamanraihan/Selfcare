@@ -77,6 +77,9 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
         $h .= $stat('Cash in today', money($tdy['in']), 'plus', 'out: ' . money($tdy['out']));
         $h .= $stat('Expenses this month', money($mth['out']), 'minus', 'see Accounts');
     }
+    if (\Selfcare\Rx::forType((string) $p->type['slug']) !== null && ($p->can('manage_rx') || $p->can('view_rx')) && $p->module('documents')) {
+        $h .= $stat('Prescriptions today', (string) $q("SELECT COUNT(*) FROM sc_prescriptions WHERE tenant_id = ? AND status = 'issued' AND deleted_at IS NULL AND rx_date = CURDATE()", [$t]), 'pill', (string) $q("SELECT COUNT(*) FROM sc_prescriptions WHERE tenant_id = ? AND status = 'draft' AND deleted_at IS NULL", [$t]) . ' drafts waiting');
+    }
     if ($p->can('view_messages') && $p->module('messages')) {
         $h .= $stat('Unread messages', (string) $q('SELECT COUNT(*) FROM sc_messages WHERE tenant_id = ? AND is_read = 0', [$t]), 'mail');
     }
@@ -597,7 +600,7 @@ $app->router->post('/portal/messages/{id}/{do}', static function (array $a) use 
 });
 
 // ------------------------------------------------------------------ role access
-$permModule = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing'];
+$permModule = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing', 'manage_rx' => 'documents', 'view_rx' => 'documents'];
 $app->router->get('/portal/access', static function () use ($app, $dash, $card, $permModule): void {
     $p = Portal::boot($app);
     $p->need('manage_access', 'access');

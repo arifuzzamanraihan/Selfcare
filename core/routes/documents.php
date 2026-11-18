@@ -115,6 +115,13 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
         $rr = $om !== null && !empty($om['bill']) && $om['bill']['type'] === $type ? $app->db->one('SELECT * FROM sc_records WHERE id = ? AND tenant_id = ? AND module = ? AND deleted_at IS NULL AND invoice_id IS NULL', [(int) $_GET['rec'], $p->tenantId, (string) $_GET['mod']]) : null;
         $pre = $rr !== null ? \Selfcare\Ops::billPrefill($om, $rr) : [];
     }
+    // a bill for a prescription: the patient, the doctor and the prescription number
+    if (!empty($_GET['rx']) && $rr === null) {
+        $xr = (new \Selfcare\Rx($app->db))->find($p->tenantId, (int) $_GET['rx']);
+        if ($xr !== null && $xr['deleted_at'] === null) {
+            $pre = ['party_name' => (string) $xr['patient_name'], 'party_phone' => (string) $xr['patient_phone'], 'patient_id' => (string) $xr['patient_id'], 'doctor_id' => (string) $xr['doctor_id'], 'reference' => (string) $xr['rx_no']];
+        }
+    }
     $h = '<form class="d-form" method="post" action="' . e(url('portal/billing/save')) . '" data-invoice data-currency="' . e($currency) . '" autocomplete="off">' . csrf_field() . '<input type="hidden" name="doc_type" value="' . e($type) . '">' . ($rr !== null ? '<input type="hidden" name="rec" value="' . (int) $rr['id'] . '"><input type="hidden" name="mod" value="' . e((string) $rr['module']) . '">' : '') . '<div class="d-form-grid">';
     $h .= $field('party_name', (string) $cfg['party'] . ' name', 'text', [], old('party_name', (string) ($pre['party_name'] ?? '')), false);
     $h .= $field('party_phone', 'Phone', 'tel', [], old('party_phone', (string) ($pre['party_phone'] ?? '')));
@@ -122,13 +129,13 @@ $newInvoice = static function (array $a) use ($app, $dash, $card, $billing, $inv
     if ($p->can('manage_patients') && $cfg['party'] === 'Patient') {
         $pts = $app->db->all('SELECT p.id, u.first_name, u.last_name, p.patient_unique_id FROM patients p JOIN users u ON u.id = p.user_id WHERE p.tenant_id = ? ORDER BY u.first_name LIMIT 300', [$p->tenantId]);
         if ($pts) {
-            $h .= Crud::field('patient_id', ['label' => 'Registered patient (optional)', 'type' => 'select', 'options' => array_column(array_map(fn ($r) => ['k' => $r['id'], 'v' => trim($r['first_name'] . ' ' . $r['last_name']) . ' (' . $r['patient_unique_id'] . ')'], $pts), 'v', 'k')], old('patient_id'));
+            $h .= Crud::field('patient_id', ['label' => 'Registered patient (optional)', 'type' => 'select', 'options' => array_column(array_map(fn ($r) => ['k' => $r['id'], 'v' => trim($r['first_name'] . ' ' . $r['last_name']) . ' (' . $r['patient_unique_id'] . ')'], $pts), 'v', 'k')], old('patient_id', (string) ($pre['patient_id'] ?? '')));
         }
     }
     if (!empty($cfg['doctor'])) {
         $docs = $app->db->all('SELECT d.id, u.first_name, u.last_name FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.tenant_id = ? ORDER BY u.first_name', [$p->tenantId]);
         if ($docs) {
-            $h .= Crud::field('doctor_id', ['label' => 'Doctor (for doctor-wise reports)', 'type' => 'select', 'options' => array_column(array_map(fn ($r) => ['k' => $r['id'], 'v' => 'Dr. ' . $r['first_name'] . ' ' . $r['last_name']], $docs), 'v', 'k')], old('doctor_id'));
+            $h .= Crud::field('doctor_id', ['label' => 'Doctor (for doctor-wise reports)', 'type' => 'select', 'options' => array_column(array_map(fn ($r) => ['k' => $r['id'], 'v' => 'Dr. ' . $r['first_name'] . ' ' . $r['last_name']], $docs), 'v', 'k')], old('doctor_id', (string) ($pre['doctor_id'] ?? '')));
         }
     }
     $h .= $field('invoice_date', 'Date', 'date', [], old('invoice_date', date('Y-m-d')));

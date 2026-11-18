@@ -13,7 +13,7 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
 <link rel="icon" href="<?= e(asset('img/favicon.ico')) ?>" sizes="any">
 <script>try{var t=localStorage.getItem('sc-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}document.documentElement.classList.add('js')</script>
 <link rel="stylesheet" href="<?= e(asset('css/selfcare-ui.css')) ?>"><link rel="stylesheet" href="<?= e(asset('css/selfcare-dash.css')) ?>">
-<script src="<?= e(asset('js/selfcare-app.js')) ?>" defer></script><script src="<?= e(asset('js/selfcare-docs.js')) ?>" defer></script>
+<script src="<?= e(asset('js/selfcare-app.js')) ?>" defer></script><script src="<?= e(asset('js/selfcare-docs.js')) ?>" defer></script><script src="<?= e(asset('js/selfcare-rx.js')) ?>" defer></script>
 </head>
 <body class="d-body">
 <a class="sc-skip" href="#main">Skip to content</a>

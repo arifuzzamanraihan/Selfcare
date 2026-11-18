@@ -28,3 +28,22 @@ INSERT INTO tenant_role_has_permissions (tenant_id, role_id, permission_id)
   SELECT g.tenant_id, g.role_id, p.id FROM (SELECT DISTINCT t.tenant_id, t.role_id FROM tenant_role_has_permissions t JOIN departments d ON d.id = t.role_id WHERE d.name IN ('Accountant', 'Branch Manager') AND t.permission_id <> 0) g
   JOIN permissions p ON p.name = 'manage_accounts'
   WHERE NOT EXISTS (SELECT 1 FROM tenant_role_has_permissions x WHERE x.tenant_id = g.tenant_id AND x.role_id = g.role_id AND x.permission_id = p.id);
+
+-- prescriptions: doctor registration number, patient allergies and long-term conditions
+ALTER TABLE doctors ADD COLUMN IF NOT EXISTS reg_no VARCHAR(60) NULL COMMENT 'medical council registration number printed on prescriptions';
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS allergies VARCHAR(500) NULL COMMENT 'known allergies, shown when prescribing';
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS conditions VARCHAR(500) NULL COMMENT 'long-term conditions';
+
+-- prescription permissions: vendors that already saved role grants (idempotent)
+INSERT INTO permissions (name, guard_name, created_at, updated_at)
+  SELECT n, 'web', NOW(), NOW() FROM (SELECT 'manage_rx' AS n UNION ALL SELECT 'view_rx') x WHERE NOT EXISTS (SELECT 1 FROM permissions p WHERE p.name = x.n);
+INSERT INTO tenant_role_has_permissions (tenant_id, role_id, permission_id)
+  SELECT g.tenant_id, g.role_id, p.id FROM (SELECT DISTINCT t.tenant_id, t.role_id, d.name rname FROM tenant_role_has_permissions t JOIN departments d ON d.id = t.role_id) g
+  JOIN permissions p ON p.name = 'manage_rx'
+  WHERE g.rname IN ('Medical Director', 'Consultant', 'Doctor', 'Resident', 'Optometrist')
+  AND NOT EXISTS (SELECT 1 FROM tenant_role_has_permissions x WHERE x.tenant_id = g.tenant_id AND x.role_id = g.role_id AND x.permission_id = p.id);
+INSERT INTO tenant_role_has_permissions (tenant_id, role_id, permission_id)
+  SELECT g.tenant_id, g.role_id, p.id FROM (SELECT DISTINCT t.tenant_id, t.role_id, d.name rname FROM tenant_role_has_permissions t JOIN departments d ON d.id = t.role_id) g
+  JOIN permissions p ON p.name = 'view_rx'
+  WHERE g.rname IN ('Nurse', 'Head Nurse', 'Midwife', 'Clinical Assistant', 'Case Manager', 'Medical Records Officer', 'Branch Manager', 'Counsellor', 'Therapist', 'Receptionist')
+  AND NOT EXISTS (SELECT 1 FROM tenant_role_has_permissions x WHERE x.tenant_id = g.tenant_id AND x.role_id = g.role_id AND x.permission_id = p.id);

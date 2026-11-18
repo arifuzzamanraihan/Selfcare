@@ -87,13 +87,13 @@ final class People
         ];
         if ($kind === 'doctors') {
             $depts = array_column($this->db()->all('SELECT id, title FROM doctor_departments WHERE tenant_id = ? ORDER BY title', [$this->p->tenantId]), 'title', 'id');
-            $f += ['specialist' => ['label' => 'Speciality', 'required' => true, 'max' => 191], 'qualification' => ['label' => 'Qualifications', 'max' => 191]];
+            $f += ['specialist' => ['label' => 'Speciality', 'required' => true, 'max' => 191], 'qualification' => ['label' => 'Qualifications', 'max' => 191], 'reg_no' => ['label' => 'Registration number (printed on prescriptions)', 'max' => 60]];
             if ($depts) {
                 $f['doctor_department_id'] = ['label' => 'Department', 'type' => 'select', 'options' => $depts, 'required' => true];
             }
             $f += ['appointment_charge' => ['label' => 'Fee', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], 'description' => ['label' => 'About (shown on the website)', 'type' => 'textarea', 'max' => 2000]];
         } elseif ($kind === 'patients') {
-            $f += ['dob' => ['label' => 'Date of birth', 'type' => 'date'], 'blood_group' => ['label' => 'Blood group', 'type' => 'select', 'options' => array_combine(['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'], ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'])], 'city' => ['label' => 'City', 'max' => 191]];
+            $f += ['dob' => ['label' => 'Date of birth', 'type' => 'date'], 'blood_group' => ['label' => 'Blood group', 'type' => 'select', 'options' => array_combine(['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'], ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'])], 'city' => ['label' => 'City', 'max' => 191], 'allergies' => ['label' => 'Known allergies', 'max' => 500, 'wide' => true, 'help' => 'Medicine or food allergies. Shown to doctors when they prescribe.'], 'conditions' => ['label' => 'Long-term conditions', 'max' => 500, 'wide' => true]];
         } else {
             $roles = $this->staffRoles();
             $f += ['role' => ['label' => 'Role', 'type' => 'select', 'options' => array_combine($roles, array_map(fn ($r) => $this->app->access->roleLabel($r, $this->p->family), $roles)), 'required' => true, 'help' => 'The role decides what this person can see. You can change what each role may do under Role access.']];
@@ -108,8 +108,8 @@ final class People
     {
         $tid = $this->p->tenantId;
         return match ($kind) {
-            'doctors' => $this->db()->one('SELECT d.id AS rid, d.specialist, d.description, d.doctor_department_id, d.appointment_charge, u.* FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.id = ? AND d.tenant_id = ?', [$id, $tid]),
-            'patients' => $this->db()->one('SELECT p.id AS rid, u.* FROM patients p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.tenant_id = ?', [$id, $tid]),
+            'doctors' => $this->db()->one('SELECT d.id AS rid, d.specialist, d.reg_no, d.description, d.doctor_department_id, d.appointment_charge, u.* FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.id = ? AND d.tenant_id = ?', [$id, $tid]),
+            'patients' => $this->db()->one('SELECT p.id AS rid, p.allergies, p.conditions, u.* FROM patients p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.tenant_id = ?', [$id, $tid]),
             default => $this->db()->one("SELECT u.*, d.name AS role, u.id AS rid FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE u.id = ? AND u.tenant_id = ?", [Auth::ROLE_MODEL, $id, $tid]),
         };
     }
@@ -244,7 +244,7 @@ final class People
                 $this->app->access->log($tid, $actor, $uid, $role, 'staff_created', null, ['email' => $email, 'role' => $role]);
             }
             if ($kind === 'doctors') {
-                $dd = ['specialist' => $d['specialist'], 'description' => $d['description'] ?? null, 'appointment_charge' => $d['appointment_charge'] ?? 0, 'updated_at' => $now];
+                $dd = ['specialist' => $d['specialist'], 'reg_no' => ($d['reg_no'] ?? '') !== '' ? mb_substr((string) $d['reg_no'], 0, 60) : null, 'description' => $d['description'] ?? null, 'appointment_charge' => $d['appointment_charge'] ?? 0, 'updated_at' => $now];
                 if (isset($d['doctor_department_id'])) {
                     $dd['doctor_department_id'] = (int) $d['doctor_department_id'];
                 } elseif ($row === null) {
@@ -255,8 +255,13 @@ final class People
                 } else {
                     $this->db()->insert('doctors', $dd + ['user_id' => $uid, 'tenant_id' => $tid, 'created_at' => $now]);
                 }
-            } elseif ($kind === 'patients' && $row === null) {
-                $this->db()->insert('patients', ['user_id' => $uid, 'tenant_id' => $tid, 'patient_unique_id' => strtoupper(substr($tid, 0, 3)) . '-' . strtoupper(bin2hex(random_bytes(3))), 'created_at' => $now, 'updated_at' => $now]);
+            } elseif ($kind === 'patients') {
+                $clin = ['allergies' => ($d['allergies'] ?? '') !== '' ? mb_substr((string) $d['allergies'], 0, 500) : null, 'conditions' => ($d['conditions'] ?? '') !== '' ? mb_substr((string) $d['conditions'], 0, 500) : null, 'updated_at' => $now];
+                if ($row === null) {
+                    $this->db()->insert('patients', $clin + ['user_id' => $uid, 'tenant_id' => $tid, 'patient_unique_id' => strtoupper(substr($tid, 0, 3)) . '-' . strtoupper(bin2hex(random_bytes(3))), 'created_at' => $now]);
+                } else {
+                    $this->db()->update('patients', $clin, 'id = ? AND tenant_id = ?', [(int) $row['rid'], $tid]);
+                }
             } elseif ($kind === 'staff') {
                 if ($row !== null && $role !== $row['role']) {
                     $this->db()->run('UPDATE model_has_roles SET role_id = ? WHERE model_id = ? AND model_type = ?', [$roleId, $uid, Auth::ROLE_MODEL]);
@@ -343,6 +348,7 @@ final class People
             $pairs += ['Speciality' => e((string) $row['specialist']), 'Department' => e($dept), 'Fee' => e(money((float) $row['appointment_charge'])), 'About' => e((string) $row['description'])];
         } elseif ($kind === 'patients') {
             $pairs = ['ID' => e((string) $this->db()->val('SELECT patient_unique_id FROM patients WHERE id = ?', [(int) $row['rid']]))] + $pairs;
+            $pairs += ['Allergies' => e((string) ($row['allergies'] ?? '')), 'Long-term conditions' => e((string) ($row['conditions'] ?? ''))];
         }
         $form = static fn (string $path, string $label, string $cls = 'd-btn-soft', string $confirm = '', string $body = '') => '<form class="d-inline" method="post" action="' . e(url('portal/' . $path)) . '"' . ($confirm ? ' data-confirm="' . e($confirm) . '"' : '') . '>' . csrf_field() . $body . '<button class="d-btn ' . $cls . '" type="submit">' . e($label) . '</button></form> ';
         $base = $kind . '/' . $id;
@@ -396,6 +402,14 @@ final class People
             $li = '';
             foreach ($inv as $r) {
                 $li .= '<li><a href="' . e(url('portal/billing/' . $r['id'])) . '"><b>' . e($r['invoice_no']) . '</b></a> · ' . e(money((float) $r['total'], (string) $r['currency'])) . ' · ' . e(ucfirst((string) $r['status'])) . '<small>' . e(dt((string) $r['invoice_date'])) . '</small></li>';
+            }
+            if (Rx::forType((string) $this->p->type['slug']) !== null && ($this->p->can('manage_rx') || $this->p->can('view_rx'))) {
+                $rxs = $this->db()->all("SELECT id, rx_no, rx_date, status, doctor_name FROM sc_prescriptions WHERE tenant_id = ? AND patient_id = ? AND deleted_at IS NULL ORDER BY rx_date DESC, id DESC LIMIT 5", [$tid, (int) $row['rid']]);
+                $rl = '';
+                foreach ($rxs as $r) {
+                    $rl .= '<li><a href="' . e(url('portal/prescriptions/' . $r['id'])) . '"><b>' . e((string) $r['rx_no']) . '</b></a> · ' . e(ucfirst((string) $r['status'])) . ' · ' . e((string) $r['doctor_name']) . '<small>' . e(dt((string) $r['rx_date'])) . '</small></li>';
+                }
+                $side .= '<section class="d-card"><h3>Prescriptions</h3>' . ($rl ? '<ul class="d-tl">' . $rl . '</ul>' : '<p class="d-mute">No prescriptions yet.</p>') . '<p style="margin-top:10px"><a class="d-btn d-btn-soft" href="' . e(url('portal/prescriptions/patient/' . $row['rid'])) . '">Full history</a>' . ($this->p->can('manage_rx') ? ' <a class="d-btn d-btn-primary" href="' . e(url('portal/prescriptions/new', ['patient' => $row['rid']])) . '">New prescription</a>' : '') . '</p></section>';
             }
             $reqs = (int) $this->db()->val('SELECT COUNT(*) FROM sc_appointment_requests WHERE tenant_id = ? AND email = ?', [$tid, $row['email']]);
             $side .= '<section class="d-card"><h3>Invoices</h3>' . ($li ? '<ul class="d-tl">' . $li . '</ul>' : '<p class="d-mute">No invoices yet.</p>') . '<p class="d-help">' . $reqs . ' ' . e(strtolower($this->p->label('requests', 'requests'))) . ' sent from the website.</p></section>';

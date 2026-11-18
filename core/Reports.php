@@ -32,6 +32,9 @@ final class Reports
         'test_volume' => ['Test-wise volume and revenue', 'How many of each test or study, and the revenue.', 'sc_invoice_items, sc_invoices'],
         'turnaround' => ['Turnaround time (TAT)', 'Days from sample collection to report, by department.', 'sc_documents'],
         'sales_register' => ['Sales register', 'Every sale in the period.', 'sc_invoices'],
+        'rx_register' => ['Prescription register', 'Every prescription in the period with patient, doctor, diagnosis and medicines.', 'sc_prescriptions, sc_prescription_items'],
+        'rx_medicines' => ['Most prescribed medicines', 'How many times each medicine was prescribed, and to how many patients.', 'sc_prescription_items, sc_prescriptions'],
+        'rx_by_doctor' => ['Prescriptions by doctor', 'Prescriptions issued and medicines written by each doctor.', 'sc_prescriptions, sc_prescription_items'],
         'dispensing_register' => ['Dispensing register', 'Each item dispensed with prescriber and prescription number.', 'sc_invoice_items, sc_invoices'],
         'stock_report' => ['Stock report', 'Items in stock with value.', 'sc_stock_items'],
         'expiry_report' => ['Expiry report', 'Items expired or expiring in the next 90 days.', 'sc_stock_items'],
@@ -63,6 +66,9 @@ final class Reports
             'equipment' => ['sales_register', 'stock_report', 'low_stock', 'purchase_register', 'staff_roster'],
             default => [],
         };
+        if (Rx::forType($typeSlug) !== null) {
+            $extra = array_merge($extra, ['rx_register', 'rx_medicines', 'rx_by_doctor']);
+        }
         if (in_array($typeSlug, ['hospital', 'maternity-center', 'mental-health'], true)) {
             $extra = array_merge($extra, ['admission_register', 'discharge_register', 'census', 'bed_occupancy']);
         }
@@ -95,6 +101,18 @@ final class Reports
         $sumCol = static fn (array $rows, int $i) => array_sum(array_map(static fn ($r) => (float) str_replace([',', '$', '€', '£', '৳', '₹'], '', (string) ($r[$i] ?? 0)), $rows));
 
         switch ($key) {
+            case 'rx_register':
+                $rows = $db->all("SELECT r.*, (SELECT GROUP_CONCAT(i.drug ORDER BY i.line_no SEPARATOR ', ') FROM sc_prescription_items i WHERE i.prescription_id = r.id AND i.tenant_id = r.tenant_id) drugs FROM sc_prescriptions r WHERE r.tenant_id = ? AND r.deleted_at IS NULL AND r.rx_date BETWEEN ? AND ?" . ($q !== '' ? ' AND (r.patient_name LIKE ? OR r.rx_no LIKE ? OR r.diagnosis LIKE ? OR r.doctor_name LIKE ?)' : '') . ' ORDER BY r.rx_date, r.id', array_merge([(string) $tid, $from, $to], $q !== '' ? [$like, $like, $like, $like] : []));
+                $out = array_map(static fn ($r) => [(string) $r['rx_no'], dt((string) $r['rx_date']), (string) $r['patient_name'], (string) $r['doctor_name'], mb_strimwidth(trim((string) $r['diagnosis']), 0, 60, '...'), mb_strimwidth((string) $r['drugs'], 0, 90, '...'), ucfirst((string) $r['status'])], $rows);
+                return $res([['No', 1.1], ['Date', 1.1], ['Patient', 1.9], ['Doctor', 1.7], ['Diagnosis', 2], ['Medicines', 3], ['State', 0.9]], $out, [['Prescriptions', (string) count($rows)], ['Issued', (string) count(array_filter($rows, static fn ($r) => $r['status'] === 'issued'))], ['Drafts', (string) count(array_filter($rows, static fn ($r) => $r['status'] === 'draft'))], ['Cancelled', (string) count(array_filter($rows, static fn ($r) => $r['status'] === 'cancelled'))]]);
+            case 'rx_medicines':
+                $rows = $db->all("SELECT i.drug, COUNT(*) n, COUNT(DISTINCT COALESCE(r.patient_id, CONCAT('w', r.id))) pts FROM sc_prescription_items i JOIN sc_prescriptions r ON r.id = i.prescription_id AND r.tenant_id = i.tenant_id WHERE r.tenant_id = ? AND r.status = 'issued' AND r.deleted_at IS NULL AND r.rx_date BETWEEN ? AND ?" . ($q !== '' ? ' AND i.drug LIKE ?' : '') . ' GROUP BY i.drug ORDER BY n DESC, i.drug LIMIT 200', array_merge([(string) $tid, $from, $to], $q !== '' ? [$like] : []));
+                $out = array_map(static fn ($r) => [(string) $r['drug'], (string) $r['n'], (string) $r['pts']], $rows);
+                return $res([['Medicine', 4], ['Times prescribed', 1.4, 'R'], ['Patients', 1.2, 'R']], $out, [['Different medicines', (string) count($rows)], ['Lines written', (string) array_sum(array_column($rows, 'n'))]]);
+            case 'rx_by_doctor':
+                $rows = $db->all("SELECT r.doctor_name, COUNT(*) n, COUNT(DISTINCT r.patient_id) pts, (SELECT COUNT(*) FROM sc_prescription_items i JOIN sc_prescriptions r2 ON r2.id = i.prescription_id AND r2.tenant_id = i.tenant_id WHERE r2.tenant_id = r.tenant_id AND r2.doctor_name = r.doctor_name AND r2.status = 'issued' AND r2.deleted_at IS NULL AND r2.rx_date BETWEEN ? AND ?) meds FROM sc_prescriptions r WHERE r.tenant_id = ? AND r.status = 'issued' AND r.deleted_at IS NULL AND r.rx_date BETWEEN ? AND ? GROUP BY r.doctor_name ORDER BY n DESC", [$from, $to, (string) $tid, $from, $to]);
+                $out = array_map(static fn ($r) => [(string) $r['doctor_name'], (string) $r['n'], (string) $r['pts'], (string) $r['meds'], $r['n'] ? number_format($r['meds'] / $r['n'], 1) : '0'], $rows);
+                return $res([['Doctor', 3], ['Prescriptions', 1.3, 'R'], ['Registered patients', 1.5, 'R'], ['Medicine lines', 1.3, 'R'], ['Lines per prescription', 1.6, 'R']], $out, [['Issued', (string) array_sum(array_column($rows, 'n'))]]);
             case 'cash_book':
                 $acc = new Accounts($db, $this->billing);
                 $days = $acc->daily((string) $tid, $from, $to);

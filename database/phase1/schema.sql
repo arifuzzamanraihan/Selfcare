@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS free_services (
 INSERT INTO permissions (name, guard_name, created_at, updated_at)
 SELECT n, 'web', NOW(), NOW() FROM (
   SELECT 'manage_catalog' AS n UNION ALL SELECT 'manage_free_services' UNION ALL SELECT 'view_messages'
-  UNION ALL SELECT 'manage_access' UNION ALL SELECT 'view_plan' UNION ALL SELECT 'manage_accounts'
+  UNION ALL SELECT 'manage_access' UNION ALL SELECT 'view_plan' UNION ALL SELECT 'manage_accounts' UNION ALL SELECT 'manage_rx' UNION ALL SELECT 'view_rx'
 ) x WHERE NOT EXISTS (SELECT 1 FROM permissions p WHERE p.name = x.n);
 
 -- ---------------------------------------------------------------------------
@@ -524,4 +524,79 @@ CREATE TABLE IF NOT EXISTS sc_stock_moves (
   created_at TIMESTAMP NULL DEFAULT NULL,
   KEY sc_mv_item (tenant_id, item_id, id),
   KEY sc_mv_time (tenant_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Structured prescriptions (doctor-practising kinds). A prescription belongs to one vendor, one patient (patients.id, or a walk-in name)
+-- and one doctor (doctors.id, name kept as printed). Issued prescriptions are locked; a change is a new copy (parent_id).
+CREATE TABLE IF NOT EXISTS sc_prescriptions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  rx_no VARCHAR(40) NOT NULL,
+  rx_date DATE NOT NULL,
+  patient_id INT UNSIGNED NULL COMMENT 'patients.id, NULL for a walk-in',
+  patient_name VARCHAR(190) NOT NULL,
+  patient_phone VARCHAR(40) NULL,
+  age VARCHAR(20) NULL,
+  sex VARCHAR(10) NULL,
+  weight DECIMAL(6,2) NULL,
+  doctor_id BIGINT UNSIGNED NULL COMMENT 'doctors.id',
+  doctor_name VARCHAR(190) NOT NULL,
+  doctor_info VARCHAR(255) NULL COMMENT 'speciality, qualifications and registration no as printed',
+  vitals TEXT NULL COMMENT 'JSON: bp, pulse, temp, spo2, height',
+  allergies VARCHAR(500) NULL,
+  complaints TEXT NULL,
+  diagnosis TEXT NULL,
+  investigations TEXT NULL,
+  advice TEXT NULL,
+  followup_date DATE NULL,
+  extra TEXT NULL COMMENT 'JSON: fields that only some kinds use (tooth, eye, gestation ...)',
+  status VARCHAR(12) NOT NULL DEFAULT 'draft' COMMENT 'draft | issued | cancelled',
+  issued_at DATETIME NULL,
+  issued_by BIGINT UNSIGNED NULL,
+  cancel_reason VARCHAR(240) NULL,
+  cancelled_at DATETIME NULL,
+  cancelled_by BIGINT UNSIGNED NULL,
+  parent_id BIGINT UNSIGNED NULL COMMENT 'the prescription this one was copied from',
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  UNIQUE KEY sc_rx_no (tenant_id, rx_no),
+  KEY sc_rx_patient (tenant_id, patient_id),
+  KEY sc_rx_doctor (tenant_id, doctor_id),
+  KEY sc_rx_date (tenant_id, rx_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sc_prescription_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  prescription_id BIGINT UNSIGNED NOT NULL,
+  line_no SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  drug VARCHAR(190) NOT NULL,
+  strength VARCHAR(60) NULL,
+  form VARCHAR(40) NULL,
+  route VARCHAR(30) NULL,
+  dose VARCHAR(60) NULL,
+  freq VARCHAR(60) NULL,
+  timing VARCHAR(40) NULL,
+  dur_n SMALLINT UNSIGNED NULL,
+  dur_unit VARCHAR(10) NULL,
+  qty VARCHAR(30) NULL,
+  indication VARCHAR(120) NULL,
+  instruction VARCHAR(255) NULL,
+  KEY sc_rxi_rx (tenant_id, prescription_id),
+  KEY sc_rxi_drug (tenant_id, drug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sc_rx_templates (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  diagnosis TEXT NULL,
+  advice TEXT NULL,
+  items TEXT NULL COMMENT 'JSON list of medicine lines',
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  KEY sc_rxt_tenant (tenant_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

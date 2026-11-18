@@ -45,28 +45,28 @@ Legend: **Y** works end to end today, **P** partly, **-** missing. Intake = regi
 
 | Kind | Intake | Service | Rx | Bill | Accounts | Records | Reports | Main gaps (research in RESEARCH.md) |
 |---|---|---|---|---|---|---|---|---|
-| Hospital | Y | P | P | Y | - | P | Y | structured prescription, IPD beds and admissions, token queue |
-| Clinic | Y | P | P | Y | - | P | Y | structured prescription, token queue, doctor-wise share |
-| Specialty clinic | Y | P | P | Y | - | P | Y | prescription, procedure records |
-| Dental clinic | Y | P | P | Y | - | P | Y | treatment plan and tooth chart, prescription |
-| Eye clinic | Y | P | P | Y | - | P | Y | eye exam, optical orders, prescription |
+| Hospital | Y | P | Y | Y | - | P | Y | IPD beds and admissions, token queue |
+| Clinic | Y | P | Y | Y | - | P | Y | token queue, doctor-wise share |
+| Specialty clinic | Y | P | Y | Y | - | P | Y | procedure records |
+| Dental clinic | Y | P | Y | Y | - | P | Y | treatment plan and tooth chart |
+| Eye clinic | Y | P | Y | Y | - | P | Y | eye exam, optical orders |
 | Diagnostic centre | Y | Y (samples) | n/a | Y | - | P | Y | test catalogue with ranges, validation |
 | Imaging centre | Y | - | n/a | Y | - | P | Y | study orders and radiology reports |
-| Dialysis centre | Y | - | P | Y | - | P | Y | session schedule and machines |
-| Maternity | Y | - | P | Y | - | P | Y | antenatal and vaccination schedules |
-| Mental health | Y | - | P | Y | - | P | Y | session notes, treatment plans |
-| Traditional medicine | Y | - | P | Y | - | P | Y | consultation with remedy prescription |
+| Dialysis centre | Y | - | Y | Y | - | P | Y | session schedule and machines |
+| Maternity | Y | - | Y | Y | - | P | Y | antenatal and vaccination schedules |
+| Mental health | Y | - | Y | Y | - | P | Y | session notes, treatment plans |
+| Traditional medicine | Y | - | Y | Y | - | P | Y | consultation with remedy |
 | Nursing home | Y | - | n/a | Y | - | P | Y | residents, care plans, medication chart |
 | Rehabilitation | Y | - | n/a | Y | - | P | Y | plans and sessions |
 | Pathology lab | Y | Y | n/a | Y | - | Y | Y | test catalogue with ranges, validation, critical values |
 | Pharmacy | Y | Y | Y (orders) | Y | - | Y | Y | batch FEFO, purchase/GRN, controlled-drug register |
 | Blood bank | Y | Y | n/a | Y | - | Y | Y | TTI results, crossmatch, reaction log |
 | Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y | - | Y (history with times) | Y | crew roster, run sheet, maintenance log |
-| Telemedicine | Y | - | P | Y | - | P | Y | slots and video link, prescription |
+| Telemedicine | Y | - | Y | Y | - | P | Y | slots and video link |
 | Home care | Y | - | n/a | Y | - | P | Y | visit schedule, caregiver roster |
 | Equipment supplier | Y | - | n/a | Y | - | P | Y | rentals and orders, service log |
 
-Cross-cutting gaps, built in this order: (1) Accounts for every kind (done, live), (2) structured Prescriptions with PDF and history, (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
+Cross-cutting gaps, built in this order: (1) Accounts for every kind (done, live), (2) structured Prescriptions with PDF and history (done, live), (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
 
 ## Shared work-list features added with ambulance
 
@@ -86,3 +86,14 @@ Every vendor type has **Accounts** (Money → Accounts), permission `manage_acco
 - Integrity checks: ledger tenant, amounts, status/paid_at, codes unique per vendor and kind (5 checks). Isolation test: ledger ids of another vendor refused on view/pay/delete/restore/save; accounts pages and PDFs never contain another vendor's money.
 - Tests: accounts end to end (36 checks) and all 23 demo vendors open every accounts page; isolation 31,486 checks.
 - Not built yet (future): day-end closing with drawer count and period lock, doctor payout shares, double-entry journals / trial balance.
+
+## Prescriptions (step 3)
+
+Kinds that write them: hospital, clinic, specialty clinic, dental, eye, maternity, mental health, traditional medicine, dialysis, telemedicine (others have the page refused and no menu entry). Permissions `manage_rx` (write/issue/copy/cancel: Doctor, Consultant, Medical Director, Resident, Optometrist) and `view_rx` (read/print: nurses, receptionist, records, branch manager and similar).
+- Structured medicine lines: medicine, strength, form (per kind), dose, how often, route, when to take, duration or quantity, reason, special instruction.
+- Patient (registered, linked to patients.id, or walk-in), doctor (doctors.id, name, speciality, registration number printed), examination (BP, pulse, temperature, SpO2, height, weight), complaints, diagnosis, tests advised, advice, follow-up date, per-kind fields (tooth, eye, gestation, dry weight, consultation mode ...).
+- Safety: allergies recorded on the patient and checked against the medicines (direct and by class: penicillin, sulfa, NSAID ...); an issue is blocked until the doctor confirms the warning; same medicine twice is flagged; issue needs dose, frequency and duration or quantity on every line.
+- Lifecycle: draft (edit, delete) -> issued (locked) -> cancelled with reason; a change is a copy (parent link). Numbers RX-00001 per vendor.
+- PDF with letterhead, barcode, signature and stamp box; blank prescription pad PDF; saved sets of medicines; patient history page (medicines now, all prescriptions, invoices, forms) with PDF; card on the patient profile; bill from a prescription (patient, doctor and number pre-filled).
+- Reports: Prescription register, Most prescribed medicines, Prescriptions by doctor.
+- Research: ISO 17523, EU eHealth ePrescription guidelines, ISMP safe electronic prescribing, Australian e-prescribing profile (see RESEARCH.md).

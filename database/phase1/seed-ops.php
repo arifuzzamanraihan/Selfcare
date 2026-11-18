@@ -4,7 +4,7 @@
 // Safe to run twice: a module that already has rows for a vendor is skipped. Only the demo vendors are touched.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Ops'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Rx', 'Ops'] as $f) {
     if (is_file(dirname(__DIR__, 2) . '/core/' . $f . '.php')) {
         require_once dirname(__DIR__, 2) . '/core/' . $f . '.php';
     }
@@ -166,6 +166,45 @@ foreach ($demoTenants as $vi => $t) {
     }
     $seeded[] = "$t/ledger=" . count($rows);
 }
+
+// prescriptions: four sample prescriptions (three issued, one draft) for each demo vendor that writes them
+$rxe = new \Selfcare\Rx($db);
+$sets = [
+    ['Fever and body ache for 2 days', 'Viral fever', [['Paracetamol 500 mg', '500 mg', 'Tablet', '1 tablet', '1+1+1 (three times daily)', 'After food', 3, 'days'], ['Oral rehydration salts (ORS)', '', 'Sachet', '1 sachet in 1 glass of water', 'When needed (PRN)', '', 3, 'days']], 'Rest, drink plenty of fluids. Come back if the fever lasts more than 3 days.'],
+    ['Heartburn and acidity after meals', 'Gastritis', [['Omeprazole 20 mg', '20 mg', 'Capsule', '1 capsule', '1+0+0 (morning)', 'Empty stomach', 14, 'days'], ['Antacid suspension', '', 'Suspension', '10 ml', '1+1+1 (three times daily)', 'After food', 7, 'days']], 'Avoid spicy and oily food. Do not lie down right after eating.'],
+    ['Seasonal allergy, sneezing and itchy eyes', 'Allergic rhinitis', [['Cetirizine 10 mg', '10 mg', 'Tablet', '1 tablet', '0+0+1 (night)', '', 7, 'days'], ['Normal saline nasal drops', '', 'Drops', '2 drops each nostril', '1+0+1 (twice daily)', '', 7, 'days']], 'Avoid dust and cold drinks.'],
+    ['High blood pressure check, mild headache', 'Hypertension', [['Amlodipine 5 mg', '5 mg', 'Tablet', '1 tablet', '1+0+0 (morning)', '', 0, 'ongoing']], 'Reduce salt. Walk 30 minutes daily. Check blood pressure weekly.'],
+];
+foreach ($demoTenants as $vi => $t) {
+    $type = (string) $db->val('SELECT type_slug FROM sc_vendors WHERE tenant_id = ?', [$t]);
+    if (($only !== null && !in_array($t, $only, true)) || \Selfcare\Rx::forType($type) === null || $db->val('SELECT COUNT(*) FROM sc_prescriptions WHERE tenant_id = ?', [$t])) {
+        continue;
+    }
+    $docs = $rxe->doctors($t);
+    $pts = $rxe->patients($t, 8);
+    if (!$docs || !$pts) {
+        continue;
+    }
+    $doc0 = $docs[0];
+    $db->update('doctors', ['reg_no' => 'BMDC-' . (10000 + $vi * 137)], 'id = ? AND tenant_id = ? AND reg_no IS NULL', [(int) $doc0['id'], $t]);
+    $docs = $rxe->doctors($t);
+    foreach ($sets as $i => [$compl, $diag, $lines, $advice]) {
+        $pt = $pts[$i % count($pts)];
+        $d = $docs[$i % count($docs)];
+        $date = $day(-($i * 4 + 1));
+        $id = $db->insert('sc_prescriptions', ['tenant_id' => $t, 'rx_no' => $rxe->code($t), 'rx_date' => $date, 'patient_id' => $pt['id'], 'patient_name' => trim($pt['first_name'] . ' ' . $pt['last_name']), 'patient_phone' => $pt['phone'], 'age' => \Selfcare\Rx::age($pt['dob']) ?: (string) (24 + $i * 9), 'sex' => [0 => 'Male', 1 => 'Female', 2 => 'Other'][(int) $pt['gender']] ?? null, 'weight' => 58 + $i * 6,
+            'doctor_id' => $d['id'], 'doctor_name' => \Selfcare\Rx::doctorLabel($d), 'doctor_info' => \Selfcare\Rx::doctorInfo($d), 'vitals' => json_encode(['bp' => '120/80', 'pulse' => (string) (72 + $i), 'temp' => $i === 0 ? '101 F' : '98.4 F']), 'allergies' => $i === 2 ? 'Penicillin' : null,
+            'complaints' => $compl, 'diagnosis' => $diag, 'advice' => $advice, 'followup_date' => $i === 3 ? null : $day(7 - $i * 4), 'status' => $i === 3 ? 'draft' : 'issued', 'issued_at' => $i === 3 ? null : $date . ' 11:00:00', 'issued_by' => null, 'created_at' => $now, 'updated_at' => $now]);
+        foreach ($lines as $n => [$drug, $str, $form, $dose, $freq, $timing, $dn, $unit]) {
+            $db->insert('sc_prescription_items', ['tenant_id' => $t, 'prescription_id' => $id, 'line_no' => $n + 1, 'drug' => $drug, 'strength' => $str ?: null, 'form' => $form, 'route' => 'PO (by mouth)', 'dose' => $dose, 'freq' => $freq, 'timing' => $timing ?: null, 'dur_n' => $dn ?: null, 'dur_unit' => $unit]);
+        }
+        if ($i === 2) {
+            $db->update('patients', ['allergies' => 'Penicillin'], 'id = ? AND tenant_id = ? AND allergies IS NULL', [(int) $pt['id'], $t]);
+        }
+    }
+    $seeded[] = "$t/prescriptions=4";
+}
+
 // an opening cash balance that keeps the demo cash book above zero (only where the vendor has not set one)
 foreach ($demoTenants as $t) {
     if (($only !== null && !in_array($t, $only, true)) || !$db->val('SELECT COUNT(*) FROM sc_ledger WHERE tenant_id = ?', [$t]) || $db->val("SELECT COUNT(*) FROM settings WHERE tenant_id = ? AND `key` = 'acc_opening'", [$t])) {

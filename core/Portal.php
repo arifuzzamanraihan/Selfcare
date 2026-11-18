@@ -209,6 +209,9 @@ final class Portal
             $all['Pharmacy'][] = ['key' => 'stock-alerts', 'label' => 'Stock alerts', 'icon' => 'bell', 'url' => url('portal/stock/alerts')];
             $all['Pharmacy'][] = ['key' => 'stock-moves', 'label' => 'Stock movements', 'icon' => 'clock', 'url' => url('portal/stock/moves')];
         }
+        if (Rx::forType((string) ($this->type['slug'] ?? '')) !== null && ($this->can('manage_rx') || $this->can('view_rx')) && $this->module('documents')) {
+            $all['Records'][] = ['key' => 'prescriptions', 'label' => 'Prescriptions', 'icon' => 'pill', 'url' => url('portal/prescriptions')];
+        }
         foreach (['manage_prescriptions', 'manage_medicines', 'manage_blood_bank'] as $dp) {
             if ($this->can($dp) && $this->module('documents')) {
                 $all['Records'][] = ['key' => 'documents', 'label' => 'Forms and records', 'icon' => 'file', 'url' => url('portal/documents')];

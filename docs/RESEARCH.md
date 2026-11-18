@@ -55,3 +55,8 @@ Gap: priority and timestamps, crew roster, run sheet, maintenance log, invoice f
 Must have: income posted from billing automatically (no re-entry); expense heads with party and method; supplier payables with due dates and payment history; patient receivables with ageing; cash book and daily cash summary by payment method; opening balance; profit and loss by period; refunds and credit notes carrying a reason; audit trail on every posting; PDF/export for the accountant.
 Built (live): all of the above on a cash basis, with the cash book, daily summary, dues and four reports, per vendor.
 Gap: day-end closing against the drawer count with locked periods, doctor payout shares, double-entry journals and trial balance, bank statement matching.
+
+### Prescriptions (ISO 17523:2025, EU eHealth ePrescription guidelines, ISMP guidelines for safe electronic prescribing, Australian e-prescribing conformance profile; Nov 2026)
+Must have: patient identity and weight; prescriber identity with registration number; medicine name, strength and form; dose per administration, route, frequency and timing; duration or quantity; indication; allergies shown while prescribing; no free-text-only doses; special instructions visible; privacy notice; structured fields so safety checks can run.
+Built (live): all of the above, allergy and duplicate checks, locked issued prescriptions with cancel and copy, PDF, history and reports.
+Gap: drug-interaction database, dose-by-weight calculator, controlled-drug registers and prescriber signature image, sending to a named pharmacy (cross-vendor sharing is deliberately not allowed).

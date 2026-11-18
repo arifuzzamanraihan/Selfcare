@@ -4,7 +4,7 @@
 // Read only. Run it after every deploy (deploy-live.sh does) and from cron if you like.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Ops'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Rx', 'Ops'] as $f) {
     require_once dirname(__DIR__) . '/core/' . $f . '.php';
 }
 $app = new Selfcare\App(dirname(__DIR__));
@@ -107,6 +107,16 @@ $check('ledger: kind, amount and state are valid', "SELECT id FROM sc_ledger WHE
 $check('ledger: paid has a payment time, due has none', "SELECT id, status FROM sc_ledger WHERE deleted_at IS NULL AND ((status = 'paid' AND paid_at IS NULL) OR (status = 'due' AND paid_at IS NOT NULL))");
 $check('ledger: salary links to staff of the same vendor', 'SELECT l.id FROM sc_ledger l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NOT NULL AND (u.id IS NULL OR u.tenant_id <> l.tenant_id)');
 $check('ledger numbers are unique per vendor and kind', 'SELECT tenant_id, kind, code, COUNT(*) n FROM sc_ledger WHERE code IS NOT NULL GROUP BY tenant_id, kind, code HAVING n > 1');
+
+echo "prescriptions\n";
+$check('prescriptions belong to an existing vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN tenants t ON t.id = r.tenant_id WHERE t.id IS NULL');
+$check('prescription patient is a patient of the same vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN patients p ON p.id = r.patient_id AND p.tenant_id = r.tenant_id WHERE r.patient_id IS NOT NULL AND p.id IS NULL');
+$check('prescription doctor is a doctor of the same vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN doctors d ON d.id = r.doctor_id AND d.tenant_id = r.tenant_id WHERE r.doctor_id IS NOT NULL AND d.id IS NULL');
+$check('medicine lines belong to a prescription of the same vendor', 'SELECT i.id FROM sc_prescription_items i LEFT JOIN sc_prescriptions r ON r.id = i.prescription_id AND r.tenant_id = i.tenant_id WHERE r.id IS NULL');
+$check('prescription states are valid and issued ones carry the time', "SELECT id FROM sc_prescriptions WHERE status NOT IN ('draft','issued','cancelled') OR (status = 'issued' AND issued_at IS NULL) OR (status = 'cancelled' AND (cancel_reason IS NULL OR cancelled_at IS NULL))");
+$check('issued prescriptions have at least one medicine line', "SELECT r.id FROM sc_prescriptions r WHERE r.status = 'issued' AND r.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM sc_prescription_items i WHERE i.prescription_id = r.id)");
+$check('prescription copies point to a prescription of the same vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN sc_prescriptions o ON o.id = r.parent_id AND o.tenant_id = r.tenant_id WHERE r.parent_id IS NOT NULL AND o.id IS NULL');
+$check('saved medicine sets belong to an existing vendor', 'SELECT s.id FROM sc_rx_templates s LEFT JOIN tenants t ON t.id = s.tenant_id WHERE t.id IS NULL');
 
 echo "audit\n";
 $check('audit lines belong to a vendor or the platform', "SELECT l.id FROM permission_change_log l LEFT JOIN tenants t ON t.id = l.tenant_id WHERE t.id IS NULL AND l.tenant_id NOT IN ('_platform', 'main')", true);

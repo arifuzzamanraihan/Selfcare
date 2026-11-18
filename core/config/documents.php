@@ -68,7 +68,7 @@ $forms = [
         ['t' => 'Personal details', 'f' => [['dob', 'Date of birth', 'date'], ['age', 'Age'], $sex, $bg, ['marital', 'Marital status', 'select', ['Single', 'Married', 'Widowed', 'Other']], ['nid', 'National ID / passport'], ['occupation', 'Occupation'], ['address', 'Address', 'textarea']]],
         ['t' => 'Emergency contact', 'f' => [['kin_name', 'Next of kin'], ['kin_rel', 'Relationship'], ['kin_phone', 'Phone']]],
         ['t' => 'Medical alerts', 'f' => [['allergies', 'Known allergies', 'textarea'], ['conditions', 'Chronic conditions', 'textarea'], ['insurance', 'Insurance / policy no']]]]],
-    'prescription' => ['label' => 'Prescription', 'title' => 'PRESCRIPTION', 'prefix' => 'RX-', 'perm' => 'manage_prescriptions', 'party' => 'Patient', 'sign' => ['Doctor'], 'sections' => [
+    'prescription' => ['label' => 'Prescription (hand-written copy)', 'title' => 'PRESCRIPTION', 'prefix' => 'RXC-', 'perm' => 'manage_prescriptions', 'party' => 'Patient', 'sign' => ['Doctor'], 'sections' => [
         ['t' => 'Patient and visit', 'f' => [['age', 'Age'], $sex, ['weight', 'Weight (kg)'], ['bp', 'Blood pressure'], ['pulse', 'Pulse'], ['temp', 'Temperature'], ['complaints', 'Complaints', 'textarea'], ['diagnosis', 'Diagnosis', 'textarea']]],
         ['t' => 'Medicines', 'rows' => 'meds', 'cols' => [['drug', 'Medicine', 4], ['dose', 'Dose', 2], ['freq', 'How often', 2], ['dur', 'For', 2]], 'min' => 6],
         ['t' => 'Advice', 'f' => [['tests', 'Tests advised', 'textarea'], ['advice', 'Advice', 'textarea'], ['followup', 'Follow-up date', 'date']]]]],
