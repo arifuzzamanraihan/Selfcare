@@ -3,7 +3,7 @@ use function Selfcare\{e, csrf_field, icon, old};
 $app = \Selfcare\app(); $pick = old('type', $pick); ?>
 <section class="sc-auth"><div class="sc-auth-card wide">
   <h1 style="font-size:1.7rem">Register your organisation</h1>
-  <p class="d-mute">Your website goes live on its own address right away. Start free, change the plan any time.</p>
+  <p class="d-mute">Our team checks every new organisation, then your website and portal go live on your own address with a free HTTPS lock, usually within a day. Start free, change the plan any time.</p>
   <?php if (!empty($error)): ?><div class="sc-alert bad" role="alert"><?= e($error) ?></div><?php endif; ?>
   <form class="sc-form" method="post" action="<?= e(\Selfcare\url('register')) ?>"><?= csrf_field() ?>
     <input class="sc-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">

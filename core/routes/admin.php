@@ -542,6 +542,7 @@ $app->router->post('/admin/vendors/{id}/restore', static function (array $a) use
     }
     $to = in_array($v['prev_status'], ['active', 'suspended'], true) ? (string) $v['prev_status'] : 'active';
     $app->db->run('UPDATE sc_vendors SET status = ?, prev_status = NULL, deleted_at = NULL, deleted_by = NULL WHERE tenant_id = ?', [$to, $t]);
+    $app->domains->revive($t);
     $app->access->log($t, (int) $u['id'], null, null, 'vendor_restored', 'deleted', $to);
     flash('Vendor restored.', 'ok');
     redirect(url('admin/vendors/' . $t));

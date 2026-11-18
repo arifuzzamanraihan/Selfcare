@@ -82,6 +82,17 @@ final class Domains
         $this->db->insert('sc_domains', ['tenant_id' => $slug, 'host' => $host, 'kind' => 'subdomain', 'status' => 'pending_cert', 'next_try_at' => $now, 'created_at' => $now, 'updated_at' => $now]);
     }
 
+    /** A restored vendor gets its addresses back: the worker issues the certificates again within a few minutes. */
+    public function revive(string $tenantId): void
+    {
+        if (!$this->enabled()) {
+            return;
+        }
+        $now = date('Y-m-d H:i:s');
+        $this->db->run("UPDATE sc_domains SET status = IF(kind = 'custom' AND dns_ok_at IS NULL, 'pending_dns', 'pending_cert'), last_error = NULL, attempts = 0, next_try_at = ?, updated_at = ? WHERE tenant_id = ? AND status = 'removed' AND last_error = 'Vendor deleted'", [$now, $now, $tenantId]);
+        $this->queueSubdomain($tenantId); // vendors created before SSL automation have no row yet
+    }
+
     /** @return list<array<string,mixed>> */
     public function forTenant(string $tenantId): array
     {

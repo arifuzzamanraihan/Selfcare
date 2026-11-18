@@ -23,7 +23,9 @@ $env->load($root . '/.env');
 if ($env->get('SSL_AUTOMATION') !== '1') {
     exit(0);
 }
+date_default_timezone_set($env->get('APP_TIMEZONE', 'Asia/Dhaka')); // the same clock as the web app: next_try_at is written by both
 $db = new Database($env);
+$db->run('SET time_zone = ?', [date('P')]);
 $tenant = new Tenant($env, $db);
 $domains = new Domains($db, $env, $tenant);
 
@@ -86,6 +88,13 @@ $fail = static function (array $d, string $msg) use ($db, $log): void {
     $db->run('UPDATE sc_domains SET attempts = ?, status = ?, last_error = ?, next_try_at = ?, updated_at = NOW() WHERE id = ?', [$n, $status, mb_substr($msg, 0, 250), date('Y-m-d H:i:s', time() + $wait), (int) $d['id']]);
     $log("{$d['host']}: $msg");
 };
+
+// A vendor that was deleted in Self Care (soft delete) no longer has a website: its addresses are switched off here, which lets the
+// clean-up below remove the virtual host and the certificate. Restoring the vendor queues them again (Domains::revive).
+$gone = $db->run("UPDATE sc_domains d JOIN sc_vendors v ON v.tenant_id = d.tenant_id SET d.status = 'removed', d.last_error = 'Vendor deleted', d.updated_at = NOW() WHERE v.status = 'deleted' AND d.status <> 'removed'");
+if ($gone > 0) {
+    $log("switched off $gone address(es) of deleted vendors");
+}
 
 // Orphans: a virtual host written by this worker whose address is gone (removed domain, purged vendor) is deleted.
 // Only files named 0.sc-<host>.conf are touched. The certificate is dropped too when nothing else uses it.
