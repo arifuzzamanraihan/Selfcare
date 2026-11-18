@@ -126,3 +126,11 @@ html{scroll-padding-bottom:96px}
   .sc-nav-cta{flex-direction:column;align-items:stretch;margin:8px 0 0}
   .sc-nav-cta .sc-btn{width:100%}
 }
+
+/* ---- keep the public and vendor header on one compact row ---- */
+@media (max-width:1000px){
+  .sc-head-in{flex-wrap:nowrap;align-items:center;gap:8px;padding:8px 16px;min-height:56px}
+  .sc-head{min-height:0}
+  .sc-brand{flex:1 1 auto;min-width:0}
+  .sc-burger{margin-left:auto}
+}

@@ -57,3 +57,13 @@ Shared layout rules for page actions, applied first to Clinic, Hospital and Phar
 - `core/helpers.php`: `more` icon for the kebab.
 - Tests: `tests/uiux_layout.py`. Screenshots: `shots/uiux/before/` and `shots/uiux/after/`.
 
+
+## 2026-11-19 phone header, filters, cards and impersonation banner (builder B)
+
+Central layout fix so phone screens stay on one header row everywhere (portal and super admin).
+
+- Sticky header stays one row on phones (menu, title, optional kebab for page actions, theme, avatar). Extra header actions go in a kebab so the title stays readable. Max header height is about 72px.
+- Stat and type tiles stay two per row above 340px.
+- Listing filters: label above the select, Role and State side by side, Apply under them, aligned.
+- Phone table cards wrap long values (email addresses) instead of overflowing.
+- The "viewing as super admin" bar is one compact line with a small Return button.

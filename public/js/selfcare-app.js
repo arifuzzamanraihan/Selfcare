@@ -154,6 +154,40 @@
   });
 
   // web address field follows the name until the person types in it
+
+  // On a phone, keep the page header on one row: extra header actions go in a kebab.
+
+  function packTopActions() {
+    var top = document.querySelector('.d-top');
+    var bar = document.querySelector('.d-top-actions');
+    if (!bar || !top) return;
+    var existing = bar.querySelector('.d-top-more');
+    if (existing) {
+      var menu = existing.querySelector('.d-more-menu');
+      if (menu) {
+        while (menu.firstChild) bar.insertBefore(menu.firstChild, existing);
+      }
+      existing.remove();
+    }
+    if (window.innerWidth > 980) return;
+    var kids = Array.prototype.slice.call(bar.children).filter(function (el) {
+      return el.nodeType === 1 && el.tagName !== 'SCRIPT';
+    });
+    if (!kids.length) return;
+    // Always collapse header actions on a phone so the page title stays readable on one row.
+    var wrap = document.createElement('div');
+    wrap.className = 'd-more d-top-more';
+    wrap.innerHTML = '<button type="button" class="d-act d-more-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button><div class="d-more-menu" hidden></div>';
+    var menu = wrap.querySelector('.d-more-menu');
+    kids.forEach(function (el) { menu.appendChild(el); });
+    bar.appendChild(wrap);
+    if (overflows() && bar.contains(wrap) === false) { /* no-op */ }
+  }
+  packTopActions();
+  window.addEventListener('resize', packTopActions);
+  window.addEventListener('resize', packTopActions);
+
   $$('[data-slug-from]').forEach(function (inp) {
     var src = document.getElementById(inp.getAttribute('data-slug-from'));
     if (!src) return;
