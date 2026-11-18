@@ -1,8 +1,8 @@
 /* Selfcare original CSS. Shared tokens, base and the public website. Minimal palette: neutral greys and one teal.
    Light by default, dark by [data-theme=dark] (set by selfcare-app.js, saved in the browser). No external fonts. */
 :root{--bg:#fbfbfa;--bg2:#f2f3f1;--card:#fff;--ink:#16201e;--mute:#5d6b68;--line:#e3e7e5;--brand:#0e7c6f;--brand2:#14a58f;--brand-ink:#fff;--soft:#e6f3f0;--ok:#157f4a;--okbg:#e3f5ea;--warn:#9a6700;--warnbg:#fdf3d8;--bad:#b42318;--badbg:#fde8e6;--info:#1f5fae;--infobg:#e4eefb;--shadow:0 1px 2px rgba(20,32,30,.06),0 8px 24px rgba(20,32,30,.06);--r:14px;--font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color-scheme:light}
-[data-theme=dark]{--bg:#0d1211;--bg2:#131a19;--card:#161e1d;--ink:#e8efed;--mute:#9aa9a6;--line:#25302e;--brand:#2bb9a3;--brand2:#5fd9c5;--brand-ink:#04211c;--soft:#12302b;--ok:#52d28c;--okbg:#10301f;--warn:#e7b94c;--warnbg:#33290d;--bad:#ff8a7e;--badbg:#38171a;--info:#7fb2ff;--infobg:#14253d;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);color-scheme:dark}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d1211;--bg2:#131a19;--card:#161e1d;--ink:#e8efed;--mute:#9aa9a6;--line:#25302e;--brand:#2bb9a3;--brand2:#5fd9c5;--brand-ink:#04211c;--soft:#12302b;--ok:#52d28c;--okbg:#10301f;--warn:#e7b94c;--warnbg:#33290d;--bad:#ff8a7e;--badbg:#38171a;--info:#7fb2ff;--infobg:#14253d;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);color-scheme:dark}}
+[data-theme=dark]{--bg:#0a0a0a;--bg2:#1a1a1a;--card:#141414;--ink:#fafafa;--mute:#a3a3a3;--line:#262626;--brand:#2bb9a3;--brand2:#5fd9c5;--brand-ink:#04211c;--soft:#1f1f1f;--ok:#52d28c;--okbg:#14261b;--warn:#e7b94c;--warnbg:#2a2412;--bad:#ff8a7e;--badbg:#2e1719;--info:#7fb2ff;--infobg:#16202e;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0a0a0a;--bg2:#1a1a1a;--card:#141414;--ink:#fafafa;--mute:#a3a3a3;--line:#262626;--brand:#2bb9a3;--brand2:#5fd9c5;--brand-ink:#04211c;--soft:#1f1f1f;--ok:#52d28c;--okbg:#14261b;--warn:#e7b94c;--warnbg:#2a2412;--bad:#ff8a7e;--badbg:#2e1719;--info:#7fb2ff;--infobg:#16202e;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);color-scheme:dark}}
 *,*::before,*::after{box-sizing:border-box}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--font);-webkit-font-smoothing:antialiased}
@@ -99,3 +99,10 @@ html:not(.js) .rv{opacity:1;transform:none}
 @media (max-width:760px){.sc-burger{display:block}.sc-nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;align-items:stretch;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px 18px;margin:0}.sc-nav.is-open{display:flex}.sc-theme{align-self:flex-start}}
 @media (max-width:560px){.g3,.g4,.sc-steps,.sc-stats{grid-template-columns:1fr}.sc-section{padding:48px 0}.sc-hero{padding:40px 0 32px}.sc-foot-grid{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.rv{opacity:1;transform:none}}
+
+/* Dark mode is solid neutral: no gradients and no green tint on backgrounds. Brand green stays an accent only. */
+[data-theme=dark] .sc-btn-primary::after{display:none}
+[data-theme=dark] .sc-head{background:var(--bg);backdrop-filter:none}
+[data-theme=dark] .sc-foot::before{background:var(--line);animation:none;height:1px}
+[data-theme=dark] .sc-hero,[data-theme=dark] .sc-section,[data-theme=dark] body{background-image:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .sc-btn-primary::after{display:none}:root:not([data-theme=light]) .sc-head{background:var(--bg);backdrop-filter:none}:root:not([data-theme=light]) .sc-foot::before{background:var(--line);animation:none;height:1px}}

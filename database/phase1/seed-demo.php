@@ -64,14 +64,9 @@ $mkImg = static function (string $name, int $w, int $h, array $c1, array $c2, st
     $file = $imgDir . '/' . $name . '.png';
     if (!is_file($file)) {
         $im = imagecreatetruecolor($w, $h);
-        for ($y = 0; $y < $h; $y++) {
-            $t = $y / $h;
-            $col = imagecolorallocate($im, (int) ($c1[0] + ($c2[0] - $c1[0]) * $t), (int) ($c1[1] + ($c2[1] - $c1[1]) * $t), (int) ($c1[2] + ($c2[2] - $c1[2]) * $t));
-            imageline($im, 0, $y, $w, $y, $col);
-        }
-        $white = imagecolorallocatealpha($im, 255, 255, 255, 90);
-        imagefilledellipse($im, (int) ($w * 0.8), (int) ($h * 0.25), (int) ($h * 0.9), (int) ($h * 0.9), $white);
-        imagefilledellipse($im, (int) ($w * 0.15), (int) ($h * 0.95), (int) ($h * 0.7), (int) ($h * 0.7), $white);
+        // flat colour only (no gradients); the label keeps the picture readable
+        $g = 70 + (crc32($name) % 5) * 14; // neutral grey, varied per picture
+        imagefill($im, 0, 0, imagecolorallocate($im, $g, $g, $g));
         $fg = imagecolorallocate($im, 255, 255, 255);
         imagestring($im, 5, 18, $h - 30, $label, $fg);
         imagepng($im, $file, 7);
