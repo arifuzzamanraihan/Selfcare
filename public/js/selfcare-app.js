@@ -182,7 +182,6 @@
     var menu = wrap.querySelector('.d-more-menu');
     kids.forEach(function (el) { menu.appendChild(el); });
     bar.appendChild(wrap);
-    if (overflows() && bar.contains(wrap) === false) { /* no-op */ }
   }
   packTopActions();
   window.addEventListener('resize', packTopActions);
