@@ -319,8 +319,8 @@ foreach ($data as $type => $modules) {
             continue;
         }
         $mod = \Selfcare\Ops::all()[$module] ?? [];
-        if (!$mod) {
-            continue; // module not shipped in this build
+        if (!$mod || !in_array($type, $mod['types'] ?? [], true)) {
+            continue; // module not shipped, or not for this kind of vendor
         }
         $prefix = (string) ($mod['prefix'] ?? '');
         foreach ($rows as $i => $r) {
