@@ -60,3 +60,168 @@ Gap: day-end closing against the drawer count with locked periods, doctor payout
 Must have: patient identity and weight; prescriber identity with registration number; medicine name, strength and form; dose per administration, route, frequency and timing; duration or quantity; indication; allergies shown while prescribing; no free-text-only doses; special instructions visible; privacy notice; structured fields so safety checks can run.
 Built (live): all of the above, allergy and duplicate checks, locked issued prescriptions with cancel and copy, PDF, history and reports.
 Gap: drug-interaction database, dose-by-weight calculator, controlled-drug registers and prescriber signature image, sending to a named pharmacy (cross-vendor sharing is deliberately not allowed).
+
+## Wave 2 type-specific research (18 Nov 2026)
+
+Sources reviewed (product sites, manuals and public workflow write-ups, plus Bangladesh / Pakistan / India practice): ChamberBD, DoctorLane, SehatDoc and Clinemo (token / serial queues); Open Dental, Dentrix and Practo Ray (FDI chart and treatment plans); Care’O, Medical365, EyeOps, MeDIC and Lifemaan (refraction to optical job); hospital information work in BD/PK/IN (token + OPD cash, not Western EHR-first); DGHS / EPI vaccination schedule (Bangladesh), Expanded Programme on Immunization (Pakistan, India); WHO ANC model (eight contacts) and standard ANC card fields (GA, BP, weight, FHR, next visit); dialysis units (Fresenius / Nipro clinic practice: machine assignment, pre/post weight, UF, session sheet); mental health (session notes kept off registers; treatment plans); Unani / Ayurveda / homeopathy clinic flow in South Asia (consultation + remedy list); nursing-home MAR and incident reporting (CMS-style eMAR ideas, kept simple); physiotherapy packages (session count + progress note); telemedicine payment-before-call (Practo, Sehat Kahani, Oladoc; we paste a meeting link rather than host video); home-care visit roster; equipment rental (reserve, out, due, overdue, service). Regulatory notes: no cross-vendor patient sharing; prescription rules already covered above; blood and lab already covered in Wave 1; hospital IPD/OT/ICU beds are out of this wave (Builder A).
+
+Mark: **done**, **partial**, **missing**. Counts are of realistic must-have workflow items, not every possible future add-on.
+
+### Hospital
+Sources: South-Asian HMS (token OPD, IPD admission, bed/ward, OT list, emergency), plus the platform items already live.
+- Token / OPD serial, drag to reorder, Call next, now-serving board (no names) — **done**
+- Print token slip and OPD bill — **done**
+- Link token to patient and doctor — **done**
+- History of queue actions — **done**
+- IPD admission, wards, beds, transfer — **missing** (Builder A)
+- Emergency / triage board — **missing** (Builder A)
+- ICU / OT list, OT booking — **missing** (Builder A)
+- Discharge summary as IPD record — **missing** (Builder A)
+- Nurse station / ward census — **missing** (Builder A)
+Checklist: 4 done, 5 missing (departments). Token queue is live in this branch; departments are not this builder's work.
+
+### Clinic
+- Daily token serial (not only appointment slots) — **done**
+- Drag-and-drop / arrows / keyboard reorder — **done**
+- Call next and now-serving board — **done**
+- Walk-in or registered patient, doctor optional — **done**
+- Print token, Make invoice, token register — **done**
+- Website / staff booking of visits — **partial** (generic requests already exist; patient self-booking is Builder A)
+Checklist: 5 done, 1 partial.
+
+### Specialty clinic
+- Token queue (shared with clinic) — **done**
+- Procedure list with room, specialist, fee — **done**
+- Workflow booked → in progress → completed / cancelled — **done**
+- Printable procedure note after complete, Make invoice — **done**
+- Procedure templates / consent packs — **missing** (later)
+Checklist: 4 done, 1 missing.
+
+### Dental clinic
+Sources: Open Dental, Dentrix, Practo Ray; FDI numbering is the usual chart in BD/PK/IN.
+- Token queue — **done**
+- FDI odontogram (teeth 11–48) on the treatment plan — **done**
+- Treatment plan states (proposed, accepted, in progress, completed, declined) — **done**
+- Print plan and Make invoice — **done**
+- Link to patient and dentist — **done**
+- Periodontal chart, odontogram colours per surface, attach x-ray — **missing**
+Checklist: 5 done, 3 missing (advanced charting).
+
+### Eye clinic
+Sources: Care’O, Medical365, EyeOps, MeDIC, Lifemaan.
+- Token queue — **done**
+- Visual acuity, refraction (sph/cyl/axis/add), IOP left and right — **done**
+- Print glasses Rx when the exam is complete — **done**
+- Optical job order (lens type, frame, lab workflow) — **done**
+- Make invoice for exam / job — **done**
+- Auto-create an optical job from a completed Rx — **missing**
+- Auto-refractor / retinoscopy device import — **missing**
+Checklist: 5 done, 2 missing.
+
+### Pathology laboratory (Wave 1 + catalogue)
+- Sample workflow and printable result — **done** (Wave 1)
+- Test catalogue with fee, specimen and reference range — **done**
+- Result validation / pathologist sign-off and critical-value alerts — **missing**
+Checklist: 2 done, 2 missing.
+
+### Diagnostic center
+- Samples (same as the lab) — **done** (Wave 1)
+- Test catalogue — **done**
+- Imaging studies and reports (same module as imaging centres) — **done**
+- Combined order covering lab + imaging in one basket — **missing**
+Checklist: 3 done, 1 missing.
+
+### Imaging and radiology center
+- Study queue with modality and study name — **done**
+- States booked → arrived → in progress → reported → delivered — **done**
+- Printable radiology report (findings and impression, radiologist) — **done**
+- Make invoice — **done**
+- DICOM / PACS and image viewer — **missing** (out of scope for a no-CDN, no-library app)
+Checklist: 4 done, 1 missing.
+
+### Dialysis center
+- Machine list and status (available, in a session, maintenance) — **done**
+- Session queue, machine cannot be double-booked — **done**
+- Pre/post weight, UF, blood pressure on the session — **done**
+- Session sheet and Make invoice — **done**
+- Recurring weekly schedule templates — **missing**
+Checklist: 4 done, 1 missing.
+
+### Maternity and child care
+Sources: WHO ANC contacts; DGHS EPI (BD); national EPI (PK, IN).
+- Token queue — **done**
+- ANC visit with gestation, BP, weight, fetal heart rate, next visit — **done**
+- Vaccination list (BCG and the usual EPI antigens), due / given — **done**
+- Delivery record (type, outcome, birth weight) — **done**
+- Print visit / immunisation / delivery notes — **done**
+- Partograph, newborn ID / hearing screen — **missing**
+Checklist: 5 done, 2 missing.
+
+### Mental health center
+- Session queue, clinician, fee, Make invoice — **done**
+- Session notes captured on the record (not shown as a register column) — **done**
+- Treatment / care plans — **done**
+- Extra lock on psychotherapy notes (role-restricted beyond the usual permission) — **missing**
+Checklist: 3 done, 1 missing.
+
+### Traditional and alternative medicine
+- Token queue — **done**
+- Consultation (Unani / Ayurveda / homeopathy / other) with findings and remedy — **done**
+- Printable advice, Make invoice — **done**
+- Remedy catalogue — **done**
+Checklist: 4 done, 0 missing.
+
+### Nursing home
+- Resident register (room, care level, next of kin, admit / leave / discharge) — **done**
+- Care plans — **done**
+- Medication rounds (due / given / withheld / missed) — **done**
+- Incident reports (fall and similar) — **done**
+- Print plan, MAR entry and incident — **done**
+- eMAR signing and a bed / room board — **missing**
+Checklist: 5 done, 2 missing.
+
+### Rehabilitation and physiotherapy
+- Therapy plan with goals and review date — **done**
+- Session queue and progress note — **done**
+- Session packages (count and fee) — **done**
+- Make invoice, print plan and session note — **done**
+- Automatic remaining-session countdown when a session is completed — **missing**
+Checklist: 4 done, 1 missing.
+
+### Telemedicine provider
+Sources: Practo, Oladoc, Sehat Kahani (pay, then join).
+- Consultation queue for the day — **done**
+- Meeting link field (we do not host the video ourselves) — **done**
+- States booked / waiting-paid / in the call / completed / no-show — **done**
+- Consultation invoice and print summary after complete — **done**
+- Prescriptions through the usual Prescriptions page — **done**
+- Built-in video room — **missing** (deliberate: no third-party SDK)
+Checklist: 5 done, 1 missing.
+
+### Home care and nursing
+- Caregiver roster — **done**
+- Visit queue, address, caregiver lock while on a visit — **done**
+- Visit log, next visit, visit invoice — **done**
+- GPS / clock-in — **missing**
+Checklist: 3 done, 1 missing.
+
+### Medical equipment supplier
+- Rental catalogue — **done**
+- Rentals reserved → out → returned, overdue when the due date passes — **done**
+- Service jobs — **done**
+- Rental and equipment invoices — **done**
+- Serial-number inventory and deposits — **missing**
+Checklist: 4 done, 2 missing.
+
+### Pharmacy, blood bank, ambulance
+Already researched and marked in the earlier sections. No change in this wave besides the shared engine columns (sort order, patient/staff links) which those lists can use later if needed.
+
+### Shared engine rules used by every new list
+- One-screen work queue where the type needs a today-list, with drag-and-drop, ↑/↓ and Alt+Up/Down, status filters, Call next and a now-serving board when a serial is public.
+- History log (`sc_record_events`) on every record.
+- Optional link to `patients.id` and `doctors.id` of the same vendor only (integrity-checked).
+- Make invoice where a real business would bill; print where they would print.
+- Dashboard tiles, SVG charts and type registers.
+- Isolation: another vendor and another kind of organisation cannot open the list or a record.
+
+**Totals for the 16 types that were pending (hospital departments excluded):** 75 done, 2 partial, 22 missing (the missing items are deliberate later work: PACS, built-in video, partograph, device import, and similar). Hospital departments (5 missing) stay with Builder A.
