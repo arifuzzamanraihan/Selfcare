@@ -47,3 +47,14 @@ INSERT INTO tenant_role_has_permissions (tenant_id, role_id, permission_id)
   JOIN permissions p ON p.name = 'view_rx'
   WHERE g.rname IN ('Nurse', 'Head Nurse', 'Midwife', 'Clinical Assistant', 'Case Manager', 'Medical Records Officer', 'Branch Manager', 'Counsellor', 'Therapist', 'Receptionist')
   AND NOT EXISTS (SELECT 1 FROM tenant_role_has_permissions x WHERE x.tenant_id = g.tenant_id AND x.role_id = g.role_id AND x.permission_id = p.id);
+
+-- dynamic roles: a vendor can create its own roles (rows of departments that belong to one tenant)
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(191) NULL COMMENT 'NULL = role of the Self Care catalogue, otherwise a role made by that vendor';
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS description VARCHAR(250) NULL;
+
+-- multi currency: exchange rates and a currency code on every table that stores money (invoices and plans already had one)
+ALTER TABLE sc_currencies ADD COLUMN IF NOT EXISTS rate DECIMAL(20,8) NOT NULL DEFAULT 1 COMMENT 'units of this currency for 1 US dollar';
+ALTER TABLE sc_currencies ADD COLUMN IF NOT EXISTS rate_updated_at DATETIME NULL;
+ALTER TABLE sc_ledger ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NULL;
+ALTER TABLE sc_records ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NULL;
+ALTER TABLE sc_stock_items ADD COLUMN IF NOT EXISTS currency VARCHAR(8) NULL;

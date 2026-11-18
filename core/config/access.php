@@ -38,6 +38,34 @@ return [
         'manage_reports'        => ['Reports', 'Money', 'Open and download reports.', true],
     ],
 
+    // What each permission (module) can be done with. "view" is the grant itself. An action that does not apply is shown as a dash.
+    'perm_actions' => [
+        'manage_appointments' => ['add', 'edit', 'delete', 'print', 'export'], 'manage_patients' => ['add', 'edit', 'delete', 'print', 'export'],
+        'manage_doctors' => ['add', 'edit', 'delete', 'print', 'export'], 'manage_users' => ['add', 'edit', 'delete'],
+        'manage_doctor_departments' => ['add', 'edit', 'delete'], 'manage_notice_board' => ['add', 'edit', 'delete'],
+        'manage_settings' => ['edit'], 'manage_catalog' => ['add', 'edit', 'delete'], 'manage_free_services' => ['add', 'edit', 'delete'],
+        'view_messages' => ['edit', 'delete'], 'manage_access' => ['add', 'edit', 'delete'], 'view_plan' => [],
+        'manage_invoices' => ['add', 'edit', 'delete', 'print', 'export'], 'manage_prescriptions' => ['add', 'edit', 'delete', 'print', 'export'],
+        'manage_medicines' => ['add', 'edit', 'delete', 'print', 'export'], 'manage_blood_bank' => ['add', 'edit', 'delete', 'print', 'export'],
+        'manage_accounts' => ['add', 'edit', 'delete', 'print', 'export'], 'manage_rx' => ['add', 'edit', 'delete', 'print', 'export'],
+        'view_rx' => ['print'], 'manage_reports' => ['print', 'export'],
+    ],
+
+    // What a role may do inside the modules it has, until the vendor changes it. Anything not listed gets "default".
+    // Deleting is for managers, accountants (voiding bills) and admins. Auditors only look, print and export.
+    'action_profiles' => [
+        'default' => ['add', 'edit', 'print'],
+        'Medical Director' => ['add', 'edit', 'delete', 'print', 'export'], 'Branch Manager' => ['add', 'edit', 'delete', 'print', 'export'],
+        'HR Officer' => ['add', 'edit', 'print', 'export'], 'IT Administrator' => ['add', 'edit', 'delete', 'print', 'export'],
+        'Compliance Officer' => ['print', 'export'], 'External Auditor' => ['print', 'export'],
+        'Accountant' => ['add', 'edit', 'delete', 'print', 'export'], 'Billing Clerk' => ['add', 'edit', 'print', 'export'], 'Insurance Officer' => ['add', 'edit', 'print', 'export'],
+        'Store Manager' => ['add', 'edit', 'delete', 'print', 'export'], 'Medical Records Officer' => ['add', 'edit', 'print', 'export'],
+        'Pharmacist' => ['add', 'edit', 'print', 'export'], 'Pathologist' => ['add', 'edit', 'print', 'export'], 'Radiologist' => ['add', 'edit', 'print', 'export'],
+        'Consultant' => ['add', 'edit', 'print', 'export'], 'Doctor' => ['add', 'edit', 'print', 'export'],
+        'Head Nurse' => ['add', 'edit', 'print', 'export'],
+        'Ward Attendant' => ['edit', 'print'], 'Driver' => ['edit', 'print'], 'Caregiver' => ['add', 'edit', 'print'],
+    ],
+
     // Default grants for roles that the legacy data did not cover or that need new permissions.
     // Admin always gets everything. Keys are role names from the departments table.
     'defaults' => [
@@ -115,7 +143,7 @@ return [
     // Role names shown in each kind of vendor.
     'role_labels' => [
         'ambulance' => ['Receptionist' => 'Dispatcher', 'Nurse' => 'Paramedic', 'Doctor' => 'Medical officer'],
-        'pharmacy' => ['Receptionist' => 'Counter staff'],
+        'pharmacy' => ['Receptionist' => 'Counter staff', 'Billing Clerk' => 'Cashier', 'Pharmacy Assistant' => 'Pharmacy assistant'],
         'diagnostics' => ['Doctor' => 'Pathologist / radiologist'],
         'rehab' => ['Doctor' => 'Therapist'],
         'homecare' => ['Nurse' => 'Home nurse'],

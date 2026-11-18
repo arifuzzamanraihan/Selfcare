@@ -62,11 +62,21 @@ final class Plans
     public static function price(array $plan, ?string $want = null): array
     {
         $want = $want ?? Currency::platform();
+        if ((float) $plan['price'] == 0.0 && !self::otherPrices($plan)) {
+            return [0.0, $want];
+        }
         if ((string) $plan['currency'] === $want) {
             return [(float) $plan['price'], $want];
         }
         $o = self::otherPrices($plan);
-        return isset($o[$want]) ? [$o[$want], $want] : [(float) $plan['price'], (string) $plan['currency']];
+        if (isset($o[$want])) {
+            return [$o[$want], $want];
+        }
+        if (isset(Currency::all()[$want]) && isset(Currency::all()[(string) $plan['currency']])) {
+            // no price set for this currency: convert with the rates, to a whole number of the main unit
+            return [round(Currency::convert((float) $plan['price'], (string) $plan['currency'], $want)), $want];
+        }
+        return [(float) $plan['price'], (string) $plan['currency']];
     }
 
     public static function priceText(array $plan, ?string $want = null): string

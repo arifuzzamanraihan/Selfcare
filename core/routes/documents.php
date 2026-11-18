@@ -508,6 +508,8 @@ $app->router->get('/portal/settings', static function () use ($app, $dash, $card
     $t = $p->tenantId;
     $h = '<form class="d-form" method="post" action="' . e(url('portal/settings')) . '">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('currency', ['label' => 'Currency on bills', 'type' => 'select', 'options' => \Selfcare\Currency::options($cur($p)), 'required' => true, 'help' => 'Every amount in your portal, website, invoices, PDFs and reports uses this currency. Old invoices keep the currency they were made in.'], $cur($p))
+        . Crud::field('country', ['label' => 'Country', 'max' => 60], $billing->setting($t, 'country', (string) $app->site->get(null, 'default_country', 'Pakistan')))
+        . Crud::field('timezone', ['label' => 'Time zone', 'type' => 'select', 'options' => array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()), 'help' => 'Dates and times in your portal, website and PDFs use this zone.'], $billing->setting($t, 'timezone', (string) $app->site->get(null, 'default_timezone', 'Asia/Karachi')))
         . Crud::field('doctor_commission_pct', ['label' => 'Doctor commission % (for the doctor report)', 'type' => 'number', 'step' => '0.01', 'min' => 0], $billing->setting($t, 'doctor_commission_pct', '0'))
         . Crud::field('bed_capacity', ['label' => 'Number of beds (for bed occupancy)', 'type' => 'number', 'min' => 0], $billing->setting($t, 'bed_capacity', '0'))
         . '</div><p class="d-help" style="margin-top:12px">The registration or licence number printed on every document is set under Profile and hours.</p><h3 style="margin-top:22px">Number prefixes</h3><p class="d-help">Each document type counts up from 1 on its own. The prefix is the letters in front, for example OPD-00042.</p><div class="d-form-grid">';
@@ -525,6 +527,10 @@ $app->router->post('/portal/settings', static function () use ($app, $billing, $
     if (isset(\Selfcare\Currency::all(true)[(string) ($_POST['currency'] ?? '')])) {
         $billing->setSetting($t, 'currency', (string) $_POST['currency']);
     }
+    if (in_array((string) ($_POST['timezone'] ?? ''), \DateTimeZone::listIdentifiers(), true)) {
+        $billing->setSetting($t, 'timezone', (string) $_POST['timezone']);
+    }
+    $billing->setSetting($t, 'country', mb_substr(trim((string) ($_POST['country'] ?? '')), 0, 60));
     foreach (['doctor_commission_pct' => 100.0, 'bed_capacity' => 100000.0] as $k => $max) {
         $v = (float) ($_POST[$k] ?? 0);
         $billing->setSetting($t, $k, (string) max(0, min($max, $v)));

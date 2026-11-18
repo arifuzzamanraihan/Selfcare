@@ -3,7 +3,7 @@
 // Every route starts with Portal::boot (signed in, right host, not suspended, inside shift) and then need() for the permission.
 declare(strict_types=1);
 
-use Selfcare\{Crud, Listing, People, Portal, VendorTypes};
+use Selfcare\{Crud, Listing, People, Portal, RoleUi, VendorTypes};
 use function Selfcare\{csrf_field, dt, e, flash, icon, keep_old, clear_old, money, old, redirect, url};
 
 /** Renders a dashboard page. $p null = super admin shell (pass nav etc. in $o). */
@@ -24,6 +24,9 @@ $app->dash = static function (?Portal $p, string $active, string $title, string 
             'nav' => $p->nav(), 'orgName' => $p->vendor['name'], 'orgSub' => $p->type['name'], 'user' => $p->user, 'roleLabel' => $app->access->roleLabel($p->role, $p->family),
             'banner' => $banner, 'siteLink' => $app->tenant->siteUrl((string) $p->vendor['slug']), 'orgLogo' => $app->site->get($p->tenantId, 'logo'), 'navHome' => 'portal',
         ];
+    }
+    if ($p !== null) {
+        $html = $p->filterLinks($html);
     }
     $app->view->page('dash/raw', $o + $d);
     exit;
@@ -67,8 +70,8 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
         $h .= $stat($p->label('people', 'People'), (string) $q('SELECT COUNT(*) FROM patients WHERE tenant_id = ?', [$t]), 'users');
     }
     if ($p->can('manage_invoices') && $p->module('billing')) {
-        $h .= $stat('Collected this month', money((float) $db->val("SELECT COALESCE(SUM(p.amount),0) FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND " . (new \Selfcare\Billing($db))->notCreditSql('i') . " AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%') AND p.paid_at >= ?", [$t, $month])), 'card');
-        $h .= $stat('Unpaid', money((float) $db->val("SELECT COALESCE(SUM(balance),0) FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status = 'issued' AND balance > 0", [$t])), 'clock', 'across all invoices');
+        $h .= $stat('Collected this month', money((float) $db->val("SELECT COALESCE(SUM(" . \Selfcare\Currency::sql('p.amount', 'i.currency', \Selfcare\Currency::forTenant($t)) . "),0) FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND " . (new \Selfcare\Billing($db))->notCreditSql('i') . " AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%') AND p.paid_at >= ?", [$t, $month])), 'card');
+        $h .= $stat('Unpaid', money((float) $db->val("SELECT COALESCE(SUM(" . \Selfcare\Currency::sql('balance', 'currency', \Selfcare\Currency::forTenant($t)) . "),0) FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status = 'issued' AND balance > 0", [$t])), 'clock', 'across all invoices');
     }
     if ($p->can('manage_accounts') && $p->module('billing')) {
         $acc = new \Selfcare\Accounts($db, new \Selfcare\Billing($db));
@@ -103,7 +106,7 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
         $charts .= $card($lab . ' by state', \Selfcare\Charts::bars($bars));
     }
     if ($p->can('manage_invoices') && $p->module('billing')) {
-        $got = array_column($db->all("SELECT DATE_FORMAT(p.paid_at, '%Y-%m') m, SUM(p.amount) n FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND p.paid_at >= ? GROUP BY m", [$t, $since]), 'n', 'm');
+        $got = array_column($db->all("SELECT DATE_FORMAT(p.paid_at, '%Y-%m') m, SUM(" . \Selfcare\Currency::sql('p.amount', 'i.currency', \Selfcare\Currency::forTenant($t)) . ") n FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND p.paid_at >= ? GROUP BY m", [$t, $since]), 'n', 'm');
         $charts .= $card('Money collected per month', \Selfcare\Charts::columns(array_map(static fn ($m) => [$m[0], (float) ($got[$m[1]] ?? 0), money((float) ($got[$m[1]] ?? 0))], $months), 'No payments recorded yet.'));
         $inv = array_column($db->all("SELECT status, COUNT(*) n FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' GROUP BY status", [$t]), 'n', 'status');
         $bars = [];
@@ -600,28 +603,50 @@ $app->router->post('/portal/messages/{id}/{do}', static function (array $a) use 
 });
 
 // ------------------------------------------------------------------ role access
-$permModule = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing', 'manage_rx' => 'documents', 'view_rx' => 'documents'];
-$app->router->get('/portal/access', static function () use ($app, $dash, $card, $permModule): void {
+/** Modules that make sense for this vendor (its kind and its plan) and what this person may hand out. */
+$roleScope = static function (Portal $p) use ($app): array {
+    $a = $app->access;
+    $shown = $a->permsForType((string) $p->type['slug'], $p->family, $p->tpl);
+    $viewLock = static function (string $perm) use ($p): ?string {
+        $mod = RoleUi::MODULE[$perm] ?? null;
+        if (!$p->writable()) {
+            return 'Plan ended';
+        }
+        if ($mod !== null && !$p->module($mod)) {
+            return 'Not in your plan';
+        }
+        return $p->can($perm) ? null : 'Above your own access';
+    };
+    $actLock = static fn (string $perm, string $act): bool => !$p->canDo($perm, $act);
+    return [$shown, $viewLock, $actLock];
+};
+$app->router->get('/portal/access', static function () use ($app, $dash, $card, $roleScope): void {
     $p = Portal::boot($app);
     $p->need('manage_access', 'access');
     $a = $app->access;
     $t = $p->tenantId;
     $offered = $a->offeredRoles((string) $p->type['slug']);
     $enabled = $a->enabledRoles($t, (string) $p->type['slug']);
+    $custom = array_column($a->customRoles($t), null, 'name');
     $sel = (string) ($_GET['role'] ?? '');
-    if (!isset($offered[$sel])) {
+    if (!isset($offered[$sel]) && !isset($custom[$sel])) {
         $sel = '';
     }
-    $h = '<p class="d-help">Pick a role to change what it can do. Switch roles on only if your organisation uses them. Admin always has full access.</p><div class="d-table-wrap"><table class="d-table"><thead><tr><th>Role</th><th>What it is for</th><th>State</th><th>Actions</th></tr></thead><tbody>';
-    foreach ($offered as $role => $ship) {
-        $on = in_array($role, $enabled, true);
+    $countUsers = static fn (string $role): int => (int) $app->db->val("SELECT COUNT(*) FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE d.name = ? AND u.tenant_id = ? AND (d.tenant_id IS NULL OR d.tenant_id = u.tenant_id)", [\Selfcare\Auth::ROLE_MODEL, $role, $t]);
+    $h = '<p class="d-help">Pick a role to change what it can do. Switch roles on only if your organisation uses them, or make a role of your own. Admin always has full access.</p><div class="d-table-wrap"><table class="d-table"><thead><tr><th>Role</th><th>What it is for</th><th>State</th><th></th></tr></thead><tbody>';
+    foreach ($offered + array_fill_keys(array_keys($custom), -2) as $role => $ship) {
+        $isCustom = isset($custom[$role]);
+        $on = $isCustom || in_array($role, $enabled, true);
         $full = $a->full($role);
-        $users = (int) $app->db->val("SELECT COUNT(*) FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE d.name = ? AND u.tenant_id = ?", [\Selfcare\Auth::ROLE_MODEL, $role, $t]);
-        $h .= '<tr' . ($sel === $role ? ' style="background:var(--soft)"' : '') . '><td data-label="Role"><b>' . e($a->roleLabel($role, $p->family)) . '</b><br><small class="d-mute">' . $users . ' ' . ($users === 1 ? 'person' : 'people') . '</small></td><td data-label="For">' . e($a->roleHelp($role)) . '</td><td data-label="State"><span class="d-badge is-' . ($on ? 'ok' : 'mute') . '">' . ($on ? 'In use' : 'Off') . '</span></td><td class="d-actions" data-label="Actions">';
+        $users = $countUsers($role);
+        $h .= '<tr' . ($sel === $role ? ' style="background:var(--soft)"' : '') . '><td data-label="Role"><b>' . e($isCustom ? $role : $a->roleLabel($role, $p->family)) . '</b>' . ($isCustom ? ' <span class="d-pill is-on">Your role</span>' : '') . '<br><small class="d-mute">' . $users . ' ' . ($users === 1 ? 'person' : 'people') . '</small></td><td data-label="What it is for">' . e($isCustom ? (string) ($custom[$role]['description'] ?? '') : $a->roleHelp($role)) . '</td><td data-label="State">' . ($on ? '<span class="d-pill is-on">On</span>' : '<span class="d-pill">Off</span>') . '</td><td class="d-actions">';
         if (!$full) {
             $h .= '<a class="d-act" href="' . e(url('portal/access', ['role' => $role])) . '#matrix">' . icon('edit', 14) . '<span>Permissions</span></a>';
-            if ($p->writable()) {
+            if ($p->writable() && !$isCustom) {
                 $h .= '<form class="d-inline" method="post" action="' . e(url('portal/access/role')) . '">' . csrf_field() . '<input type="hidden" name="role" value="' . e($role) . '"><input type="hidden" name="on" value="' . ($on ? 0 : 1) . '"><button class="d-act" type="submit">' . icon($on ? 'x' : 'check', 14) . '<span>' . ($on ? 'Switch off' : 'Switch on') . '</span></button></form>';
+            }
+            if ($p->writable() && $isCustom) {
+                $h .= '<form class="d-inline" method="post" action="' . e(url('portal/access/delete')) . '" data-confirm="Delete the role ' . e($role) . '? This cannot be undone.">' . csrf_field() . '<input type="hidden" name="role" value="' . e($role) . '"><button class="d-act" type="submit">' . icon('trash', 14) . '<span>Delete</span></button></form>';
             }
         } else {
             $h .= '<span class="d-mute">Always full access</span>';
@@ -630,19 +655,28 @@ $app->router->get('/portal/access', static function () use ($app, $dash, $card, 
     }
     $h .= '</tbody></table></div>';
     $out = $card('Roles', $h);
-    if ($sel !== '' && !$a->full($sel)) {
-        $cur = $a->effective($t, $sel, $p->family);
-        $m = '<form method="post" action="' . e(url('portal/access/save')) . '">' . csrf_field() . '<input type="hidden" name="role" value="' . e($sel) . '"><div class="d-table-wrap"><table class="d-matrix"><thead><tr><th>Can do</th><th>Group</th><th>Allowed</th></tr></thead><tbody>';
-        foreach ($a->permissions() as $name => $info) {
-            $mod = $permModule[$name] ?? null;
-            $planOk = $mod === null || $p->module($mod);
-            $mine = $p->can($name);
-            $dis = !$planOk || !$mine || !$p->writable();
-            $why = !$planOk ? 'Not in your plan' : (!$mine ? 'You do not have this yourself' : '');
-            $m .= '<tr><td><b>' . e($info[0]) . '</b><br><small class="d-mute">' . e($info[2]) . ($why !== '' ? ' (' . e($why) . ')' : '') . '</small></td><td>' . e($info[1]) . '</td><td><input type="checkbox" name="perm[]" value="' . e($name) . '"' . (in_array($name, $cur, true) ? ' checked' : '') . ($dis ? ' disabled' : '') . ' aria-label="' . e($info[0]) . '"></td></tr>';
+    if ($p->writable()) {
+        $copy = '<option value="">Start with nothing</option>';
+        foreach ($enabled as $r) {
+            if (!$a->full($r) && !in_array($r, ['Patient', 'Family Member', 'Referring Doctor', 'B2B Customer'], true)) {
+                $copy .= '<option value="' . e($r) . '">' . e($a->roleLabel($r, $p->family)) . '</option>';
+            }
         }
-        $m .= '</tbody></table></div><div class="d-field" style="margin-top:14px"><label for="reason">Why are you changing this? (kept in the log)</label><input id="reason" name="reason" maxlength="250"></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save role</button></div></form>';
-        $out .= '<div id="matrix">' . $card('What "' . $a->roleLabel($sel, $p->family) . '" can do', $m) . '</div>';
+        $n = '<form class="d-form" method="post" action="' . e(url('portal/access/new')) . '">' . csrf_field() . '<div class="d-grid2"><div class="d-field"><label for="nr_name">Role name</label><input id="nr_name" name="name" maxlength="40" required placeholder="e.g. Cashier, Ward clerk, Night supervisor"></div><div class="d-field"><label for="nr_copy">Start from</label><select id="nr_copy" name="copy">' . $copy . '</select></div></div><div class="d-field"><label for="nr_desc">What is this role for? (optional)</label><input id="nr_desc" name="description" maxlength="250"></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Create role</button></div><p class="d-help">You then choose its modules and what it can do on the next screen. A new role never gets more than you have yourself.</p></form>';
+        $out .= $card('Make a new role', $n);
+    }
+    if ($sel !== '' && !$a->full($sel)) {
+        [$shown, $viewLock, $actLock] = $roleScope($p);
+        $cur = $a->effective($t, $sel, $p->family);
+        $isCustom = isset($custom[$sel]);
+        $m = '<form method="post" action="' . e(url('portal/access/save')) . '">' . csrf_field() . '<input type="hidden" name="role" value="' . e($sel) . '">';
+        if ($isCustom) {
+            $m .= '<div class="d-grid2"><div class="d-field"><label for="r_name">Role name</label><input id="r_name" name="name" maxlength="40" value="' . e($sel) . '"></div><div class="d-field"><label for="r_desc">What is it for?</label><input id="r_desc" name="description" maxlength="250" value="' . e((string) ($custom[$sel]['description'] ?? '')) . '"></div></div>';
+        }
+        $extra = array_values(array_diff($cur, $shown));
+        $m .= RoleUi::grid($a, array_merge($shown, $extra), $cur, $a->actionMap($t, $sel, $p->family), $viewLock, $actLock);
+        $m .= '<div class="d-field" style="margin-top:14px"><label for="reason">Why are you changing this? (kept in the log)</label><input id="reason" name="reason" maxlength="250"></div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit"' . ($p->writable() ? '' : ' disabled') . '>Save role</button></div></form>';
+        $out .= '<div id="matrix">' . $card('What "' . e($isCustom ? $sel : $a->roleLabel($sel, $p->family)) . '" can do', $m) . '</div>';
     }
     $log = $app->db->all('SELECT l.*, u.first_name, u.last_name FROM permission_change_log l LEFT JOIN users u ON u.id = l.actor_id WHERE l.tenant_id = ? ORDER BY l.id DESC LIMIT 15', [$t]);
     $l = '';
@@ -650,7 +684,7 @@ $app->router->get('/portal/access', static function () use ($app, $dash, $card, 
         $l .= '<li><b>' . e(str_replace('_', ' ', (string) $r['action'])) . '</b> ' . e((string) $r['role_name']) . '<small>' . e(trim((string) $r['first_name'] . ' ' . (string) $r['last_name'])) . ' · ' . e(dt((string) $r['created_at'], 'd M Y, H:i')) . ($r['reason'] ? ' · ' . e((string) $r['reason']) : '') . '</small></li>';
     }
     $out .= $card('Recent changes', $l !== '' ? '<ul class="d-tl">' . $l . '</ul>' : '<p class="d-mute">Nothing has been changed yet.</p>');
-    $dash($p, 'access', 'Role access', $out, ['sub' => 'Choose which roles you use and what each can do. For time-limited access, edit the person under Staff accounts.']);
+    $dash($p, 'access', 'Role access', $out, ['sub' => 'Choose which roles you use, make your own, and set what each can view, add, edit, delete, print and export. For time-limited access, edit the person under Staff accounts.']);
 });
 $app->router->post('/portal/access/role', static function () use ($app, $posted): void {
     $p = Portal::boot($app);
@@ -673,7 +707,52 @@ $app->router->post('/portal/access/role', static function () use ($app, $posted)
     }
     $posted(($on ? 'Role switched on.' : 'Role switched off.'), url('portal/access'), $err);
 });
-$app->router->post('/portal/access/save', static function () use ($app, $posted, $permModule): void {
+$app->router->post('/portal/access/new', static function () use ($app, $posted, $roleScope): void {
+    $p = Portal::boot($app);
+    $p->need('manage_access', 'access');
+    $p->needWritable();
+    $a = $app->access;
+    $t = $p->tenantId;
+    $name = trim((string) ($_POST['name'] ?? ''));
+    $err = $a->nameError($t, $name);
+    if ($err !== null) {
+        $posted('', url('portal/access'), $err);
+    }
+    if (count($a->customRoles($t)) >= 30) {
+        $posted('', url('portal/access'), 'You have reached the limit of 30 roles of your own.');
+    }
+    [$shown, $viewLock, $actLock] = $roleScope($p);
+    $perms = [];
+    $acts = [];
+    $copy = (string) ($_POST['copy'] ?? '');
+    if ($copy !== '' && in_array($copy, $a->enabledRoles($t, (string) $p->type['slug']), true) && !$a->full($copy)) {
+        $map = $a->actionMap($t, $copy, $p->family);
+        foreach ($map as $perm => $list) {
+            // never more than the person making it holds
+            if (!$p->can($perm)) {
+                continue;
+            }
+            $perms[] = $perm;
+            $acts[$perm] = array_values(array_filter($list, static fn ($x) => $p->canDo($perm, $x)));
+        }
+    }
+    $id = $a->createRole($t, $name, (string) ($_POST['description'] ?? ''), $perms, $acts);
+    $a->log($t, (int) $p->user['id'], null, $name, 'role_created', null, ['from' => $copy ?: null, 'id' => $id]);
+    flash('Role created. Now choose what it can do.', 'ok');
+    redirect(url('portal/access', ['role' => $name]) . '#matrix');
+});
+$app->router->post('/portal/access/delete', static function () use ($app, $posted): void {
+    $p = Portal::boot($app);
+    $p->need('manage_access', 'access');
+    $p->needWritable();
+    $role = (string) ($_POST['role'] ?? '');
+    $err = $app->access->deleteRole($p->tenantId, $role);
+    if ($err === null) {
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, $role, 'role_deleted', null, null);
+    }
+    $posted('Role deleted.', url('portal/access'), $err);
+});
+$app->router->post('/portal/access/save', static function () use ($app, $posted, $roleScope): void {
     $p = Portal::boot($app);
     $p->need('manage_access', 'access');
     $p->needWritable();
@@ -681,28 +760,33 @@ $app->router->post('/portal/access/save', static function () use ($app, $posted,
     $a = $app->access;
     $t = $p->tenantId;
     $back = url('portal/access', ['role' => $role]);
-    if (!isset($a->offeredRoles((string) $p->type['slug'])[$role]) || $a->full($role)) {
+    $isCustom = $a->isCustom($t, $role);
+    if ((!isset($a->offeredRoles((string) $p->type['slug'])[$role]) && !$isCustom) || $a->full($role)) {
         $posted('', $back, 'That role cannot be changed.');
     }
+    [$shown, $viewLock, $actLock] = $roleScope($p);
     $before = $a->effective($t, $role, $p->family);
-    $want = array_values(array_intersect(array_keys($a->permissions()), array_map('strval', (array) ($_POST['perm'] ?? []))));
-    // keep what the form could not change (disabled boxes): plan ceiling and grantor ceiling
-    foreach ($a->permissions() as $name => $_) {
-        $mod = $permModule[$name] ?? null;
-        $locked = ($mod !== null && !$p->module($mod)) || !$p->can($name);
-        if ($locked) {
-            $want = array_values(array_diff($want, [$name]));
-            if (in_array($name, $before, true)) {
-                $want[] = $name;
-            }
-        }
-    }
+    $beforeActs = $a->actionMap($t, $role, $p->family);
+    [$want, $acts] = RoleUi::read($a, $shown, $before, $beforeActs, $viewLock, $actLock);
     if ($role === $p->role && in_array('manage_access', $before, true) && !in_array('manage_access', $want, true)) {
         $posted('', $back, 'You cannot remove your own access to this page.');
     }
-    $a->save($t, $role, $want);
-    $a->log($t, (int) $p->user['id'], null, $role, 'permissions_changed', $before, $want, (string) ($_POST['reason'] ?? ''));
-    $posted('Role saved.', $back);
+    $newName = $role;
+    if ($isCustom) {
+        $newName = trim((string) ($_POST['name'] ?? $role));
+        if ($newName !== $role) {
+            $err = $a->nameError($t, $newName, $role);
+            if ($err !== null) {
+                $posted('', $back, $err);
+            }
+        }
+    }
+    $a->save($t, $role, $want, $acts);
+    if ($isCustom) {
+        $a->renameRole($t, $role, $newName, (string) ($_POST['description'] ?? ''));
+    }
+    $a->log($t, (int) $p->user['id'], null, $newName, 'permissions_changed', ['perms' => $before, 'actions' => $beforeActs], ['perms' => $want, 'actions' => $acts], (string) ($_POST['reason'] ?? ''));
+    $posted('Role saved. It applies right away.', url('portal/access', ['role' => $newName]));
 });
 
 // ------------------------------------------------------------------ plan

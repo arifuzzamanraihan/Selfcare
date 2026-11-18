@@ -196,7 +196,7 @@ final class People
                 keep_old($_POST);
                 return 'That role is not switched on for your organisation.';
             }
-            $roleId = $this->app->access->roleId($role);
+            $roleId = $this->app->access->roleId($role, $this->p->tenantId);
             // grantor ceiling: only roles whose permissions you hold yourself
             if (!$this->app->access->full($this->p->role)) {
                 $mine = $this->p->perms;
@@ -216,7 +216,7 @@ final class People
                 return 'This is the last active admin. Make another admin first.';
             }
         } else {
-            $roleId = $this->app->access->roleId($role) ?? 0;
+            $roleId = $this->app->access->roleId($role, $this->p->tenantId) ?? 0;
         }
         $this->db()->begin();
         try {

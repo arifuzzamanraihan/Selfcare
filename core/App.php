@@ -31,6 +31,7 @@ final class App
     public ?\Closure $siteContact = null;
     /** Renders a dashboard page: ($portalOrNull, $active, $title, $html, $options). Set in routes/portal.php. */
     public ?\Closure $dash = null;
+    public ?\Closure $adminPage = null;
     /** Small HTML builders shared by route files (card, btn, stat). @var array<string,\Closure> */
     public array $ui = [];
 
@@ -61,6 +62,11 @@ final class App
             }
             if ($this->hostVendor !== null) {
                 Currency::$context = Currency::forTenant((string) $this->hostVendor['id']);
+                $tz = (string) $this->db->val("SELECT `value` FROM settings WHERE tenant_id = ? AND `key` = 'timezone' LIMIT 1", [(string) $this->hostVendor['id']]);
+                if ($tz !== '' && in_array($tz, \DateTimeZone::listIdentifiers(), true) && $tz !== date_default_timezone_get()) {
+                    date_default_timezone_set($tz); // each vendor works in its own time zone
+                    $this->db->run('SET time_zone = ?', [date('P')]);
+                }
             }
         }
     }

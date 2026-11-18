@@ -42,5 +42,14 @@ $run(__DIR__ . '/schema.sql');
 $run(__DIR__ . '/migrate-r4.sql'); // idempotent: adds columns that older installs do not have
 Selfcare\Plans::seedDefaults($db);
 echo "currencies added: " . Selfcare\Currency::seed($db) . "\n";
+Selfcare\Currency::reset();
+// one time: vendors keep the currency they were showing, then the platform default becomes Pakistan (PKR)
+if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'currency_defaults_v2' LIMIT 1") !== '1') {
+    echo "vendors pinned to their currency: " . Selfcare\Currency::pinExisting($db) . "\n";
+    foreach (['platform_currency' => 'PKR', 'default_country' => 'Pakistan', 'default_timezone' => 'Asia/Karachi', 'currency_defaults_v2' => '1'] as $k => $v) {
+        $id = $db->val("SELECT id FROM front_settings WHERE tenant_id IS NULL AND `key` = ? LIMIT 1", [$k]);
+        $id ? $db->run("UPDATE front_settings SET `value` = ?, updated_at = NOW() WHERE id = ?", [$v, $id]) : $db->insert('front_settings', ['key' => $k, 'value' => $v, 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+    }
+}
 echo "vendor types added: " . Selfcare\VendorTypes::seed($db) . "\n";
 echo "done\n";

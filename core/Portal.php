@@ -42,6 +42,8 @@ final class Portal
     public array $sub;
     /** @var list<string> */
     public array $perms;
+    /** The portal request being served (used by the page layout to hide buttons this role may not press). */
+    public static ?self $current = null;
 
     private function __construct(private App $app)
     {
@@ -97,7 +99,69 @@ final class Portal
         $p->family = (string) $p->tpl['family'];
         $p->sub = $app->plans->current($p->tenantId);
         $p->perms = $app->access->effective($p->tenantId, $p->role, $p->family);
+        self::$current = $p;
+        $p->gate();
         return $p;
+    }
+
+    /** May this role do this action inside this module? (view, add, edit, delete, print, export) */
+    public function canDo(string $perm, string $action): bool
+    {
+        return !$this->isSide() && $this->app->access->canDo($this->tenantId, $this->role, $this->family, $perm, $action);
+    }
+
+    /** Portal address of a request, without the base path. */
+    private function pathOf(string $uri): string
+    {
+        $path = (string) parse_url($uri, PHP_URL_PATH);
+        $bp = base_path();
+        return '/' . trim(($bp !== '' && str_starts_with($path, $bp)) ? substr($path, strlen($bp)) : $path, '/');
+    }
+
+    /** One central check of what this role may do: the module of the address and the kind of action (add, edit, delete, print, export). */
+    private function gate(): void
+    {
+        if ($this->isSide() || $this->app->access->full($this->role)) {
+            return;
+        }
+        $path = $this->pathOf((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+        $perm = $this->modulePerm($path);
+        if ($perm === null || !$this->can($perm)) {
+            return; // no module, or no grant: the page itself answers
+        }
+        $action = Access::classify((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'), $path, $_GET, $_POST);
+        if (!$this->canDo($perm, $action)) {
+            $this->app->error(403, 'Your role can open this part but is not allowed to ' . ['add' => 'add new records', 'edit' => 'change records', 'delete' => 'delete or void records', 'print' => 'print or download PDFs', 'export' => 'export data'][$action] . '. Ask your administrator.', 'No access');
+        }
+    }
+
+    private function modulePerm(string $path): ?string
+    {
+        return $this->app->access->permForPath($path, (string) $this->type['slug'], $this->family, $this->tpl, $this->can('manage_rx'));
+    }
+
+    /** Takes out the buttons and forms of a page that this role may not use (the server refuses them anyway). */
+    public function filterLinks(string $html): string
+    {
+        if ($this->isSide() || $this->app->access->full($this->role) || stripos($html, 'href=') === false && stripos($html, 'action=') === false) {
+            return $html;
+        }
+        $deny = function (string $url, string $method): bool {
+            $url = html_entity_decode($url);
+            $host = (string) parse_url($url, PHP_URL_HOST);
+            if ($host !== '' && strcasecmp($host, (string) ($_SERVER['HTTP_HOST'] ?? '')) !== 0 && strcasecmp($host, Tenant::requestHost()) !== 0) {
+                return false;
+            }
+            $path = $this->pathOf($url);
+            $perm = $this->modulePerm($path);
+            if ($perm === null) {
+                return false;
+            }
+            parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+            return !$this->canDo($perm, Access::classify($method, $path, $q));
+        };
+        $html = preg_replace_callback('#<a\b[^>]*?\bhref="([^"]+)"[^>]*>.*?</a>#s', static fn (array $m): string => $deny($m[1], 'GET') ? '' : $m[0], $html) ?? $html;
+        return preg_replace_callback('#<form\b[^>]*?\baction="([^"]+)"[^>]*>.*?</form>#s', static fn (array $m): string => $deny($m[1], 'POST') ? '' : $m[0], $html) ?? $html;
     }
 
     public function isSide(): bool
@@ -212,10 +276,14 @@ final class Portal
         if (Rx::forType((string) ($this->type['slug'] ?? '')) !== null && ($this->can('manage_rx') || $this->can('view_rx')) && $this->module('documents')) {
             $all['Records'][] = ['key' => 'prescriptions', 'label' => 'Prescriptions', 'icon' => 'pill', 'url' => url('portal/prescriptions')];
         }
-        foreach (['manage_prescriptions', 'manage_medicines', 'manage_blood_bank'] as $dp) {
-            if ($this->can($dp) && $this->module('documents')) {
-                $all['Records'][] = ['key' => 'documents', 'label' => 'Forms and records', 'icon' => 'file', 'url' => url('portal/documents')];
-                break;
+        if ($this->module('documents')) {
+            // only when this role can fill in at least one form of this kind of vendor
+            $bill = new Billing($this->app->db);
+            foreach ($bill->catalog((string) $this->type['slug'], $this->family)['forms'] as $k => $c) {
+                if ($this->can((string) $c['perm']) && $this->module($bill->module($k))) {
+                    $all['Records'][] = ['key' => 'documents', 'label' => 'Forms and records', 'icon' => 'file', 'url' => url('portal/documents')];
+                    break;
+                }
             }
         }
         $add('Account', 'access', 'Role access', 'shield', 'portal/access', 'manage_access', 'access');

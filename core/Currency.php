@@ -12,25 +12,117 @@ final class Currency
     /** @var array<string,array<string,mixed>>|null */
     private static ?array $rows = null;
 
-    /** Built in rows. Used to seed the table and as a fallback when the table is not there yet. @return list<array<string,mixed>> */
+    /**
+     * Built in rows. Used to seed the table and as a fallback when the table is not there yet.
+     * rate = units of the currency for 1 US dollar. The rates are indicative starting values: Self Care edits them under Currencies.
+     * @return list<array<string,mixed>>
+     */
     public static function defaults(): array
     {
-        $r = static fn (string $c, string $n, string $s, string $maj, string $min, string $grp = 'standard', string $pos = 'before', int $dec = 2, int $o = 0): array => ['code' => $c, 'name' => $n, 'symbol' => $s, 'decimals' => $dec, 'symbol_pos' => $pos, 'thousand_sep' => ',', 'decimal_sep' => '.', 'grouping' => $grp, 'major_name' => $maj, 'minor_name' => $min, 'is_enabled' => 1, 'sort_order' => $o];
-        return [
-            $r('PKR', 'Pakistani Rupee', 'Rs', 'Rupees', 'Paisa', 'lakh', 'before', 2, 1), $r('BDT', 'Bangladeshi Taka', '৳', 'Taka', 'Paisa', 'lakh', 'before', 2, 2), $r('USD', 'US Dollar', '$', 'Dollars', 'Cents', 'standard', 'before', 2, 3),
-            $r('INR', 'Indian Rupee', '₹', 'Rupees', 'Paise', 'lakh', 'before', 2, 4), $r('CAD', 'Canadian Dollar', 'CA$', 'Dollars', 'Cents', 'standard', 'before', 2, 5), $r('EUR', 'Euro', '€', 'Euro', 'Cents', 'standard', 'before', 2, 6),
-            $r('GBP', 'British Pound', '£', 'Pounds', 'Pence', 'standard', 'before', 2, 7), $r('AED', 'UAE Dirham', 'AED', 'Dirhams', 'Fils', 'standard', 'before', 2, 8), $r('SAR', 'Saudi Riyal', 'SAR', 'Riyals', 'Halalas', 'standard', 'before', 2, 9),
+        // code, name, symbol, major, minor, grouping, symbol position, decimals, rate per 1 USD
+        $t = [
+            ['PKR', 'Pakistani Rupee', 'Rs', 'Rupees', 'Paisa', 'lakh', 'before', 2, 280], ['BDT', 'Bangladeshi Taka', '৳', 'Taka', 'Paisa', 'lakh', 'before', 2, 122], ['USD', 'US Dollar', '$', 'Dollars', 'Cents', 'standard', 'before', 2, 1],
+            ['INR', 'Indian Rupee', '₹', 'Rupees', 'Paise', 'lakh', 'before', 2, 85], ['CAD', 'Canadian Dollar', 'CA$', 'Dollars', 'Cents', 'standard', 'before', 2, 1.38], ['EUR', 'Euro', '€', 'Euro', 'Cents', 'standard', 'before', 2, 0.92],
+            ['GBP', 'British Pound', '£', 'Pounds', 'Pence', 'standard', 'before', 2, 0.78], ['AED', 'UAE Dirham', 'AED', 'Dirhams', 'Fils', 'standard', 'before', 2, 3.6725], ['SAR', 'Saudi Riyal', 'SAR', 'Riyals', 'Halalas', 'standard', 'before', 2, 3.75],
+            ['AUD', 'Australian Dollar', 'A$', 'Dollars', 'Cents', 'standard', 'before', 2, 1.52], ['MYR', 'Malaysian Ringgit', 'RM', 'Ringgit', 'Sen', 'standard', 'before', 2, 4.4], ['SGD', 'Singapore Dollar', 'S$', 'Dollars', 'Cents', 'standard', 'before', 2, 1.34],
+            ['NPR', 'Nepalese Rupee', 'NPR', 'Rupees', 'Paisa', 'lakh', 'before', 2, 135], ['LKR', 'Sri Lankan Rupee', 'LKR', 'Rupees', 'Cents', 'standard', 'before', 2, 300], ['QAR', 'Qatari Riyal', 'QAR', 'Riyals', 'Dirhams', 'standard', 'before', 2, 3.64],
+            ['KWD', 'Kuwaiti Dinar', 'KWD', 'Dinars', 'Fils', 'standard', 'before', 3, 0.307], ['BHD', 'Bahraini Dinar', 'BHD', 'Dinars', 'Fils', 'standard', 'before', 3, 0.376], ['OMR', 'Omani Rial', 'OMR', 'Rials', 'Baisa', 'standard', 'before', 3, 0.385],
+            ['JOD', 'Jordanian Dinar', 'JOD', 'Dinars', 'Fils', 'standard', 'before', 3, 0.709], ['AFN', 'Afghan Afghani', '؋', 'Afghanis', 'Pul', 'standard', 'before', 2, 70], ['IQD', 'Iraqi Dinar', 'IQD', 'Dinars', '', 'standard', 'before', 0, 1310],
+            ['EGP', 'Egyptian Pound', 'E£', 'Pounds', 'Piastres', 'standard', 'before', 2, 49], ['TRY', 'Turkish Lira', '₺', 'Lira', 'Kurus', 'standard', 'before', 2, 34], ['CNY', 'Chinese Yuan', 'CN¥', 'Yuan', 'Fen', 'standard', 'before', 2, 7.2],
+            ['JPY', 'Japanese Yen', '¥', 'Yen', '', 'standard', 'before', 0, 150], ['KRW', 'South Korean Won', '₩', 'Won', '', 'standard', 'before', 0, 1400], ['HKD', 'Hong Kong Dollar', 'HK$', 'Dollars', 'Cents', 'standard', 'before', 2, 7.8],
+            ['THB', 'Thai Baht', '฿', 'Baht', 'Satang', 'standard', 'before', 2, 35], ['IDR', 'Indonesian Rupiah', 'Rp', 'Rupiah', '', 'standard', 'before', 0, 15800], ['PHP', 'Philippine Peso', '₱', 'Pesos', 'Centavos', 'standard', 'before', 2, 57],
+            ['VND', 'Vietnamese Dong', '₫', 'Dong', '', 'standard', 'after', 0, 25000], ['MMK', 'Myanmar Kyat', 'K', 'Kyats', 'Pya', 'standard', 'before', 0, 2100], ['NZD', 'New Zealand Dollar', 'NZ$', 'Dollars', 'Cents', 'standard', 'before', 2, 1.65],
+            ['CHF', 'Swiss Franc', 'CHF', 'Francs', 'Rappen', 'standard', 'before', 2, 0.88], ['SEK', 'Swedish Krona', 'kr', 'Kronor', 'Ore', 'standard', 'after', 2, 10.5], ['NOK', 'Norwegian Krone', 'kr', 'Kroner', 'Ore', 'standard', 'after', 2, 10.8],
+            ['DKK', 'Danish Krone', 'kr', 'Kroner', 'Ore', 'standard', 'after', 2, 6.9], ['RUB', 'Russian Ruble', '₽', 'Rubles', 'Kopecks', 'standard', 'after', 2, 95], ['BRL', 'Brazilian Real', 'R$', 'Reais', 'Centavos', 'standard', 'before', 2, 5.5],
+            ['MXN', 'Mexican Peso', 'MX$', 'Pesos', 'Centavos', 'standard', 'before', 2, 18], ['ZAR', 'South African Rand', 'R', 'Rand', 'Cents', 'standard', 'before', 2, 18], ['NGN', 'Nigerian Naira', '₦', 'Naira', 'Kobo', 'standard', 'before', 2, 1500],
+            ['KES', 'Kenyan Shilling', 'KSh', 'Shillings', 'Cents', 'standard', 'before', 2, 129], ['GHS', 'Ghanaian Cedi', 'GH₵', 'Cedis', 'Pesewas', 'standard', 'before', 2, 15], ['TZS', 'Tanzanian Shilling', 'TSh', 'Shillings', 'Cents', 'standard', 'before', 0, 2600],
+            ['UGX', 'Ugandan Shilling', 'USh', 'Shillings', '', 'standard', 'before', 0, 3700], ['ETB', 'Ethiopian Birr', 'Br', 'Birr', 'Santim', 'standard', 'before', 2, 125], ['MAD', 'Moroccan Dirham', 'MAD', 'Dirhams', 'Centimes', 'standard', 'before', 2, 10],
         ];
+        $out = [];
+        foreach ($t as $i => [$c, $n, $s, $maj, $min, $grp, $pos, $dec, $rate]) {
+            $out[] = ['code' => $c, 'name' => $n, 'symbol' => $s, 'decimals' => $dec, 'symbol_pos' => $pos, 'thousand_sep' => ',', 'decimal_sep' => '.', 'grouping' => $grp, 'major_name' => $maj, 'minor_name' => $min, 'is_enabled' => 1, 'sort_order' => $i + 1, 'rate' => $rate];
+        }
+        return $out;
     }
 
+    /** Adds the built in currencies that are missing, and gives the rate to currencies that never had one. Returns how many were added. */
     public static function seed(Database $db): int
     {
         $n = 0;
+        $hasRate = (bool) $db->all("SHOW COLUMNS FROM sc_currencies LIKE 'rate'");
         foreach (self::defaults() as $r) {
             if ((int) $db->val('SELECT COUNT(*) FROM sc_currencies WHERE code = ?', [$r['code']]) === 0) {
+                if (!$hasRate) {
+                    unset($r['rate']);
+                }
                 $db->insert('sc_currencies', $r);
                 $n++;
+            } elseif ($hasRate && $r['code'] !== 'USD') {
+                $db->run('UPDATE sc_currencies SET rate = ? WHERE code = ? AND rate_updated_at IS NULL AND rate = 1', [$r['rate'], $r['code']]);
             }
+        }
+        return $n;
+    }
+
+    /** Units of the currency for 1 US dollar (never 0). */
+    public static function rate(string $code): float
+    {
+        $r = (float) (self::all()[$code]['rate'] ?? 1);
+        return $r > 0 ? $r : 1.0;
+    }
+
+    /** Value of $amount given in $from, written in $to. Same currency = same number. */
+    public static function convert(float $amount, string $from, string $to): float
+    {
+        if ($from === $to || $from === '') {
+            return $amount;
+        }
+        return round($amount / self::rate($from) * self::rate($to), max(0, min(4, (int) (self::all()[$to]['decimals'] ?? 2))));
+    }
+
+    /**
+     * SQL that gives an amount column in the currency $target, whatever currency the row was written in (NULL = already $target).
+     * Use inside SUM(): SUM(Currency::sql('i.total', 'i.currency', 'PKR')).
+     */
+    public static function sql(string $amountCol, string $currencyCol, string $target): string
+    {
+        $t = str_replace("'", '', $target);
+        $rt = number_format(self::rate($t), 8, '.', '');
+        return "IF($currencyCol IS NULL OR $currencyCol = '$t', $amountCol, $amountCol / COALESCE(NULLIF((SELECT c.rate FROM sc_currencies c WHERE c.code = $currencyCol COLLATE utf8mb4_unicode_ci), 0), 1) * $rt)";
+    }
+
+    /** Writes the amount columns of rows (which carry their own currency code, or none) in the currency $target. @param list<array<string,mixed>> $rows @param list<string> $keys @return list<array<string,mixed>> */
+    public static function normalize(array $rows, array $keys, string $target, string $curKey = 'currency'): array
+    {
+        foreach ($rows as &$r) {
+            $from = (string) ($r[$curKey] ?? '');
+            if ($from !== '' && $from !== $target) {
+                foreach ($keys as $k) {
+                    if (isset($r[$k])) {
+                        $r[$k] = self::convert((float) $r[$k], $from, $target);
+                    }
+                }
+                $r[$curKey] = $target;
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Run once on upgrade, before the defaults change: every vendor that never chose a currency keeps the one it was showing,
+     * and money rows without a code get their vendor's code. Nothing a vendor sees changes.
+     */
+    public static function pinExisting(Database $db): int
+    {
+        $legacy = (string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'platform_currency' LIMIT 1");
+        $legacy = $legacy !== '' && isset(self::all()[$legacy]) ? $legacy : 'USD';
+        $n = 0;
+        foreach ($db->all("SELECT t.id FROM tenants t WHERE NOT EXISTS (SELECT 1 FROM settings s WHERE s.tenant_id = t.id AND s.`key` = 'currency')") as $t) {
+            $db->run("INSERT INTO settings (tenant_id, `key`, `value`, created_at, updated_at) VALUES (?, 'currency', ?, NOW(), NOW())", [$t['id'], $legacy]);
+            $n++;
+        }
+        foreach (['sc_ledger', 'sc_records', 'sc_stock_items'] as $tbl) {
+            $db->run("UPDATE $tbl x SET x.currency = COALESCE((SELECT s.`value` FROM settings s WHERE s.tenant_id = x.tenant_id AND s.`key` = 'currency' LIMIT 1), ?) WHERE x.currency IS NULL", [$legacy]);
         }
         return $n;
     }
@@ -68,7 +160,21 @@ final class Currency
             $c = (string) app()->site->get(null, 'platform_currency', '');
         } catch (\Throwable) {
         }
-        return isset(self::all()[$c]) ? $c : 'USD';
+        return isset(self::all()[$c]) ? $c : (isset(self::all()['PKR']) ? 'PKR' : 'USD');
+    }
+
+    /** Currency a visitor of the public site looks at: ?cur=XXX (remembered in a cookie), else the platform default. */
+    public static function visitor(): string
+    {
+        $c = strtoupper((string) ($_GET['cur'] ?? ''));
+        if ($c !== '' && isset(self::all(true)[$c])) {
+            if (!headers_sent()) {
+                setcookie('sc_cur', $c, ['expires' => time() + 86400 * 90, 'path' => '/', 'samesite' => 'Lax']);
+            }
+            return $c;
+        }
+        $c = strtoupper((string) ($_COOKIE['sc_cur'] ?? ''));
+        return $c !== '' && isset(self::all(true)[$c]) ? $c : self::platform();
     }
 
     /** Currency a vendor chose in its settings, else the platform default. */

@@ -28,7 +28,7 @@ $adminNav = static function () use ($app): array {
     $i = static fn (string $k, string $l, string $ic, string $p, int $badge = 0): array => ['key' => $k, 'label' => $l, 'icon' => $ic, 'url' => url($p), 'badge' => $badge];
     $pending = (int) $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE status = 'pending'");
     return [
-        ['group' => 'Platform', 'items' => [$i('overview', 'Overview', 'home', 'admin'), $i('vendors', 'Vendors', 'building', 'admin/vendors'), $i('requests', 'Registration requests', 'clock', 'admin/requests', $pending), $i('types', 'Vendor types', 'layers', 'admin/types'), $i('plans', 'Plans', 'card', 'admin/plans')]],
+        ['group' => 'Platform', 'items' => [$i('overview', 'Overview', 'home', 'admin'), $i('vendors', 'Vendors', 'building', 'admin/vendors'), $i('requests', 'Registration requests', 'clock', 'admin/requests', $pending), $i('types', 'Vendor types', 'layers', 'admin/types'), $i('plans', 'Plans', 'card', 'admin/plans'), $i('roletpl', 'Role templates', 'shield', 'admin/role-templates')]],
         ['group' => 'Money', 'items' => [$i('billing', 'Subscription invoices', 'file', 'admin/billing'), $i('currencies', 'Currencies', 'card', 'admin/currencies'), $i('reports', 'Reports', 'chart', 'admin/reports')]],
         ['group' => 'Website', 'items' => [$i('content', 'Site content and footer', 'globe', 'admin/content'), $i('c-features', 'Features', 'star', 'admin/c/features'), $i('c-steps', 'How it works', 'arrow', 'admin/c/steps'), $i('c-faq', 'Questions', 'help', 'admin/c/faq'), $i('c-testimonials', 'Testimonials', 'heart', 'admin/c/testimonials'), $i('messages', 'Messages', 'mail', 'admin/messages'), $i('free', 'Free services', 'heart', 'admin/free-services')]],
         ['group' => 'Account', 'items' => [$i('account', 'My account', 'user', 'admin/account')]],
@@ -37,6 +37,7 @@ $adminNav = static function () use ($app): array {
 $page = static function (array $u, string $active, string $title, string $html, array $o = []) use ($app, $dash, $adminNav): void {
     $dash(null, $active, $title, $html, $o + ['nav' => $adminNav(), 'orgName' => 'Self Care', 'orgSub' => 'Super admin', 'user' => $u, 'roleLabel' => 'Super admin', 'banner' => '', 'navHome' => 'admin', 'siteLink' => $app->tenant->mainUrl('')]);
 };
+$app->adminPage = $page;
 $go = static function (string $ok, string $to, ?string $err = null): void {
     if ($err !== null) {
         flash($err, 'bad');
@@ -827,11 +828,19 @@ $currencyMod = static function () use ($app): array {
             'thousand_sep' => ['label' => 'Thousands separator', 'max' => 2, 'default' => ','], 'decimal_sep' => ['label' => 'Decimal separator', 'max' => 2, 'default' => '.'],
             'grouping' => ['label' => 'Digit grouping', 'type' => 'select', 'options' => ['standard' => '1,234,567 (standard)', 'lakh' => '12,34,567 (lakh and crore)'], 'required' => true],
             'major_name' => ['label' => 'Main unit in words (Rupees)', 'required' => true, 'max' => 40], 'minor_name' => ['label' => 'Small unit in words (Paisa)', 'max' => 40],
+            'rate' => ['label' => 'Exchange rate: how many of this currency equal 1 US dollar', 'type' => 'number', 'step' => '0.00000001', 'min' => 0.00000001, 'required' => true, 'default' => 1, 'help' => 'Used only to convert in totals, reports and plan prices. Amounts already saved are never changed.'],
             'is_enabled' => ['label' => 'Offer this currency to vendors', 'type' => 'toggle', 'default' => 1], 'sort_order' => ['label' => 'Order', 'type' => 'number', 'default' => 50]],
-        'columns' => ['sort_order' => ['label' => 'Order'], 'code' => ['label' => 'Code'], 'name' => ['label' => 'Name'], 'symbol' => ['label' => 'Symbol'], 'decimals' => ['label' => 'Decimals'], 'grouping' => ['label' => 'Grouping'], 'is_enabled' => ['label' => 'On', 'type' => 'bool']],
+        'columns' => ['sort_order' => ['label' => 'Order'], 'code' => ['label' => 'Code'], 'name' => ['label' => 'Name'], 'symbol' => ['label' => 'Symbol'], 'rate' => ['label' => 'Per 1 USD'], 'decimals' => ['label' => 'Decimals'], 'grouping' => ['label' => 'Grouping'], 'is_enabled' => ['label' => 'On', 'type' => 'bool']],
         'search' => ['t.code', 't.name'], 'sort' => 'sort_order', 'empty' => 'No currencies.',
         'before_save' => function (array $d, ?array $old) use ($app) {
             $d['decimals'] = max(0, min(4, (int) $d['decimals']));
+            $d['rate'] = (float) $d['rate'];
+            if ($d['rate'] <= 0) {
+                return 'The exchange rate must be more than 0.';
+            }
+            if (!$old || abs((float) $old['rate'] - $d['rate']) > 1e-9) {
+                $d['rate_updated_at'] = date('Y-m-d H:i:s');
+            }
             if ($old) {
                 $d['code'] = $old['code'];
             } else {
@@ -1094,8 +1103,10 @@ $app->router->post('/admin/billing/save', static function () use ($app, $adminUs
         keep_old($_POST);
         $go('', url('admin/billing/new'), 'Choose a vendor, a document and a plan.');
     }
-    [$planAmount, $planCur] = \Selfcare\Plans::price($plan);
-    $amount = trim((string) ($_POST['amount'] ?? '')) === '' ? $planAmount : (float) $_POST['amount'];
+    // blank amount: the plan price in the vendor's own currency (converted with the rates when the plan has no price in it); a typed amount is in the platform currency
+    $typed = trim((string) ($_POST['amount'] ?? '')) !== '';
+    [$planAmount, $planCur] = \Selfcare\Plans::price($plan, $typed ? null : \Selfcare\Currency::forTenant($t));
+    $amount = $typed ? (float) $_POST['amount'] : $planAmount;
     $period = mb_substr(trim((string) ($_POST['period'] ?? '')), 0, 60);
     $in = ['party_name' => $ten['hospital_name'], 'invoice_date' => date('Y-m-d'), 'x_plan_name' => $plan['name'], 'x_period' => $period, 'discount' => $_POST['discount'] ?? 0, 'paid_now' => $_POST['paid_now'] ?? 0, 'payment_method' => $_POST['payment_method'] ?? 'Bank transfer', 'payment_ref' => $_POST['reference'] ?? '', 'note' => $_POST['note'] ?? ''];
     try {

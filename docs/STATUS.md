@@ -97,3 +97,20 @@ Kinds that write them: hospital, clinic, specialty clinic, dental, eye, maternit
 - PDF with letterhead, barcode, signature and stamp box; blank prescription pad PDF; saved sets of medicines; patient history page (medicines now, all prescriptions, invoices, forms) with PDF; card on the patient profile; bill from a prescription (patient, doctor and number pre-filled).
 - Reports: Prescription register, Most prescribed medicines, Prescriptions by doctor.
 - Research: ISO 17523, EU eHealth ePrescription guidelines, ISMP safe electronic prescribing, Australian e-prescribing profile (see RESEARCH.md).
+
+## Dynamic roles (step 4)
+
+- Every vendor can switch catalogue roles on or off, **make its own roles** (name, purpose, copy from an existing role), delete unused ones, and for each module choose **View / Add / Edit / Delete / Print / Export**. Only modules of the vendor's kind and plan appear; boxes above the editor's own access are greyed. Edits apply at once and are written to the change log.
+- Central enforcement: `Portal::boot` -> `Portal::gate()` maps every portal address to a module (`Access::permForPath`) and the kind of action (`Access::classify`: view/add/edit/delete/print/export) and answers 403 when the role was not given it. `Portal::filterLinks()` hides the buttons and forms a role may not use.
+- Custom roles are rows of `departments` with `tenant_id` set (unique name per vendor, never equal to a catalogue role); grants in `tenant_role_has_permissions`, actions in `sc_role_actions`. Another vendor can never see, edit, delete or hand out the role (tests).
+- Self Care: Admin > Role templates. Per vendor type: what each role starts with, extra template roles (e.g. pharmacy "Cashier"), reset to built-in, **apply to existing vendors**. New vendors are seeded from the template (`Access::seedTenant($slug, $family, $type)`).
+- Fixes found by the per-role sweep: the "Forms and records" menu link no longer shows for roles that have no form to fill.
+- Tests: `tests/roles.py` (a test user for every switched-on role of every type, 19,000+ checks: sign in, menu links open, modules refused, each action refused/allowed as configured), `tests/roles_dyn.py` (48 checks: create/copy/rename/save/assign/delete, edits effective at once, other vendors isolated, templates apply). Role-by-feature matrix: `docs/ROLES.md`.
+- Not yet: per-role dashboards/landing pages (step: per-role portals), approval workflows.
+
+## Multi-currency (Pakistan default)
+
+- `sc_currencies`: 49 world currencies seeded (PKR, BDT, INR, USD, EUR, GBP, AED, SAR, CAD, AUD, MYR, SGD, NPR, LKR, ...), each with symbol, position, decimals, separators, digit grouping, words and an **exchange rate per 1 USD** (editable by Self Care; rates are indicative until edited). Platform default currency, country and time zone are PKR, Pakistan and Asia/Karachi (new vendors get them; existing vendors were pinned to the currency they were showing, amounts never change).
+- Every money row carries its code: invoices and plans already did; `sc_ledger`, `sc_records`, `sc_stock_items` now do (filled automatically in `Database::insert`). Totals that mix currencies are converted with the rates (`Currency::sql`, `Currency::normalize`): cash book, daily/monthly collection, revenue by item, doctor revenue, expense register, receivables/payables, portal tiles and charts, platform reports.
+- Vendor settings: currency, country, time zone (applied to the vendor's pages and PDFs). Pricing page: visitor currency switcher (default PKR, remembered in a cookie), plan prices converted when a plan has no price in that currency; subscription invoices default to the vendor's own currency.
+- Tests: `tests/currency.php` (43), `tests/currency_web.py` (14).

@@ -65,8 +65,14 @@ final class Database
     }
 
     /** @param array<string,mixed> $data */
+    /** Tables whose rows hold money without an invoice: they get the vendor's currency code when saved. */
+    private const MONEY_TABLES = ['sc_ledger' => 1, 'sc_records' => 1, 'sc_stock_items' => 1];
+
     public function insert(string $table, array $data): int
     {
+        if (isset(self::MONEY_TABLES[$table]) && !array_key_exists('currency', $data) && !empty($data['tenant_id'])) {
+            $data['currency'] = Currency::forTenant((string) $data['tenant_id']); // every money row carries its currency code
+        }
         $cols = array_keys($data);
         $sql = 'INSERT INTO `' . $table . '` (`' . implode('`,`', $cols) . '`) VALUES (' . implode(',', array_fill(0, count($cols), '?')) . ')';
         $this->run($sql, array_values($data));

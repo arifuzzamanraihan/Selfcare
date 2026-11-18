@@ -139,6 +139,7 @@ final class Reports
                 return $res([['Type', 1.2], ['Category', 3.2], ['Amount', 1.6, 'R']], $out, [['Income', $fm($ti)], ['Expenses', $fm($to2)], [$ti - $to2 >= 0 ? 'Profit' : 'Loss', $fm(abs($ti - $to2))]]);
             case 'expense_register':
                 $rows = $db->all("SELECT * FROM sc_ledger WHERE tenant_id = ? AND kind = 'expense' AND deleted_at IS NULL AND entry_date BETWEEN ? AND ?" . ($q !== '' ? ' AND (party LIKE ? OR category LIKE ? OR code LIKE ?)' : '') . ' ORDER BY entry_date, id', $q !== '' ? [$tid, $from, $to, $like, $like, $like] : [$tid, $from, $to]);
+                $rows = Currency::normalize($rows, ['amount'], $currency);
                 $out = array_map(fn ($r) => [(string) $r['code'], dt((string) $r['entry_date']), (string) $r['category'], (string) $r['party'], (string) $r['method'], $r['status'] === 'due' ? 'To pay' : 'Paid', $fm($r['amount'])], $rows);
                 return $res([['No', 1.2], ['Date', 1.2], ['Category', 2.2], ['Paid to', 2], ['Method', 1.2], ['State', 0.9], ['Amount', 1.4, 'R']], $out, [['Entries', (string) count($rows)], ['Total', $fm(array_sum(array_column($rows, 'amount')))], ['Still to pay', $fm(array_sum(array_map(static fn ($r) => $r['status'] === 'due' ? (float) $r['amount'] : 0, $rows)))]]);
             case 'payables':
@@ -148,7 +149,7 @@ final class Reports
                 $out = array_map(fn ($r) => [(string) $r['ref'], dt((string) $r['d']), (string) $r['party'], (string) $r['label'], $r['due_date'] ? dt((string) $r['due_date']) : '', $fm($r['amount']), max(0, (int) $r['age']) . ' d'], $rows);
                 return $res([['No', 1.3], ['Date', 1.2], ['To', 2.2], ['For', 2], ['Pay by', 1.2], ['Amount', 1.4, 'R'], ['Late', 0.8, 'R']], $out, [['Total to pay', $fm(array_sum($b))], ['Not late', $fm($b[0])], ['1-30 days late', $fm($b[1])], ['Over 30 days late', $fm($b[2] + $b[3])]]);
             case 'daily_collection':
-                $rows = $db->all('SELECT DATE(p.paid_at) d, p.method, COUNT(*) n, SUM(p.amount) amt FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = ? AND i.status <> ? AND DATE(p.paid_at) BETWEEN ? AND ? AND ' . $this->billing->notCreditSql('i') . ' AND (p.note IS NULL OR p.note NOT LIKE \'Credit note%\') GROUP BY DATE(p.paid_at), p.method ORDER BY d', [$tid, 'vendor', 'void', $from, $to]);
+                $rows = $db->all('SELECT DATE(p.paid_at) d, p.method, COUNT(*) n, SUM(' . Currency::sql('p.amount', 'i.currency', $currency) . ') amt FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = ? AND i.status <> ? AND DATE(p.paid_at) BETWEEN ? AND ? AND ' . $this->billing->notCreditSql('i') . ' AND (p.note IS NULL OR p.note NOT LIKE \'Credit note%\') GROUP BY DATE(p.paid_at), p.method ORDER BY d', [$tid, 'vendor', 'void', $from, $to]);
                 $days = [];
                 foreach ($rows as $r) {
                     $days[$r['d']][$r['method']] = ($days[$r['d']][$r['method']] ?? 0) + (float) $r['amt'];
@@ -165,13 +166,13 @@ final class Reports
                 $tot = $sumCol($out, 6);
                 return $res([['Date', 1.6], ['Receipts', 1, 'R'], ['Cash', 1.4, 'R'], ['Card', 1.4, 'R'], ['Mobile / bank', 1.5, 'R'], ['Other', 1.2, 'R'], ['Total', 1.6, 'R']], $out, [['Total collected', $fm($tot)], ['Days with collections', (string) count($out)]]);
             case 'monthly_collection':
-                $rows = $db->all('SELECT DATE_FORMAT(invoice_date, \'%Y-%m\') m, SUM(total) billed, SUM(paid) paid, SUM(balance) due, COUNT(*) n FROM sc_invoices WHERE tenant_id = ? AND issuer = ? AND status <> ? AND doc_type NOT IN (\'credit_note\',\'refund_receipt\',\'sales_return\',\'purchase_order\',\'grn\',\'quotation\',\'supplier_invoice\') AND invoice_date BETWEEN ? AND ? GROUP BY m ORDER BY m', [$tid, 'vendor', 'void', $from, $to]);
+                $rows = $db->all('SELECT DATE_FORMAT(invoice_date, \'%Y-%m\') m, SUM(' . Currency::sql('total', 'currency', $currency) . ') billed, SUM(' . Currency::sql('paid', 'currency', $currency) . ') paid, SUM(' . Currency::sql('balance', 'currency', $currency) . ') due, COUNT(*) n FROM sc_invoices WHERE tenant_id = ? AND issuer = ? AND status <> ? AND doc_type NOT IN (\'credit_note\',\'refund_receipt\',\'sales_return\',\'purchase_order\',\'grn\',\'quotation\',\'supplier_invoice\') AND invoice_date BETWEEN ? AND ? GROUP BY m ORDER BY m', [$tid, 'vendor', 'void', $from, $to]);
                 $out = array_map(fn ($r) => [date('F Y', strtotime($r['m'] . '-01')), (string) $r['n'], $fm($r['billed']), $fm($r['paid']), $fm($r['due'])], $rows);
                 return $res([['Month', 2], ['Invoices', 1, 'R'], ['Billed', 1.6, 'R'], ['Collected', 1.6, 'R'], ['Outstanding', 1.6, 'R']], $out, [['Billed', $fm(array_sum(array_column($rows, 'billed')))], ['Collected', $fm(array_sum(array_column($rows, 'paid')))], ['Outstanding', $fm(array_sum(array_column($rows, 'due')))]]);
             case 'revenue_by_item':
             case 'test_volume':
                 $types = $key === 'test_volume' ? "AND i.doc_type IN ('test_invoice','imaging_invoice','sample_receipt')" : "AND i.doc_type NOT IN ('credit_note','refund_receipt','sales_return','purchase_order','grn','quotation','supplier_invoice','advance_receipt')";
-                $rows = $db->all("SELECT x.category, x.item_name, SUM(x.qty) qty, SUM(x.amount) amt FROM sc_invoice_items x JOIN sc_invoices i ON i.id = x.invoice_id WHERE i.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND i.invoice_date BETWEEN ? AND ? $types GROUP BY x.category, x.item_name ORDER BY amt DESC", [$tid, $from, $to]);
+                $rows = $db->all("SELECT x.category, x.item_name, SUM(x.qty) qty, SUM(".Currency::sql('x.amount','i.currency',$currency).") amt FROM sc_invoice_items x JOIN sc_invoices i ON i.id = x.invoice_id WHERE i.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND i.invoice_date BETWEEN ? AND ? $types GROUP BY x.category, x.item_name ORDER BY amt DESC", [$tid, $from, $to]);
                 $out = array_map(fn ($r) => [(string) $r['category'], (string) $r['item_name'], rtrim(rtrim((string) $r['qty'], '0'), '.'), $fm($r['amt'])], $rows);
                 return $res([['Department / group', 2], [$key === 'test_volume' ? 'Test' : 'Service / item', 3.5], ['Qty', 1, 'R'], ['Revenue', 1.6, 'R']], $out, [['Total revenue', $fm(array_sum(array_column($rows, 'amt')))], ['Lines', (string) count($out)]]);
             case 'dues':
@@ -206,7 +207,7 @@ final class Reports
                 return $res([['Date', 1.2], ['Name', 2], ['Phone', 1.4], ['Doctor', 1.8], ['Note', 3], ['Status', 1]], $out, [['Requests', (string) count($out)], ['Confirmed or done', (string) count(array_filter($rows, static fn ($r) => in_array($r['status'], ['confirmed', 'done'], true)))]]);
             case 'doctor_revenue':
                 $pct = (float) $this->billing->setting((string) $tid, 'doctor_commission_pct', '0');
-                $rows = $db->all("SELECT d.id, u.first_name, u.last_name, COUNT(i.id) n, COALESCE(SUM(i.total), 0) billed, COALESCE(SUM(i.paid), 0) paid FROM doctors d JOIN users u ON u.id = d.user_id LEFT JOIN sc_invoices i ON i.doctor_id = d.id AND i.status <> 'void' AND i.issuer = 'vendor' AND i.invoice_date BETWEEN ? AND ? WHERE d.tenant_id = ? GROUP BY d.id, u.first_name, u.last_name ORDER BY billed DESC", [$from, $to, $tid]);
+                $rows = $db->all("SELECT d.id, u.first_name, u.last_name, COUNT(i.id) n, COALESCE(SUM(".Currency::sql('i.total','i.currency',$currency)."), 0) billed, COALESCE(SUM(".Currency::sql('i.paid','i.currency',$currency)."), 0) paid FROM doctors d JOIN users u ON u.id = d.user_id LEFT JOIN sc_invoices i ON i.doctor_id = d.id AND i.status <> 'void' AND i.issuer = 'vendor' AND i.invoice_date BETWEEN ? AND ? WHERE d.tenant_id = ? GROUP BY d.id, u.first_name, u.last_name ORDER BY billed DESC", [$from, $to, $tid]);
                 $out = array_map(fn ($r) => ['Dr. ' . $r['first_name'] . ' ' . $r['last_name'], (string) $r['n'], $fm($r['billed']), $fm($r['paid']), $fm($r['paid'] * $pct / 100)], $rows);
                 return $res([['Doctor', 3], ['Invoices', 1, 'R'], ['Billed', 1.6, 'R'], ['Collected', 1.6, 'R'], ['Commission', 1.6, 'R']], $out, [['Commission rate', rtrim(rtrim((string) $pct, '0'), '.') . '% (set in Settings)'], ['Total billed', $fm(array_sum(array_column($rows, 'billed')))]]);
             case 'admission_register':
@@ -329,7 +330,7 @@ final class Reports
                 }
                 return $res([['Plan', 3], ['Active vendors', 1.4, 'R'], ['Monthly price', 1.6, 'R'], ['MRR', 1.6, 'R']], $out, [['MRR', $fm($mrr)], ['ARR (MRR x 12)', $fm($mrr * 12)]]);
             case 'p_plan_revenue':
-                $rows = $db->all("SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '\$.plan_name')), 'Other') pn, COUNT(*) n, SUM(total) billed, SUM(paid) paid FROM sc_invoices WHERE issuer = 'platform' AND status <> 'void' AND doc_type = 'subscription_invoice' AND invoice_date BETWEEN ? AND ? GROUP BY pn ORDER BY billed DESC", [$from, $to]);
+                $rows = $db->all("SELECT COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '\$.plan_name')), 'Other') pn, COUNT(*) n, SUM(".Currency::sql('total','currency',$currency).") billed, SUM(".Currency::sql('paid','currency',$currency).") paid FROM sc_invoices WHERE issuer = 'platform' AND status <> 'void' AND doc_type = 'subscription_invoice' AND invoice_date BETWEEN ? AND ? GROUP BY pn ORDER BY billed DESC", [$from, $to]);
                 $out = array_map(fn ($r) => [(string) $r['pn'], (string) $r['n'], $fm($r['billed']), $fm($r['paid'])], $rows);
                 return $res([['Plan', 3], ['Invoices', 1, 'R'], ['Billed', 1.6, 'R'], ['Collected', 1.6, 'R']], $out, [['Billed', $fm(array_sum(array_column($rows, 'billed')))], ['Collected', $fm(array_sum(array_column($rows, 'paid')))]]);
             case 'p_renewals':
@@ -342,6 +343,7 @@ final class Reports
                 return $res([['Vendor', 3], ['Type', 1.6], ['Users', 0.9, 'R'], ['Patients', 1, 'R'], ['Requests', 1, 'R'], ['Invoices', 1, 'R']], $out, [['Vendors', (string) count($out)], ['Users in total', (string) array_sum(array_column($rows, 'staff'))]]);
             case 'p_receivables':
                 $rows = $db->all("SELECT i.*, t.hospital_name FROM sc_invoices i JOIN tenants t ON t.id = i.tenant_id WHERE i.issuer = 'platform' AND i.status = 'issued' AND i.balance > 0 AND i.invoice_date BETWEEN ? AND ? ORDER BY i.invoice_date", [$from, $to]);
+                $rows = Currency::normalize($rows, ['total', 'paid', 'balance'], $currency);
                 $out = array_map(fn ($r) => [(string) $r['invoice_no'], dt((string) $r['invoice_date']), (string) $r['hospital_name'], $fm($r['total']), $fm($r['paid']), $fm($r['balance'])], $rows);
                 return $res([['Invoice', 1.6], ['Date', 1.2], ['Vendor', 3], ['Total', 1.2, 'R'], ['Paid', 1.2, 'R'], ['Due', 1.2, 'R']], $out, [['Outstanding', $fm(array_sum(array_column($rows, 'balance')))]]);
         }

@@ -31,7 +31,11 @@ final class Vendors
             ]);
             $db->insert('model_has_roles', ['role_id' => $adminRole, 'model_type' => Auth::ROLE_MODEL, 'model_id' => $uid]);
             $db->insert('sc_vendors', ['tenant_id' => $slug, 'type_slug' => $type['slug'], 'status' => in_array($in['status'] ?? 'active', ['active', 'suspended'], true) ? $in['status'] ?? 'active' : 'active', 'city' => $in['city'] ?? null, 'phone' => $in['phone'] ?? null, 'is_listed' => 1]);
-            $app->access->seedTenant($slug, $family);
+            $bs = new Billing($db);
+            $bs->setSetting($slug, 'currency', isset($in['currency']) && isset(Currency::all(true)[(string) $in['currency']]) ? (string) $in['currency'] : Currency::platform());
+            $bs->setSetting($slug, 'country', (string) ($in['country'] ?? $app->site->get(null, 'default_country', 'Pakistan')));
+            $bs->setSetting($slug, 'timezone', (string) ($in['timezone'] ?? $app->site->get(null, 'default_timezone', 'Asia/Karachi')));
+            $app->access->seedTenant($slug, $family, (string) $type["slug"]);
             $planId = (int) ($in['plan_id'] ?? 0);
             if (!$planId) {
                 $planId = (int) $app->site->get(null, 'default_plan_id', '0');

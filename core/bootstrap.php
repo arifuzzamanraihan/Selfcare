@@ -2,7 +2,7 @@
 // Selfcare original front bootstrap. No framework, only PHP itself.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Rx', 'Ops'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Rx', 'Ops', 'RoleUi'] as $f) {
     if (is_file(__DIR__ . '/' . $f . '.php')) {
         require_once __DIR__ . '/' . $f . '.php';
     }
@@ -35,7 +35,7 @@ if ($app->db->val('SELECT COUNT(*) FROM sc_vendor_types') == 0) {
 }
 Selfcare\Plans::seedDefaults($app->db);
 
-foreach (['public', 'auth', 'site', 'portal', 'admin', 'documents', 'ops', 'accounts', 'rx'] as $r) {
+foreach (['public', 'auth', 'site', 'portal', 'admin', 'documents', 'ops', 'accounts', 'rx', 'roletpl'] as $r) {
     $file = __DIR__ . '/routes/' . $r . '.php';
     if (is_file($file)) {
         (static function (App $app, string $file): void {

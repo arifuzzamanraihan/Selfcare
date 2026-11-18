@@ -436,8 +436,10 @@ CREATE TABLE IF NOT EXISTS sc_currencies (
   minor_name VARCHAR(40) NOT NULL DEFAULT '' COMMENT 'e.g. Paisa',
   is_enabled TINYINT(1) NOT NULL DEFAULT 1,
   sort_order INT NOT NULL DEFAULT 0,
+  rate DECIMAL(20,8) NOT NULL DEFAULT 1 COMMENT 'units of this currency for 1 US dollar (used to convert, never to change stored amounts)',
+  rate_updated_at DATETIME NULL,
   UNIQUE KEY cur_code (code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Round 5: type-specific operations (samples, blood units, trips, prescriptions ...) and the stock ledger
 CREATE TABLE IF NOT EXISTS sc_records (
@@ -599,4 +601,29 @@ CREATE TABLE IF NOT EXISTS sc_rx_templates (
   created_at TIMESTAMP NULL DEFAULT NULL,
   deleted_at TIMESTAMP NULL DEFAULT NULL,
   KEY sc_rxt_tenant (tenant_id, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dynamic roles (step 4): what a role may do inside each module (view is the grant itself), and the default role templates per vendor type.
+CREATE TABLE IF NOT EXISTS sc_role_actions (
+  tenant_id VARCHAR(191) NOT NULL,
+  role_id BIGINT UNSIGNED NOT NULL,
+  permission VARCHAR(60) NOT NULL,
+  actions VARCHAR(80) NOT NULL DEFAULT '',
+  PRIMARY KEY (tenant_id, role_id, permission),
+  KEY sra_role (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sc_role_templates (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  type_slug VARCHAR(60) NOT NULL,
+  role_name VARCHAR(191) NOT NULL,
+  is_custom TINYINT(1) NOT NULL DEFAULT 0,
+  enabled TINYINT(1) NOT NULL DEFAULT 1,
+  description VARCHAR(250) NULL,
+  perms TEXT NULL,
+  actions TEXT NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  updated_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY srt_type_role (type_slug, role_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
