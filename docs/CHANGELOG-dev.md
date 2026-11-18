@@ -1,5 +1,8 @@
 # Developer changelog (shared files others may touch)
 
+## 2026-11-18 clinic-only ship (Builder C)
+The work-list engine and the **clinic** token queue are in this deploy. Other type-specific lists are not switched on this week: their configs were removed from this branch (full copy kept on `builder-c-wave2-wip`). Checklists for the remaining types are in `docs/CHECKLIST-*.md`. Tokens are limited to vendor type `clinic`.
+
 ## 2026-11-18 dynamic roles + multi-currency (builder A)
 - NEW `core/RoleUi.php`, `core/routes/roletpl.php` (added to the route list in bootstrap), `tests/roles*.py`, `tests/currency*.{php,py}`.
 - `Portal::boot` now calls `gate()` (action permissions) and sets `Portal::$current`; `$app->dash` runs `Portal::filterLinks()` on every portal page. New portal routes must keep the usual path names (`.../new`, `.../save`, `.../{id}/delete`, `.../pdf`, `.../print`, `format=csv`) so the action classifier (`Access::classify`) maps them correctly. A new module needs an entry in `Access::permForPath` and `perm_actions` (core/config/access.php).

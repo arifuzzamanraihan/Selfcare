@@ -19,7 +19,7 @@ foreach ($argv as $a) {
         $only = array_filter(explode(',', $m[1]));
     }
 }
-$demo = ['pharmacy' => 'medicopharma', 'laboratory' => 'precisionlab', 'diagnostic-center' => 'diagnosticplus', 'blood-bank' => 'lifeline', 'ambulance' => 'rapidambulance'];
+$demo = ['pharmacy' => 'medicopharma', 'laboratory' => 'precisionlab', 'diagnostic-center' => 'diagnosticplus', 'blood-bank' => 'lifeline', 'ambulance' => 'rapidambulance', 'clinic' => 'sunriseclinic', 'hospital' => 'citygeneral', 'specialty-clinic' => 'heartcare', 'dental-clinic' => 'brightsmile', 'eye-clinic' => 'visionplus', 'imaging-center' => 'clearscan', 'dialysis-center' => 'renalcare', 'maternity-center' => 'motherhood', 'mental-health' => 'mindwell', 'alternative-medicine' => 'herbalcare', 'nursing-home' => 'evergreencare', 'rehabilitation' => 'movewell', 'telemedicine' => 'docnow', 'home-care' => 'carehome', 'equipment-supplier' => 'medequip'];
 $day = static fn (int $n): string => date('Y-m-d', strtotime(($n >= 0 ? '+' : '') . $n . ' days'));
 $now = date('Y-m-d H:i:s');
 
@@ -109,6 +109,202 @@ $data['ambulance'] = [
     ],
 ];
 
+// Wave 2 type-specific demo records
+$tok = static function (array $people) use ($day): array {
+    $rows = [];
+    $states = ['waiting', 'waiting', 'called', 'in_consult', 'done', 'skipped'];
+    $visits = ['New', 'Follow-up', 'New', 'Report show', 'New', 'Follow-up'];
+    $prio = ['Normal', 'Urgent', 'Normal', 'Elderly', 'Normal', 'Normal'];
+    foreach ($people as $i => [$name, $phone, $doc]) {
+        $rows[] = ['title' => $name, 'phone' => $phone, 'party' => $doc, 'cat' => $visits[$i], 'tag' => $prio[$i], 'date1' => $day(0), 'status' => $states[$i], 'sort_order' => $i + 1, 'notes' => $i === 0 ? 'Fever for two days' : null];
+    }
+    return $rows;
+};
+$peopleA = [['Nusrat Jahan', '01711001001', 'Dr Rahman'], ['Karim Hossain', '01711001002', 'Dr Salma'], ['Farhana Akter', '01711001003', 'Dr Rahman'], ['Imran Chowdhury', '01711001004', 'Dr Hasan'], ['Mehnaz Begum', '01711001005', 'Dr Salma'], ['Rafiq Islam', '01711001006', 'Dr Rahman']];
+foreach (['clinic' => 'sunriseclinic', 'hospital' => 'citygeneral', 'specialty-clinic' => 'heartcare', 'dental-clinic' => 'brightsmile', 'eye-clinic' => 'visionplus', 'maternity-center' => 'motherhood', 'alternative-medicine' => 'herbalcare'] as $type => $_slug) {
+    $data[$type]['tokens'] = $tok($peopleA);
+}
+
+$data['specialty-clinic']['procedures'] = [
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Dr Hasan', 'cat' => 'ECG', 'place_a' => 'Room 2', 'date1' => $day(0), 'amount' => 15, 'status' => 'booked'],
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Dr Hasan', 'cat' => 'Echocardiogram', 'place_a' => 'Echo lab', 'date1' => $day(0), 'amount' => 45, 'status' => 'in_progress'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Rahman', 'cat' => 'Treadmill test', 'place_a' => 'Room 3', 'date1' => $day(0), 'amount' => 50, 'status' => 'completed', 'notes' => 'Exercise tolerance fair. No significant ST change.'],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Dr Hasan', 'cat' => 'Holter fitting', 'date1' => $day(-1), 'amount' => 60, 'status' => 'cancelled', 'notes' => 'Patient postponed.'],
+];
+
+$data['dental-clinic']['txplans'] = [
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Dr Karim', 'cat' => 'Pain in upper right', 'date1' => $day(0), 'amount' => 80, 'status' => 'proposed', 'meta' => json_encode(['teeth' => '16,15']), 'notes' => "16 — Examination and X-ray — 10\n16 — Root canal (first visit) — 70"],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Dr Karim', 'cat' => 'Cleaning', 'date1' => $day(0), 'amount' => 25, 'status' => 'accepted', 'meta' => json_encode(['teeth' => '11,12,21,22']), 'notes' => 'Full mouth scaling — 25'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Nadia', 'cat' => 'Decay', 'date1' => $day(-2), 'amount' => 40, 'status' => 'in_progress', 'meta' => json_encode(['teeth' => '36']), 'notes' => "36 — Composite filling — 40"],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Dr Karim', 'cat' => 'Extraction', 'date1' => $day(-10), 'amount' => 20, 'status' => 'completed', 'meta' => json_encode(['teeth' => '48']), 'notes' => '48 — Extraction — 20'],
+];
+
+$data['eye-clinic']['eyexams'] = [
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Dr Salma', 'date1' => $day(0), 'amount' => 20, 'status' => 'booked'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Dr Salma', 'date1' => $day(0), 'amount' => 20, 'status' => 'in_exam'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Rahman', 'date1' => $day(0), 'amount' => 20, 'status' => 'completed', 'notes' => 'Advice: new progressive lenses. Review in 1 year.', 'meta' => json_encode(['va_r' => '6/9', 'va_l' => '6/12', 'sph_r' => '-1.25', 'cyl_r' => '-0.50', 'axis_r' => '90', 'add_r' => '+1.50', 'sph_l' => '-1.50', 'cyl_l' => '-0.75', 'axis_l' => '85', 'add_l' => '+1.50', 'iop_r' => '14', 'iop_l' => '15'])],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Dr Salma', 'date1' => $day(-1), 'amount' => 20, 'status' => 'cancelled'],
+];
+$data['eye-clinic']['optical'] = [
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Rahman', 'cat' => 'Progressive', 'place_a' => 'Metal frame, mid-index', 'date1' => $day(0), 'date2' => $day(5), 'amount' => 85, 'status' => 'in_lab', 'notes' => "R: -1.25 / -0.50 x 90 Add +1.50\nL: -1.50 / -0.75 x 85 Add +1.50\nAnti-reflective coating."],
+    ['title' => 'Mehnaz Begum', 'phone' => '01711001005', 'party' => 'Dr Salma', 'cat' => 'Single vision', 'place_a' => 'Plastic frame', 'date1' => $day(-4), 'date2' => $day(-1), 'amount' => 35, 'status' => 'ready'],
+    ['title' => 'Rafiq Islam', 'phone' => '01711001006', 'party' => 'Dr Salma', 'cat' => 'Single vision', 'place_a' => 'Ready-made +1.00', 'date1' => $day(-8), 'amount' => 12, 'status' => 'delivered'],
+];
+
+$catRows = [
+    ['title' => 'Complete blood count (CBC)', 'cat' => 'Haematology', 'place_a' => 'Blood', 'place_b' => '—', 'amount' => 6, 'status' => 'active', 'notes' => 'Hb, WBC, platelets. Adult Hb 12–16 g/dL (F), 13–17 (M).'],
+    ['title' => 'Fasting blood sugar', 'cat' => 'Biochemistry', 'place_a' => 'Blood', 'place_b' => 'mg/dL', 'amount' => 4, 'status' => 'active', 'notes' => '70–100 mg/dL fasting.'],
+    ['title' => 'HbA1c', 'cat' => 'Biochemistry', 'place_a' => 'Blood', 'place_b' => '%', 'amount' => 11, 'status' => 'active', 'notes' => 'Non-diabetic < 5.7 %.'],
+    ['title' => 'TSH', 'cat' => 'Immunology', 'place_a' => 'Blood', 'place_b' => 'mIU/L', 'amount' => 12, 'status' => 'active', 'notes' => '0.4–4.0 mIU/L (adult).'],
+    ['title' => 'Urine routine exam', 'cat' => 'Haematology', 'place_a' => 'Urine', 'place_b' => '—', 'amount' => 3.5, 'status' => 'active'],
+    ['title' => 'Old panel (discontinued)', 'cat' => 'Other', 'place_a' => 'Blood', 'amount' => 0, 'status' => 'inactive'],
+];
+$data['laboratory']['catalogue'] = $catRows;
+$data['diagnostic-center']['catalogue'] = $catRows;
+
+$studies = [
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Dr Rahman', 'cat' => 'X-ray', 'place_a' => 'Chest PA', 'date1' => $day(0), 'amount' => 18, 'status' => 'booked'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Dr Salma', 'cat' => 'Ultrasound', 'place_a' => 'USG abdomen', 'date1' => $day(0), 'amount' => 30, 'status' => 'in_progress'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Hasan', 'cat' => 'X-ray', 'place_a' => 'KUB', 'date1' => $day(-1), 'date2' => $day(0), 'amount' => 20, 'status' => 'reported', 'notes' => "No radio-opaque calculus.\nImpression: normal KUB radiograph."],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Dr Rahman', 'cat' => 'CT', 'place_a' => 'CT brain', 'date1' => $day(-3), 'date2' => $day(-2), 'amount' => 90, 'status' => 'delivered', 'notes' => "No acute haemorrhage or infarct.\nImpression: normal study."],
+    ['title' => 'Mehnaz Begum', 'phone' => '01711001005', 'party' => 'Walk-in', 'cat' => 'Mammography', 'place_a' => 'Bilateral mammogram', 'date1' => $day(-2), 'amount' => 55, 'status' => 'cancelled', 'notes' => 'Patient rescheduled.'],
+];
+$data['imaging-center']['studies'] = $studies;
+$data['diagnostic-center']['studies'] = array_slice($studies, 0, 3);
+
+$data['dialysis-center']['dmachines'] = [
+    ['code' => 'M-1', 'title' => 'Fresenius 4008', 'place_a' => 'Station 1', 'date1' => $day(20), 'status' => 'available'],
+    ['code' => 'M-2', 'title' => 'Fresenius 4008', 'place_a' => 'Station 2', 'status' => 'in_use'],
+    ['code' => 'M-3', 'title' => 'Nipro Surdial', 'place_a' => 'Station 3', 'status' => 'available'],
+    ['code' => 'M-4', 'title' => 'Older unit', 'place_a' => 'Workshop', 'status' => 'maintenance', 'notes' => 'Pending pump service.'],
+];
+$data['dialysis-center']['dsessions'] = [
+    ['title' => 'Shahid Sarker', 'phone' => '01711002001', 'party' => 'Nurse Nadia', 'cat' => 'M-2', 'tag' => 'Morning', 'date1' => $day(0), 'amount' => 40, 'status' => 'in_session', 'meta' => json_encode(['pre_wt' => '68.4', 'bp' => '140/90'])],
+    ['title' => 'Lamia Chowdhury', 'phone' => '01711002002', 'party' => 'Nurse Nadia', 'cat' => 'M-1', 'tag' => 'Morning', 'date1' => $day(0), 'amount' => 40, 'status' => 'scheduled'],
+    ['title' => 'Arif Hossain', 'phone' => '01711002003', 'party' => 'Nurse Karim', 'cat' => 'M-3', 'tag' => 'Afternoon', 'date1' => $day(0), 'amount' => 40, 'status' => 'scheduled'],
+    ['title' => 'Mehnaz Karim', 'phone' => '01711002004', 'party' => 'Nurse Nadia', 'cat' => 'M-1', 'tag' => 'Morning', 'date1' => $day(-2), 'amount' => 40, 'status' => 'completed', 'meta' => json_encode(['pre_wt' => '62.0', 'post_wt' => '59.8', 'uf' => '2.2', 'bp' => '130/80'])],
+    ['title' => 'Rafiq Ahmed', 'phone' => '01711002005', 'tag' => 'Morning', 'date1' => $day(-1), 'status' => 'missed', 'notes' => 'Did not arrive.'],
+];
+
+$data['maternity-center']['anc'] = [
+    ['title' => 'Sumaiya Begum', 'phone' => '01711003001', 'party' => 'Dr Nadia', 'cat' => 'Booking', 'date1' => $day(0), 'status' => 'booked'],
+    ['title' => 'Tahmina Akter', 'phone' => '01711003002', 'party' => 'Dr Nadia', 'cat' => 'ANC 3', 'date1' => $day(0), 'date2' => $day(28), 'status' => 'seen', 'amount' => 15, 'meta' => json_encode(['ga' => '28', 'bp' => '110/70', 'weight' => '64', 'fhr' => '140']), 'notes' => 'Fetal movements good. Iron and calcium continued.'],
+    ['title' => 'Aisha Rahman', 'phone' => '01711003003', 'party' => 'Midwife Farhana', 'cat' => '36 weeks', 'date1' => $day(-7), 'date2' => $day(7), 'status' => 'seen', 'amount' => 15, 'meta' => json_encode(['ga' => '36', 'bp' => '120/80', 'weight' => '71', 'fhr' => '138'])],
+    ['title' => 'Lamia Islam', 'phone' => '01711003004', 'party' => 'Dr Nadia', 'cat' => 'ANC 2', 'date1' => $day(0), 'status' => 'missed'],
+];
+$data['maternity-center']['vaccines'] = [
+    ['title' => 'Baby of Tahmina', 'phone' => '01711003002', 'cat' => 'BCG', 'qty' => 1, 'date1' => $day(-10), 'status' => 'given', 'party' => 'Nurse Karim'],
+    ['title' => 'Baby of Tahmina', 'phone' => '01711003002', 'cat' => 'OPV', 'qty' => 1, 'date1' => $day(-10), 'date2' => $day(20), 'status' => 'given', 'party' => 'Nurse Karim'],
+    ['title' => 'Baby of Aisha', 'phone' => '01711003003', 'cat' => 'Penta', 'qty' => 1, 'date1' => $day(0), 'status' => 'due'],
+    ['title' => 'Sumaiya Begum', 'phone' => '01711003001', 'cat' => 'TT', 'qty' => 1, 'date1' => $day(0), 'status' => 'due'],
+];
+$data['maternity-center']['deliveries'] = [
+    ['title' => 'Mehnaz Sultana', 'phone' => '01711003005', 'party' => 'Dr Nadia', 'cat' => 'Normal', 'place_a' => 'Live birth', 'qty' => 3.1, 'date1' => $day(0), 'status' => 'admitted'],
+    ['title' => 'Farhana Begum', 'phone' => '01711003006', 'party' => 'Dr Nadia', 'cat' => 'C-section', 'place_a' => 'Live birth', 'qty' => 2.8, 'date1' => $day(-2), 'date2' => $day(1), 'amount' => 220, 'status' => 'delivered', 'notes' => 'Elective CS at 39 weeks. Mother and baby well.'],
+    ['title' => 'Rokeya Akter', 'phone' => '01711003007', 'party' => 'Midwife Farhana', 'cat' => 'Normal', 'place_a' => 'Live birth', 'qty' => 3.4, 'date1' => $day(-8), 'date2' => $day(-6), 'amount' => 80, 'status' => 'discharged'],
+];
+
+$data['mental-health']['mhsessions'] = [
+    ['title' => 'Anonymous client A', 'phone' => '01711004001', 'party' => 'Dr Salma', 'cat' => 'Counselling', 'date1' => $day(0), 'status' => 'booked'],
+    ['title' => 'Anonymous client B', 'phone' => '01711004002', 'party' => 'Counsellor Karim', 'cat' => 'Follow-up', 'date1' => $day(0), 'amount' => 25, 'status' => 'completed', 'notes' => 'Mood improved. Sleep still broken. Continue weekly sessions.'],
+    ['title' => 'Anonymous client C', 'phone' => '01711004003', 'party' => 'Dr Salma', 'cat' => 'Assessment', 'date1' => $day(0), 'status' => 'in_session'],
+    ['title' => 'Anonymous client D', 'phone' => '01711004004', 'party' => 'Counsellor Karim', 'cat' => 'Counselling', 'date1' => $day(-1), 'status' => 'no_show'],
+];
+$data['mental-health']['mhplans'] = [
+    ['title' => 'Anonymous client B', 'phone' => '01711004002', 'party' => 'Counsellor Karim', 'cat' => 'Anxiety', 'date1' => $day(-30), 'date2' => $day(14), 'status' => 'active', 'notes' => 'Weekly counselling. Breathing practice at home. Review medication with the doctor.'],
+    ['title' => 'Anonymous client E', 'phone' => '01711004005', 'party' => 'Dr Salma', 'cat' => 'Depression', 'date1' => $day(-90), 'date2' => $day(-5), 'status' => 'completed', 'notes' => 'Goals met. Discharged to follow-up as needed.'],
+];
+
+$data['alternative-medicine']['consults'] = [
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Hakim Rahman', 'cat' => 'Unani', 'date1' => $day(0), 'status' => 'booked'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Hakim Rahman', 'cat' => 'Unani', 'date1' => $day(0), 'amount' => 15, 'status' => 'seen', 'notes' => "Complaint: chronic indigestion.\nRemedy: Jawarish Amla 5 g after meals, 14 days."],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Nadia', 'cat' => 'Homeopathy', 'date1' => $day(-2), 'amount' => 12, 'status' => 'seen', 'notes' => 'Arnica 30, twice daily for 5 days after a sprain.'],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Hakim Rahman', 'cat' => 'Herbal', 'date1' => $day(0), 'status' => 'cancelled'],
+];
+$data['alternative-medicine']['remedies'] = [
+    ['title' => 'Jawarish Amla', 'cat' => 'Powder', 'amount' => 8, 'status' => 'active', 'notes' => '5 g after meals.'],
+    ['title' => 'Arnica 30', 'cat' => 'Tablet', 'amount' => 3, 'status' => 'active'],
+    ['title' => 'Herbal oil (joint)', 'cat' => 'Oil', 'amount' => 12, 'status' => 'active'],
+    ['title' => 'Old tonic', 'cat' => 'Syrup', 'amount' => 0, 'status' => 'inactive'],
+];
+
+$data['nursing-home']['residents'] = [
+    ['title' => 'Abdul Karim, 78', 'phone' => '01711005001', 'party' => 'Son: Rafiq Karim', 'place_a' => 'A-12', 'cat' => 'Assisted', 'date1' => $day(-200), 'status' => 'admitted'],
+    ['title' => 'Rahima Begum, 82', 'phone' => '01711005002', 'party' => 'Daughter: Nadia', 'place_a' => 'B-3', 'cat' => 'High', 'date1' => $day(-80), 'status' => 'admitted'],
+    ['title' => 'Jamal Uddin, 74', 'phone' => '01711005003', 'party' => 'Wife: Tahmina', 'place_a' => 'A-7', 'cat' => 'Residential', 'date1' => $day(-40), 'status' => 'on_leave', 'notes' => 'With family until Friday.'],
+    ['title' => 'Shahida Akter, 70', 'phone' => '01711005004', 'party' => 'Son: Imran', 'cat' => 'Respite', 'status' => 'enquiry'],
+    ['title' => 'Old resident', 'phone' => '01711005005', 'place_a' => 'C-1', 'cat' => 'Residential', 'date1' => $day(-400), 'date2' => $day(-20), 'status' => 'discharged'],
+];
+$data['nursing-home']['ncare'] = [
+    ['title' => 'Abdul Karim, 78', 'party' => 'Nurse Nadia', 'cat' => 'Mobility', 'date1' => $day(-30), 'date2' => $day(10), 'status' => 'active', 'notes' => 'Walker for corridor walks twice a day. Watch for falls at night.'],
+    ['title' => 'Rahima Begum, 82', 'party' => 'Nurse Nadia', 'cat' => 'Nutrition', 'date1' => $day(-14), 'date2' => $day(-1), 'status' => 'reviewed', 'notes' => 'Soft diet, fluids encouraged. Weight weekly.'],
+];
+$data['nursing-home']['mar'] = [
+    ['title' => 'Abdul Karim, 78', 'cat' => 'Amlodipine 5 mg', 'tag' => 'Morning', 'date1' => $day(0), 'status' => 'due'],
+    ['title' => 'Rahima Begum, 82', 'cat' => 'Thyroxine 50 mcg', 'tag' => 'Morning', 'date1' => $day(0), 'status' => 'given', 'party' => 'Nurse Nadia'],
+    ['title' => 'Rahima Begum, 82', 'cat' => 'Paracetamol 500 mg', 'tag' => 'Noon', 'date1' => $day(0), 'status' => 'withheld', 'party' => 'Nurse Nadia', 'notes' => 'No pain today.'],
+    ['title' => 'Abdul Karim, 78', 'cat' => 'Atorvastatin 10 mg', 'tag' => 'Night', 'date1' => $day(-1), 'status' => 'given', 'party' => 'Nurse Karim'],
+];
+$data['nursing-home']['incidents'] = [
+    ['title' => 'Abdul Karim, 78', 'cat' => 'Fall', 'date1' => $day(-3), 'party' => 'Nurse Karim', 'status' => 'reviewed', 'notes' => 'Slip in the bathroom. No fracture. Family informed. Non-slip mat fitted.'],
+    ['title' => 'Jamal Uddin, 74', 'cat' => 'Behaviour', 'date1' => $day(0), 'party' => 'Caregiver Imran', 'status' => 'reported', 'notes' => 'Became distressed at visiting time. Settled after a walk.'],
+];
+
+$data['rehabilitation']['rhplans'] = [
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Nadia Chowdhury', 'cat' => 'Physiotherapy', 'date1' => $day(-14), 'date2' => $day(14), 'qty' => 10, 'amount' => 150, 'status' => 'active', 'notes' => 'Post-fracture knee. Goal: walk unaided in 4 weeks.'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Nadia Chowdhury', 'cat' => 'Speech therapy', 'date1' => $day(-40), 'qty' => 8, 'amount' => 120, 'status' => 'completed', 'notes' => 'Goals met.'],
+];
+$data['rehabilitation']['rhsessions'] = [
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Nadia Chowdhury', 'cat' => 'Physiotherapy', 'date1' => $day(0), 'qty' => 6, 'amount' => 15, 'status' => 'booked'],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Therapist Arif', 'cat' => 'Physiotherapy', 'date1' => $day(0), 'qty' => 2, 'status' => 'booked'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Nadia Chowdhury', 'cat' => 'Physiotherapy', 'date1' => $day(-3), 'qty' => 5, 'amount' => 15, 'status' => 'done', 'notes' => 'Pain 3/10 after, was 6/10. Home: straight-leg raise 10 reps.'],
+    ['title' => 'Mehnaz Begum', 'phone' => '01711001005', 'party' => 'Therapist Arif', 'cat' => 'Occupational therapy', 'date1' => $day(-1), 'status' => 'missed'],
+];
+$data['rehabilitation']['rhpacks'] = [
+    ['title' => 'Physio 10-session pack', 'cat' => 'Physiotherapy', 'qty' => 10, 'amount' => 150, 'status' => 'active'],
+    ['title' => 'Speech 8-session pack', 'cat' => 'Speech therapy', 'qty' => 8, 'amount' => 120, 'status' => 'active'],
+    ['title' => 'Old intro pack', 'cat' => 'Physiotherapy', 'qty' => 4, 'amount' => 0, 'status' => 'inactive'],
+];
+
+$data['telemedicine']['tlsessions'] = [
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'party' => 'Dr Rahman', 'cat' => 'Video', 'place_a' => 'https://meet.example.com/room-a', 'date1' => $day(0), 'amount' => 20, 'status' => 'waiting'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'party' => 'Dr Salma', 'cat' => 'Video', 'place_a' => 'https://meet.example.com/room-b', 'date1' => $day(0), 'amount' => 20, 'status' => 'booked'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'party' => 'Dr Rahman', 'cat' => 'Audio', 'date1' => $day(0), 'amount' => 15, 'status' => 'completed', 'notes' => 'Follow-up for gastritis. Continue omeprazole. Review if pain returns.'],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Dr Hasan', 'cat' => 'Video', 'date1' => $day(-1), 'status' => 'no_show'],
+];
+
+$data['home-care']['caregivers'] = [
+    ['code' => 'CG-01', 'title' => 'Nurse Nadia', 'phone' => '01711006001', 'cat' => 'Nurse', 'place_a' => 'Gulshan, Banani', 'status' => 'on_visit'],
+    ['code' => 'CG-02', 'title' => 'Caregiver Karim', 'phone' => '01711006002', 'cat' => 'Caregiver', 'place_a' => 'Dhanmondi, Lalmatia', 'status' => 'available'],
+    ['code' => 'CG-03', 'title' => 'Therapist Arif', 'phone' => '01711006003', 'cat' => 'Therapist', 'place_a' => 'Uttara', 'status' => 'available'],
+    ['code' => 'CG-04', 'title' => 'Caregiver Farhana', 'phone' => '01711006004', 'cat' => 'Caregiver', 'place_a' => 'Mirpur', 'status' => 'leave'],
+];
+$data['home-care']['hcvisits'] = [
+    ['title' => 'Abdul Karim', 'phone' => '01711005001', 'place_a' => '12 Gulshan Avenue', 'cat' => 'CG-01', 'date1' => $day(0), 'amount' => 25, 'status' => 'in_progress'],
+    ['title' => 'Rahima Begum', 'phone' => '01711005002', 'place_a' => '8 Dhanmondi Road 6', 'cat' => 'CG-02', 'date1' => $day(0), 'amount' => 20, 'status' => 'scheduled'],
+    ['title' => 'Jamal Uddin', 'phone' => '01711005003', 'place_a' => 'Uttara Sector 7', 'cat' => 'CG-03', 'date1' => $day(-1), 'date2' => $day(6), 'amount' => 30, 'status' => 'completed', 'notes' => 'Physio exercises done. Family taught the home programme.'],
+    ['title' => 'Shahida Akter', 'phone' => '01711005004', 'place_a' => 'Mirpur 10', 'date1' => $day(-2), 'status' => 'missed', 'notes' => 'No one at home.'],
+];
+
+$data['equipment-supplier']['eqitems'] = [
+    ['code' => 'EQ-0001', 'title' => 'Standard wheelchair', 'cat' => 'Mobility', 'amount' => 8, 'qty' => 6, 'status' => 'active'],
+    ['code' => 'EQ-0002', 'title' => 'Oxygen concentrator', 'cat' => 'Respiratory', 'amount' => 25, 'qty' => 3, 'status' => 'active'],
+    ['code' => 'EQ-0003', 'title' => 'Hospital bed (manual)', 'cat' => 'Bed and support', 'amount' => 15, 'qty' => 2, 'status' => 'active'],
+    ['code' => 'EQ-0004', 'title' => 'Old nebuliser model', 'cat' => 'Respiratory', 'amount' => 5, 'qty' => 0, 'status' => 'inactive'],
+];
+$data['equipment-supplier']['rentals'] = [
+    ['title' => 'City General Hospital', 'phone' => '01711007001', 'cat' => 'EQ-0002', 'place_a' => 'OC-118', 'place_b' => '14 Lake Road, Dhanmondi', 'date1' => $day(-10), 'date2' => $day(20), 'amount' => 500, 'status' => 'out', 'notes' => 'Deposit 100 held.'],
+    ['title' => 'Aisha Rahman', 'phone' => '01711007002', 'cat' => 'EQ-0001', 'place_a' => 'WC-22', 'date1' => $day(-3), 'date2' => $day(-1), 'amount' => 24, 'status' => 'overdue'],
+    ['title' => 'Karim Hossain', 'phone' => '01711007003', 'cat' => 'EQ-0001', 'place_a' => 'WC-09', 'date1' => $day(1), 'date2' => $day(14), 'amount' => 80, 'status' => 'reserved'],
+    ['title' => 'Farhana Akter', 'phone' => '01711007004', 'cat' => 'EQ-0003', 'place_a' => 'HB-04', 'date1' => $day(-20), 'date2' => $day(-5), 'amount' => 225, 'status' => 'returned', 'notes' => 'Returned in good condition.'],
+];
+$data['equipment-supplier']['service'] = [
+    ['title' => 'City General Hospital', 'phone' => '01711007001', 'cat' => 'Oxygen concentrator OC-118', 'place_a' => 'Maintenance', 'date1' => $day(0), 'status' => 'open'],
+    ['title' => 'Aisha Rahman', 'phone' => '01711007002', 'cat' => 'Wheelchair WC-22', 'place_a' => 'Repair', 'date1' => $day(-2), 'amount' => 15, 'status' => 'done', 'notes' => 'Replaced a wheel bearing.'],
+    ['title' => 'Lakeside Medical', 'phone' => '01711007005', 'cat' => 'Patient monitor', 'place_a' => 'Installation', 'date1' => $day(0), 'status' => 'in_progress'],
+];
+
+
 $seeded = [];
 foreach ($data as $type => $modules) {
     $tenant = $demo[$type] ?? null;
@@ -122,10 +318,19 @@ foreach ($data as $type => $modules) {
         if ($db->val('SELECT COUNT(*) FROM sc_records WHERE tenant_id = ? AND module = ?', [$tenant, $module])) {
             continue;
         }
-        $prefix = (string) (\Selfcare\Ops::all()[$module]['prefix'] ?? '');
-        foreach ($rows as $r) {
+        $mod = \Selfcare\Ops::all()[$module] ?? [];
+        if (!$mod) {
+            continue; // module not shipped in this build
+        }
+        $prefix = (string) ($mod['prefix'] ?? '');
+        foreach ($rows as $i => $r) {
             if ($prefix !== '' && empty($r['code'])) {
                 $r['code'] = \Selfcare\Ops::code($db, $tenant, $module, $prefix);
+            } elseif (empty($r['code']) && ($mod['number'] ?? '') === 'daily') {
+                $r['code'] = \Selfcare\Ops::dailyCode($db, $tenant, $module, (string) ($r['date1'] ?? date('Y-m-d')));
+            }
+            if (!isset($r['sort_order'])) {
+                $r['sort_order'] = $i + 1;
             }
             $rid = $db->insert('sc_records', $r + ['tenant_id' => $tenant, 'module' => $module, 'created_at' => $now, 'updated_at' => $now]);
             \Selfcare\Ops::event($db, $tenant, (int) $rid, $module, 'created', null, (string) $r['status'], null);

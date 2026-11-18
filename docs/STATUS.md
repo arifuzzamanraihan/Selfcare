@@ -1,6 +1,6 @@
 # Self Care – vendor type status
 
-Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): website, portal, staff/roles, requests queue, invoices/forms/reports, currency, full-width dashboards, super-admin profile + impersonation.
+Updated 2026-11-18 (evening, Wave 2 type work lists). Common layer (all 20 types, LIVE as of commit ccae14a): website, portal, staff/roles, requests queue, invoices/forms/reports, currency, full-width dashboards, super-admin profile + impersonation.
 
 | Wave | Type | Planned type-specific features | Website | Portal base | Type features | Reports/invoices/forms | Status |
 |---|---|---|---|---|---|---|---|
@@ -8,22 +8,22 @@ Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): webs
 | Wave 1 | Pathology laboratory | samples, test catalogue, results, reports | done | done | **done**: samples workflow (collected, testing, result entered, delivered, rejected with reason), printable result report, overview tiles and charts (diagnostic centers get the same Samples list) | done | **live** |
 | Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | **done**: donor eligibility (90-day rest, record donation, then add the bag), blood units (screening, release, reserve, issue to a named recipient, discard with reason, automatic expiry by component), blood orders (given or could not give), overview tiles and charts by blood group | done | **live** |
 | Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | **done**: vehicles (plate, type, driver, service and papers due, workshop in and out), trips (priority Emergency/Urgent/Routine, made from a website request, dispatch only with a free vehicle plus crew note, picked up, completed with km and fare, cancel frees the vehicle), "Make invoice" from a completed trip (pre-filled, linked both ways, paid with the normal payment), history with times on every record, average dispatch time tile | done | **live** |
-| Wave 2 | Hospital | OPD/IPD, beds, doctors, wards | done | done | pending | generic done, type-specific pending | pending |
-| Wave 2 | Clinic | appointments, doctors, billing | done | done | pending | generic done, type-specific pending | pending |
-| Wave 2 | Specialty clinic | appointments, procedures | done | done | pending | generic done, type-specific pending | pending |
-| Wave 2 | Dental clinic | chart, treatment plans | done | done | pending | generic done, type-specific pending | pending |
-| Wave 2 | Eye clinic | exams, optical | done | done | pending | generic done, type-specific pending | pending |
-| Wave 3 | Diagnostic center | orders, reports | done | done | pending | generic done, type-specific pending | pending |
-| Wave 3 | Imaging and radiology center | studies, reports | done | done | pending | generic done, type-specific pending | pending |
-| Wave 3 | Dialysis center | sessions, machines, schedule | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Maternity and child care | antenatal, vaccination | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Mental health center | sessions, notes | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Traditional and alternative medicine | remedies, consultations | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Nursing home | residents, care plans | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Rehabilitation and physiotherapy | plans, sessions | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Telemedicine provider | video consults | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Home care and nursing | visits, caregivers | done | done | pending | generic done, type-specific pending | pending |
-| Wave 4 | Medical equipment supplier | catalogue, rentals, orders | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Hospital | OPD/IPD, beds, doctors, wards | done | done | **partial**: OPD token queue (daily serial, drag-and-drop, Call next, now-serving board, print slip, Make invoice). Departments, IPD, ICU, OT, wards and beds belong to Builder A. | generic done, token register done | **checklist for next week** (departments: Builder A; OPD queue held on builder-c-wave2-wip) |
+| Wave 2 | Clinic | appointments, doctors, billing | done | done | **done**: token queue (daily serial, drag-and-drop / arrows / Alt+Up+Down, Call next, now-serving board without names, print token, Make invoice, register). Website and staff booking, “Make token” from a request, patient add, prescriptions, billing, accounts and dynamic roles. | done | **live (this ship)** |
+| Wave 2 | Specialty clinic | appointments, procedures | done | done | **done**: token queue (shared) and procedure list (booked → in progress → completed, note, fee, Make invoice, print after complete) | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 2 | Dental clinic | chart, treatment plans | done | done | **done**: token queue, FDI odontogram, treatment plans (proposed → accepted → in progress → completed/declined), print plan, Make invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 2 | Eye clinic | exams, optical | done | done | **done**: token queue, eye exams (VA, refraction, IOP in the record, print glasses Rx when complete), optical job orders (ordered → in lab → ready → delivered) | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 3 | Diagnostic center | orders, reports | done | done | **done**: samples (Wave 1), test catalogue, imaging studies with report/print and imaging invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 3 | Imaging and radiology center | studies, reports | done | done | **done**: imaging studies queue (booked → arrived → in progress → reported → delivered), printable radiology report, Make invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 3 | Dialysis center | sessions, machines, schedule | done | done | **done**: machines (available / in use / maintenance), session queue with machine lock, pre/post weight and UF, session sheet, Make invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Maternity and child care | antenatal, vaccination | done | done | **done**: token queue, ANC visits (GA, BP, weight, FHR), EPI vaccinations, delivery records, print notes | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Mental health center | sessions, notes | done | done | **done**: session queue and treatment plans. Session notes stay on the record (not listed in the public register). Make invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Traditional and alternative medicine | remedies, consultations | done | done | **done**: token queue, consultations with findings and remedy, printable advice, remedy catalogue | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Nursing home | residents, care plans | done | done | **done**: residents, care plans, medication rounds (MAR), incident reports, print each | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Rehabilitation and physiotherapy | plans, sessions | done | done | **done**: therapy plans, session queue with notes, session packages, Make invoice, print plan/note | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Telemedicine provider | video consults | done | done | **done**: consultation queue, paste a meeting link (we do not host video), payment-before-call states, consultation invoice, print summary after complete. Prescriptions stay on the usual Prescriptions page | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Home care and nursing | visits, caregivers | done | done | **done**: caregiver roster (asset lock while on a visit), home visit queue, visit log, visit invoice | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
+| Wave 4 | Medical equipment supplier | catalogue, rentals, orders | done | done | **done**: rental catalogue, rentals (reserved → out → returned, overdue when the due date passes), service jobs, rental/equipment invoices | done | **checklist for next week** (see docs/CHECKLIST-*.md; code held on builder-c-wave2-wip) |
 
 ## Open platform items
 - SSL: per-host HTTP-01 automation is LIVE (cron every 3 min; batches up to 10 new vendor addresses per certificate, never re-issues a valid certificate, stops at 40 new certificates/week, cleans up purged vendors). Tested with a throwaway vendor pair. The 23 original vendor hosts use the shared SAN certificate. No wildcard certificate is needed.
@@ -45,33 +45,33 @@ Legend: **Y** works end to end today, **P** partly, **-** missing. Intake = regi
 
 | Kind | Intake | Service | Rx | Bill | Accounts | Records | Reports | Main gaps (research in RESEARCH.md) |
 |---|---|---|---|---|---|---|---|---|
-| Hospital | Y | P | Y | Y | - | P | Y | IPD beds and admissions, token queue |
-| Clinic | Y | P | Y | Y | - | P | Y | token queue, doctor-wise share |
-| Specialty clinic | Y | P | Y | Y | - | P | Y | procedure records |
-| Dental clinic | Y | P | Y | Y | - | P | Y | treatment plan and tooth chart |
-| Eye clinic | Y | P | Y | Y | - | P | Y | eye exam, optical orders |
-| Diagnostic centre | Y | Y (samples) | n/a | Y | - | P | Y | test catalogue with ranges, validation |
-| Imaging centre | Y | - | n/a | Y | - | P | Y | study orders and radiology reports |
-| Dialysis centre | Y | - | Y | Y | - | P | Y | session schedule and machines |
-| Maternity | Y | - | Y | Y | - | P | Y | antenatal and vaccination schedules |
-| Mental health | Y | - | Y | Y | - | P | Y | session notes, treatment plans |
-| Traditional medicine | Y | - | Y | Y | - | P | Y | consultation with remedy |
-| Nursing home | Y | - | n/a | Y | - | P | Y | residents, care plans, medication chart |
-| Rehabilitation | Y | - | n/a | Y | - | P | Y | plans and sessions |
-| Pathology lab | Y | Y | n/a | Y | - | Y | Y | test catalogue with ranges, validation, critical values |
-| Pharmacy | Y | Y | Y (orders) | Y | - | Y | Y | batch FEFO, purchase/GRN, controlled-drug register |
-| Blood bank | Y | Y | n/a | Y | - | Y | Y | TTI results, crossmatch, reaction log |
-| Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y | - | Y (history with times) | Y | crew roster, run sheet, maintenance log |
-| Telemedicine | Y | - | Y | Y | - | P | Y | slots and video link |
-| Home care | Y | - | n/a | Y | - | P | Y | visit schedule, caregiver roster |
-| Equipment supplier | Y | - | n/a | Y | - | P | Y | rentals and orders, service log |
+| Hospital | Y | P | Y | Y | Y | P | Y | IPD, emergency, ICU, OT, wards and beds (Builder A). OPD token queue is built. |
+| Clinic | Y | Y | Y | Y | Y | Y | Y | doctor-wise payout shares (later) |
+| Specialty clinic | Y | Y | Y | Y | Y | Y | Y | none material; richer procedure templates later |
+| Dental clinic | Y | Y | Y | Y | Y | Y | Y | perio chart and imaging attach later |
+| Eye clinic | Y | Y | Y | Y | Y | Y | Y | auto-create optical job from a completed Rx later |
+| Diagnostic centre | Y | Y | n/a | Y | Y | Y | Y | result validation and critical-value alerts later |
+| Imaging centre | Y | Y | n/a | Y | Y | Y | Y | DICOM / PACS link later (out of scope for a no-CDN app) |
+| Dialysis centre | Y | Y | Y | Y | Y | Y | Y | recurring schedule templates later |
+| Maternity | Y | Y | Y | Y | Y | Y | Y | partograph and newborn ID later |
+| Mental health | Y | Y | Y | Y | Y | Y | Y | locked psychotherapy notes / extra confidentiality later |
+| Traditional medicine | Y | Y | Y | Y | Y | Y | Y | none material |
+| Nursing home | Y | Y | n/a | Y | Y | Y | Y | eMAR signing and bed board later |
+| Rehabilitation | Y | Y | n/a | Y | Y | Y | Y | automatic session countdown on packages later |
+| Pathology lab | Y | Y | n/a | Y | Y | Y | Y | result validation and critical-value alerts later; catalogue is built |
+| Pharmacy | Y | Y | Y (orders) | Y | Y | Y | Y | batch FEFO, purchase/GRN, controlled-drug register |
+| Blood bank | Y | Y | n/a | Y | Y | Y | Y | TTI results, crossmatch, reaction log |
+| Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y | Y | Y (history with times) | Y | crew roster, run sheet, maintenance log |
+| Telemedicine | Y | Y | Y | Y | Y | Y | Y | built-in video room later (today: paste a meeting link) |
+| Home care | Y | Y | n/a | Y | Y | Y | Y | GPS/check-in later |
+| Equipment supplier | Y | Y | n/a | Y | Y | Y | Y | inventory serial numbers and deposits later |
 
 Cross-cutting gaps, built in this order: (1) Accounts for every kind (done, live), (2) structured Prescriptions with PDF and history (done, live), (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
 
 ## Shared work-list features added with ambulance
 
 - **History with times** on every work-list record (`sc_record_events`, removed with the record): added, each step, deleted, brought back, invoice made, with who and the time since the step before. Existing records got a first line on deploy.
-- **Make invoice** from a record: ambulance trip, lab sample, blood order, pharmacy prescription order. The invoice form is pre-filled (name, phone, reference, trip fields, first line), the record keeps the invoice id and shows it with Paid/Unpaid. Another vendor's record cannot be used to pre-fill or link (tested in the isolation run).
+- **Make invoice** from a record: ambulance trip, lab sample, blood order, pharmacy prescription order, and Wave 2 records that declare a bill (token, procedure, treatment plan, exam, study, dialysis session, visit, rental, teleconsult, and so on). The invoice form is pre-filled (name, phone, reference, trip fields, first line), the record keeps the invoice id and shows it with Paid/Unpaid. Another vendor's record cannot be used to pre-fill or link (tested in the isolation run).
 - **Make trip / order / sample from a website request** on the request page, with name, phone, date and note already filled in.
 
 ## Accounts for every kind (step 2)
@@ -114,3 +114,6 @@ Kinds that write them: hospital, clinic, specialty clinic, dental, eye, maternit
 - Every money row carries its code: invoices and plans already did; `sc_ledger`, `sc_records`, `sc_stock_items` now do (filled automatically in `Database::insert`). Totals that mix currencies are converted with the rates (`Currency::sql`, `Currency::normalize`): cash book, daily/monthly collection, revenue by item, doctor revenue, expense register, receivables/payables, portal tiles and charts, platform reports.
 - Vendor settings: currency, country, time zone (applied to the vendor's pages and PDFs). Pricing page: visitor currency switcher (default PKR, remembered in a cookie), plan prices converted when a plan has no price in that currency; subscription invoices default to the vendor's own currency.
 - Tests: `tests/currency.php` (43), `tests/currency_web.py` (14).
+
+## Next week (owner-approved build)
+Type-specific work for every vendor except pharmacy, pathology lab, blood bank, ambulance and clinic is paused. See `docs/CHECKLIST-*.md`. Held implementation lives on git branch `builder-c-wave2-wip` and will be switched on when the owner says to build that type.
