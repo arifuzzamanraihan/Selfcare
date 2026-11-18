@@ -63,10 +63,20 @@ final class App
             if ($this->hostVendor !== null) {
                 Currency::$context = Currency::forTenant((string) $this->hostVendor['id']);
                 $tz = (string) $this->db->val("SELECT `value` FROM settings WHERE tenant_id = ? AND `key` = 'timezone' LIMIT 1", [(string) $this->hostVendor['id']]);
+                if ($tz === '') {
+                    $tz = (string) $this->site->get(null, 'default_timezone', '');
+                }
                 if ($tz !== '' && in_array($tz, \DateTimeZone::listIdentifiers(), true) && $tz !== date_default_timezone_get()) {
                     date_default_timezone_set($tz); // each vendor works in its own time zone
                     $this->db->run('SET time_zone = ?', [date('P')]);
                 }
+            }
+        } else {
+            Currency::visitor(); // set the public pricing cookie before any HTML is sent
+            $tz = (string) $this->site->get(null, 'default_timezone', '');
+            if ($tz !== '' && in_array($tz, \DateTimeZone::listIdentifiers(), true) && $tz !== date_default_timezone_get()) {
+                date_default_timezone_set($tz);
+                $this->db->run('SET time_zone = ?', [date('P')]);
             }
         }
     }

@@ -89,16 +89,17 @@ final class Reports
      * @param array{from:string,to:string,q:string} $f
      * @return array{cols:list<array<int,mixed>>,rows:list<mixed>,summary:list<array{0:string,1:string}>}
      */
-    public function run(string $key, ?string $tid, array $f, string $currency = 'USD'): array
+    public function run(string $key, ?string $tid, array $f, ?string $currency = null): array
     {
         $db = $this->db;
         $from = $f['from'];
         $to = $f['to'];
         $q = $f['q'] ?? '';
+        $currency = $currency && isset(Currency::all()[$currency]) ? $currency : ($tid ? Currency::forTenant($tid) : Currency::platform());
         $fm = static fn ($v) => Billing::fmt((float) $v, $currency);
         $like = '%' . addcslashes($q, '%_\\') . '%';
         $res = static fn (array $cols, array $rows, array $sum = []) => ['cols' => $cols, 'rows' => $rows, 'summary' => $sum];
-        $sumCol = static fn (array $rows, int $i) => array_sum(array_map(static fn ($r) => (float) str_replace([',', '$', '€', '£', '৳', '₹'], '', (string) ($r[$i] ?? 0)), $rows));
+        $sumCol = static fn (array $rows, int $i) => array_sum(array_map(static fn ($r) => (float) preg_replace('/[^0-9.\-]/', '', (string) ($r[$i] ?? 0)), $rows));
 
         switch ($key) {
             case 'rx_register':
@@ -176,7 +177,7 @@ final class Reports
                 $out = array_map(fn ($r) => [(string) $r['category'], (string) $r['item_name'], rtrim(rtrim((string) $r['qty'], '0'), '.'), $fm($r['amt'])], $rows);
                 return $res([['Department / group', 2], [$key === 'test_volume' ? 'Test' : 'Service / item', 3.5], ['Qty', 1, 'R'], ['Revenue', 1.6, 'R']], $out, [['Total revenue', $fm(array_sum(array_column($rows, 'amt')))], ['Lines', (string) count($out)]]);
             case 'dues':
-                $rows = $db->all("SELECT * FROM sc_invoices WHERE tenant_id = ? AND issuer = ? AND status = 'issued' AND balance > 0 AND invoice_date BETWEEN ? AND ? ORDER BY invoice_date", [$tid, 'vendor', $from, $to]);
+                $rows = Currency::normalize($db->all("SELECT * FROM sc_invoices WHERE tenant_id = ? AND issuer = ? AND status = 'issued' AND balance > 0 AND invoice_date BETWEEN ? AND ? ORDER BY invoice_date", [$tid, 'vendor', $from, $to]), ['total', 'paid', 'balance'], $currency);
                 $b = [0, 0, 0, 0];
                 $out = [];
                 foreach ($rows as $r) {
@@ -189,12 +190,12 @@ final class Reports
             case 'sales_register':
             case 'purchase_register':
                 $in = match ($key) { 'sales_register' => "AND doc_type IN ('sales_invoice','equipment_invoice','rental_invoice','sales_return')", 'purchase_register' => "AND doc_type IN ('purchase_order','grn','supplier_invoice')", default => '' };
-                $rows = $db->all("SELECT * FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND invoice_date BETWEEN ? AND ? $in " . ($q !== '' ? 'AND (party_name LIKE ? OR invoice_no LIKE ?)' : '') . ' ORDER BY invoice_date, id', $q !== '' ? [$tid, $from, $to, $like, $like] : [$tid, $from, $to]);
+                $rows = Currency::normalize($db->all("SELECT * FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND invoice_date BETWEEN ? AND ? $in " . ($q !== '' ? 'AND (party_name LIKE ? OR invoice_no LIKE ?)' : '') . ' ORDER BY invoice_date, id', $q !== '' ? [$tid, $from, $to, $like, $like] : [$tid, $from, $to]), ['total', 'paid', 'balance'], $currency);
                 $out = array_map(fn ($r) => [(string) $r['invoice_no'], dt((string) $r['invoice_date']), (string) ($this->billing->config()['invoices'][$r['doc_type']]['label'] ?? $r['doc_type']), (string) $r['party_name'], $fm($r['total']), $fm($r['paid']), $fm($r['balance']), (string) $r['status']], $rows);
                 $valid = array_filter($rows, static fn ($r) => $r['status'] !== 'void');
                 return $res([['No', 1.5], ['Date', 1.1], ['Type', 2], ['Name', 2.2], ['Total', 1.2, 'R'], ['Paid', 1.2, 'R'], ['Due', 1.2, 'R'], ['Status', 0.9]], $out, [['Documents', (string) count($rows)], ['Total value (excl. void)', $fm(array_sum(array_column($valid, 'total')))], ['Collected', $fm(array_sum(array_column($valid, 'paid')))]]);
             case 'payments_register':
-                $rows = $db->all('SELECT p.*, i.invoice_no, i.party_name FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = ? AND DATE(p.paid_at) BETWEEN ? AND ? ORDER BY p.paid_at', [$tid, 'vendor', $from, $to]);
+                $rows = Currency::normalize($db->all('SELECT p.*, i.invoice_no, i.party_name, i.currency FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = ? AND DATE(p.paid_at) BETWEEN ? AND ? ORDER BY p.paid_at', [$tid, 'vendor', $from, $to]), ['amount'], $currency);
                 $out = array_map(fn ($r) => [dt((string) $r['paid_at'], 'd M Y H:i'), (string) $r['invoice_no'], (string) $r['party_name'], (string) $r['method'], (string) ($r['reference'] ?? ''), $fm($r['amount'])], $rows);
                 return $res([['Date', 1.6], ['Invoice', 1.5], ['Name', 2.2], ['Method', 1.3], ['Reference', 1.5], ['Amount', 1.3, 'R']], $out, [['Payments', (string) count($rows)], ['Total', $fm(array_sum(array_column($rows, 'amount')))]]);
             case 'patient_register':
@@ -292,11 +293,11 @@ final class Reports
             case 'expiry_report':
             case 'low_stock':
                 $where = $key === 'expiry_report' ? 'AND expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 90 DAY)' : ($key === 'low_stock' ? 'AND quantity <= reorder_level' : '');
-                $rows = $db->all("SELECT * FROM sc_stock_items WHERE tenant_id = ? $where " . ($q !== '' ? 'AND (name LIKE ? OR sku LIKE ?)' : '') . ' ORDER BY ' . ($key === 'expiry_report' ? 'expiry_date' : 'name'), $q !== '' ? [$tid, $like, $like] : [$tid]);
+                $rows = Currency::normalize($db->all("SELECT * FROM sc_stock_items WHERE tenant_id = ? $where " . ($q !== '' ? 'AND (name LIKE ? OR sku LIKE ?)' : '') . ' ORDER BY ' . ($key === 'expiry_report' ? 'expiry_date' : 'name'), $q !== '' ? [$tid, $like, $like] : [$tid]), ['cost_price', 'sell_price'], $currency);
                 $out = array_map(static fn ($r) => [(string) $r['name'], (string) ($r['sku'] ?? ''), (string) ($r['batch_no'] ?? ''), $r['expiry_date'] ? dt((string) $r['expiry_date']) . ($r['expiry_date'] < date('Y-m-d') ? ' (expired)' : '') : '', rtrim(rtrim((string) $r['quantity'], '0'), '.'), rtrim(rtrim((string) $r['reorder_level'], '0'), '.'), Billing::fmt((float) $r['quantity'] * (float) $r['cost_price'], $currency)], $rows);
                 return $res([['Item', 3], ['SKU', 1], ['Batch', 1.1], ['Expiry', 1.5], ['In stock', 0.9, 'R'], ['Reorder at', 0.9, 'R'], ['Value (cost)', 1.4, 'R']], $out, [['Items', (string) count($rows)], ['Stock value at cost', $fm(array_sum(array_map(static fn ($r) => $r['quantity'] * $r['cost_price'], $rows)))]]);
             case 'trip_revenue':
-                $rows = $db->all("SELECT meta, total, paid FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND doc_type = 'trip_invoice' AND status <> 'void' AND invoice_date BETWEEN ? AND ?", [$tid, $from, $to]);
+                $rows = Currency::normalize($db->all("SELECT meta, total, paid, currency FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND doc_type = 'trip_invoice' AND status <> 'void' AND invoice_date BETWEEN ? AND ?", [$tid, $from, $to]), ['total', 'paid'], $currency);
                 $by = [];
                 foreach ($rows as $r) {
                     $m = $r['meta'] ? (array) json_decode((string) $r['meta'], true) : [];
@@ -316,15 +317,16 @@ final class Reports
                 $out = array_map(static function ($r) { [$pn, $ends] = array_pad(explode('|', (string) $r['sub']), 2, ''); return [(string) $r['hospital_name'], (string) $r['tenant_username'], (string) $r['type_slug'], (string) ($r['city'] ?? ''), $pn ?: 'No plan', $pn ? ($ends ? dt($ends) : 'Never') : '', ucfirst((string) $r['status']), dt((string) $r['created_at'])]; }, $rows);
                 return $res([['Vendor', 2.2], ['Address name', 1.4], ['Type', 1.4], ['City', 1], ['Plan', 1.1], ['Ends', 1], ['Status', 0.9], ['Joined', 1]], $out, [['Vendors', (string) count($out)]]);
             case 'p_subscriptions':
-                $rows = $db->all("SELECT s.*, p.name pn, p.price, t.hospital_name FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id JOIN tenants t ON t.id = s.tenant_id WHERE DATE(s.starts_at) BETWEEN ? AND ? ORDER BY s.id DESC", [$from, $to]);
-                $out = array_map(fn ($r) => [(string) $r['hospital_name'], (string) $r['pn'], $fm($r['price']), dt((string) $r['starts_at']), $r['ends_at'] ? dt((string) $r['ends_at']) : 'Never', ucfirst((string) $r['status']), (string) ($r['note'] ?? '')], $rows);
+                $rows = $db->all("SELECT s.*, p.name pn, p.price, p.currency pcur, p.other_prices, t.hospital_name FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id JOIN tenants t ON t.id = s.tenant_id WHERE DATE(s.starts_at) BETWEEN ? AND ? ORDER BY s.id DESC", [$from, $to]);
+                $out = array_map(fn ($r) => [(string) $r['hospital_name'], (string) $r['pn'], $fm(Plans::price(['price' => $r['price'], 'currency' => $r['pcur'], 'other_prices' => $r['other_prices']], $currency)[0]), dt((string) $r['starts_at']), $r['ends_at'] ? dt((string) $r['ends_at']) : 'Never', ucfirst((string) $r['status']), (string) ($r['note'] ?? '')], $rows);
                 return $res([['Vendor', 2.2], ['Plan', 1.2], ['Price', 1, 'R'], ['Starts', 1.1], ['Ends', 1.1], ['State', 0.9], ['Note', 2]], $out, [['Subscriptions', (string) count($out)]]);
             case 'p_mrr':
-                $rows = $db->all("SELECT p.name, p.price, p.duration_days, COUNT(*) n FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id WHERE s.status = 'active' AND (s.ends_at IS NULL OR s.ends_at > NOW()) GROUP BY p.id, p.name, p.price, p.duration_days ORDER BY p.price");
+                $rows = $db->all("SELECT p.*, COUNT(*) n FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id WHERE s.status = 'active' AND (s.ends_at IS NULL OR s.ends_at > NOW()) GROUP BY p.id ORDER BY p.price");
                 $out = [];
                 $mrr = 0.0;
                 foreach ($rows as $r) {
-                    $monthly = (int) ($r['duration_days'] ?? 0) >= 360 ? (float) $r['price'] / 12 : (float) $r['price'];
+                    [$amount] = Plans::price($r, $currency);
+                    $monthly = (int) ($r['duration_days'] ?? 0) >= 360 ? $amount / 12 : $amount;
                     $mrr += $monthly * $r['n'];
                     $out[] = [(string) $r['name'], (string) $r['n'], $fm($monthly), $fm($monthly * $r['n'])];
                 }

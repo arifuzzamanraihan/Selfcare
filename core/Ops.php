@@ -245,6 +245,10 @@ final class Ops
         foreach (self::forPortal($p) as $key => $m) {
             foreach ($m['kpis'] ?? [] as $k) {
                 [$sql, $par] = self::sql($k[1], $p->tenantId);
+                if (($k[6] ?? '') === 'money') {
+                    $cur = Currency::forTenant($p->tenantId);
+                    $sql = preg_replace_callback('/SUM\((?:[a-z]+\.)?(amount|total|paid|balance|fare)\)/i', static fn ($m) => 'SUM(' . Currency::sql($m[1], 'currency', $cur) . ')', $sql) ?? $sql;
+                }
                 $v = $db->val($sql, $par);
                 $tiles .= $stat((string) $k[0], ($k[6] ?? '') === 'money' ? money((float) $v) : (string) (int) $v, (string) $k[2], (string) $k[3]);
             }

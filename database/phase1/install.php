@@ -40,6 +40,7 @@ if (!$hasUsers) {
 }
 $run(__DIR__ . '/schema.sql');
 $run(__DIR__ . '/migrate-r4.sql'); // idempotent: adds columns that older installs do not have
+$run(__DIR__ . '/migrate-20261118-currency-rates.sql'); // rates + currency codes on money tables
 Selfcare\Plans::seedDefaults($db);
 echo "currencies added: " . Selfcare\Currency::seed($db) . "\n";
 Selfcare\Currency::reset();

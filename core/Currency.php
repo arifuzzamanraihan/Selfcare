@@ -11,6 +11,9 @@ final class Currency
     public static ?string $context = null;
     /** @var array<string,array<string,mixed>>|null */
     private static ?array $rows = null;
+    private static ?string $visitor = null;
+    /** Tables that store a currency code next to an amount. */
+    public const MONEY_TABLES = ['sc_ledger', 'sc_records', 'sc_stock_items', 'sc_invoices'];
 
     /**
      * Built in rows. Used to seed the table and as a fallback when the table is not there yet.
@@ -150,6 +153,23 @@ final class Currency
     public static function reset(): void
     {
         self::$rows = null;
+        self::$visitor = null;
+    }
+
+    /** Adds the vendor's currency when a new money row does not name one. @param array<string,mixed> $data @return array<string,mixed> */
+    public static function stamp(string $table, array $data): array
+    {
+        if (!in_array($table, self::MONEY_TABLES, true) || (isset($data['currency']) && (string) $data['currency'] !== '')) {
+            return $data;
+        }
+        $tid = (string) ($data['tenant_id'] ?? '');
+        if ($tid !== '') {
+            try {
+                $data['currency'] = self::forTenant($tid);
+            } catch (\Throwable) {
+            }
+        }
+        return $data;
     }
 
     /** Platform default (plans, subscription invoices). */
@@ -163,18 +183,21 @@ final class Currency
         return isset(self::all()[$c]) ? $c : (isset(self::all()['PKR']) ? 'PKR' : 'USD');
     }
 
-    /** Currency a visitor of the public site looks at: ?cur=XXX (remembered in a cookie), else the platform default. */
+    /** Currency a visitor of the public site looks at: ?cur=XXX (remembered in a cookie), else the platform default. Call once before any output so the cookie can be set. */
     public static function visitor(): string
     {
+        if (self::$visitor !== null) {
+            return self::$visitor;
+        }
         $c = strtoupper((string) ($_GET['cur'] ?? ''));
         if ($c !== '' && isset(self::all(true)[$c])) {
             if (!headers_sent()) {
                 setcookie('sc_cur', $c, ['expires' => time() + 86400 * 90, 'path' => '/', 'samesite' => 'Lax']);
             }
-            return $c;
+            return self::$visitor = $c;
         }
         $c = strtoupper((string) ($_COOKIE['sc_cur'] ?? ''));
-        return $c !== '' && isset(self::all(true)[$c]) ? $c : self::platform();
+        return self::$visitor = ($c !== '' && isset(self::all(true)[$c]) ? $c : self::platform());
     }
 
     /** Currency a vendor chose in its settings, else the platform default. */

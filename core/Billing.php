@@ -134,8 +134,9 @@ final class Billing
      * Saves an invoice with its items (and the payment taken now). Throws InvalidArgumentException with a plain message.
      * @param array<string,mixed> $in header fields @param list<array<string,mixed>> $items
      */
-    public function create(string $tenantId, string $issuer, string $docType, array $in, array $items, ?int $userId, string $currency = 'USD'): int
+    public function create(string $tenantId, string $issuer, string $docType, array $in, array $items, ?int $userId, ?string $currency = null): int
     {
+        $currency = $currency && isset(Currency::all()[$currency]) ? $currency : Currency::forTenant($tenantId);
         $cfg = $this->cfg['invoices'][$docType] ?? null;
         if ($cfg === null) {
             throw new \InvalidArgumentException('Unknown document type.');

@@ -61,7 +61,8 @@ $app->router->get('/free-services', static function () use ($app, $mainPage): vo
 });
 
 $app->router->get('/pricing', static function (): void {
-    redirect(url('') . '#pricing');
+    $cur = strtoupper((string) ($_GET['cur'] ?? ''));
+    redirect(url('') . ($cur !== '' ? ('?cur=' . rawurlencode($cur)) : '') . '#pricing');
 });
 
 foreach (['terms' => 'Terms of use', 'privacy' => 'Privacy policy'] as $slug => $label) {

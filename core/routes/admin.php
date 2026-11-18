@@ -1171,7 +1171,7 @@ $app->router->get('/admin/reports/{key}', static function (array $a) use ($app, 
     }
     $f = ['from' => $from, 'to' => $to, 'q' => ''];
     $rep = new Reports($app->db, $billing);
-    $res = $rep->run($key, null, $f, 'USD');
+    $res = $rep->run($key, null, $f, \Selfcare\Currency::platform());
     if (($_GET['format'] ?? '') === 'pdf') {
         Documents::send($rep->model($app, null, $key, Reports::META[$key][0], $res, $f, $u), $key . '-' . $from . '_' . $to . '.pdf');
     }

@@ -85,6 +85,19 @@ final class Plans
         return Currency::fmt($a, $c, true);
     }
 
+    /** Yearly price to show: [amount, currency]. Same rules as price(). @return array{0:float,1:string} */
+    public static function yearPrice(array $plan, ?string $want = null): array
+    {
+        $want = $want ?? Currency::platform();
+        $year = (float) ($plan['price_year'] ?? 0);
+        if ($year <= 0) {
+            return [0.0, $want];
+        }
+        $tmp = $plan;
+        $tmp['price'] = $year;
+        return self::price($tmp, $want);
+    }
+
     /** Is this plan offered to a vendor type? */
     public function fitsType(array $plan, string $typeSlug): bool
     {
