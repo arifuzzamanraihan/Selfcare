@@ -44,11 +44,16 @@ $planId = static fn (string $n): int => (int) $db->val('SELECT id FROM sc_plans 
 
 // ------------------------------------------------------------------ super admin
 if (!$db->val('SELECT COUNT(*) FROM users WHERE is_super_admin_default = 1')) {
-    $p = $pw();
+    // --admin-email=you@host sets the super admin address; SC_ADMIN_HASH (environment) reuses an existing bcrypt hash instead of a new password
+    $adminEmail = $opt['admin-email'] ?? 'superadmin@selfcare.example';
+    $hash = (string) getenv('SC_ADMIN_HASH');
+    $p = $hash === '' ? $pw() : '';
     $rid = (int) $db->val("SELECT id FROM departments WHERE name = 'Super Admin'");
-    $uid = $db->insert('users', ['department_id' => $rid, 'first_name' => 'Self Care', 'last_name' => 'Administrator', 'email' => 'superadmin@selfcare.example', 'password' => password_hash($p, PASSWORD_BCRYPT), 'is_super_admin_default' => 1, 'gender' => 0, 'is_admin_default' => 1, 'status' => 1, 'language' => 'en', 'hospital_name' => 'Self Care', 'created_at' => $now, 'updated_at' => $now]);
+    $uid = $db->insert('users', ['department_id' => $rid, 'first_name' => 'Self Care', 'last_name' => 'Administrator', 'email' => $adminEmail, 'password' => $hash !== '' ? $hash : password_hash($p, PASSWORD_BCRYPT), 'is_super_admin_default' => 1, 'gender' => 0, 'is_admin_default' => 1, 'status' => 1, 'language' => 'en', 'hospital_name' => 'Self Care', 'created_at' => $now, 'updated_at' => $now]);
     $db->insert('model_has_roles', ['role_id' => $rid, 'model_type' => Auth::ROLE_MODEL, 'model_id' => $uid]);
-    $credLines[] = "SUPER ADMIN  $base/login  superadmin@selfcare.example  $p";
+    if ($hash === '') {
+        $credLines[] = "SUPER ADMIN  $base/login  $adminEmail  $p";
+    }
 }
 // main-site message so the inbox is not empty
 if (!$db->val('SELECT COUNT(*) FROM sc_messages WHERE tenant_id IS NULL')) {
