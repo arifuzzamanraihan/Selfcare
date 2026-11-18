@@ -1,6 +1,6 @@
 # Self Care – vendor type status
 
-Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit e524b62): website, portal, staff/roles, requests queue, invoices/forms/reports, currency, full-width dashboards, super-admin profile + impersonation.
+Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): website, portal, staff/roles, requests queue, invoices/forms/reports, currency, full-width dashboards, super-admin profile + impersonation.
 
 | Wave | Type | Planned type-specific features | Website | Portal base | Type features | Reports/invoices/forms | Status |
 |---|---|---|---|---|---|---|---|
@@ -26,7 +26,7 @@ Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit e524b62): webs
 | Wave 4 | Medical equipment supplier | catalogue, rentals, orders | done | done | pending | generic done, type-specific pending | pending |
 
 ## Open platform items
-- Wildcard SSL (needs one.com DNS creds or Cloudflare token); per-vendor SSL worker written, not deployed (SAN cert covers current 23 vendor hosts).
+- SSL: per-host HTTP-01 automation is LIVE (cron every 3 min; batches up to 10 new vendor addresses per certificate, never re-issues a valid certificate, stops at 40 new certificates/week, cleans up purged vendors). Tested with a throwaway vendor pair. The 23 original vendor hosts use the shared SAN certificate. No wildcard certificate is needed.
 - Outgoing mail relay (port 25 blocked).
 - Old live hospital data not migrated.
 - Repo cleanup: not started.
