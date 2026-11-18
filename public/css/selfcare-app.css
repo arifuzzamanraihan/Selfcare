@@ -1,0 +1,20 @@
+/* Selfcare original styles for the Selfcare core. */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #f6f4ef; color: #1c2420; }
+.sc-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: #fff; border-bottom: 1px solid #e3ded2; }
+.sc-brand { font-weight: 700; font-size: 20px; color: #14532d; text-decoration: none; }
+.sc-head nav { display: flex; gap: 14px; align-items: center; }
+.sc-head a { color: #14532d; }
+.sc-inline { display: inline; }
+.sc-main { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
+.sc-hero h1 { font-size: 36px; margin: 0 0 8px; }
+.sc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 24px; }
+.sc-card { background: #fff; border: 1px solid #e3ded2; border-radius: 10px; padding: 18px; display: grid; gap: 4px; }
+.sc-card strong { font-size: 28px; color: #14532d; }
+.sc-panel { background: #fff; border: 1px solid #e3ded2; border-radius: 10px; padding: 24px; max-width: 420px; }
+.sc-form { display: grid; gap: 14px; }
+.sc-form input { width: 100%; padding: 10px; border: 1px solid #c9c2b2; border-radius: 6px; margin-top: 4px; }
+.sc-btn { background: #14532d; color: #fff; border: 0; border-radius: 6px; padding: 10px 18px; text-decoration: none; cursor: pointer; display: inline-block; }
+.sc-error { color: #991b1b; }
+.sc-foot { text-align: center; color: #6b7280; padding: 24px; font-size: 13px; }
+button { cursor: pointer; }

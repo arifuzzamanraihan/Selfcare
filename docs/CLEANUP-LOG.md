@@ -26,3 +26,13 @@ own views and hand-written `public/css` / `public/js`). Files that still
 reference old framework APIs must be rewritten to vanilla PHP/PDO/vanilla
 JS — never by restoring a dependency. Removed files remain in git history;
 restoring them violates `AGENTS.md` unless the Selfcare owner lifts the rule.
+
+## Rewrite phase 1 — original Selfcare core (2026-11-18)
+- Added `core/` (Env, Database/PDO, Router, Auth, View) and `templates/`,
+  written from scratch for Selfcare. No framework code is used or copied.
+- `public/index.php` now boots only the Selfcare core; home shows live
+  counts from MySQL, `/login` signs in against the `users` table,
+  `/health` reports database status.
+- Verified in XAMPP (PHP 8.2, MariaDB): HTTP 200, database connected.
+- Legacy module code remains in the repo only as a functional reference
+  and is being replaced module by module; it is not executed by the core.
