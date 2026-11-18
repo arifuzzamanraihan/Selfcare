@@ -18,8 +18,9 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
 <body class="d-body">
 <a class="sc-skip" href="#main">Skip to content</a>
 <?php if (!empty($impBanner)): ?><div class="d-imp" role="alert"><?= $impBanner ?></div><?php endif; ?>
+<div class="d-scrim" data-side-scrim aria-hidden="true"></div>
 <div class="d-shell">
-  <aside class="d-side" data-side aria-label="Menu">
+  <aside class="d-side" id="d-side" data-side aria-label="Menu">
     <a class="d-side-brand" href="<?= e(\Selfcare\url($navHome ?? 'portal')) ?>"><img src="<?= e($logo) ?>" width="32" height="32" alt=""><span>Self Care</span></a>
     <div class="d-org"><b><?= e((string) $orgName) ?></b><span><?= e((string) $orgSub) ?></span></div>
     <nav>
@@ -32,7 +33,7 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
   </aside>
   <div>
     <header class="d-top">
-      <button class="d-burger" type="button" data-side-toggle aria-label="Open the menu"><?= icon('menu', 20) ?></button>
+      <button class="d-burger" type="button" data-side-toggle aria-label="Open the menu" aria-expanded="false" aria-controls="d-side"><?= icon('menu', 20) ?></button>
       <h1><?= e((string) $title) ?></h1><span class="sp"></span>
       <button class="sc-theme" type="button" data-theme-toggle aria-label="Switch light or dark mode"><span class="i-moon"><?= icon('moon', 18) ?></span><span class="i-sun"><?= icon('sun', 18) ?></span></button>
       <div class="d-me"><i><?= e(initials(trim($user['first_name'] . ' ' . $user['last_name']))) ?></i><span><b><?= e(trim($user['first_name'] . ' ' . $user['last_name'])) ?></b><br><small class="d-mute"><?= e((string) $roleLabel) ?></small></span></div>

@@ -149,3 +149,28 @@ a.d-person{color:inherit;text-decoration:none}a.d-person:hover b{color:var(--bra
 .d-inline{display:inline}
 @media (max-width:640px){.d-bars li{grid-template-columns:1fr auto}.d-bars li .d-bar{grid-column:1/-1;order:3}.d-cols{gap:5px}.d-cols>div{font-size:.68rem}.d-typegrid{grid-template-columns:1fr 1fr}.d-typecard{padding:12px}}
 @media (max-width:420px){.d-typegrid{grid-template-columns:1fr}}
+/* ---- Mobile fix (centralised): the desktop two-column shell above must not apply on small screens.
+   Without this the content column stayed 260px wide with an empty band on the right. ---- */
+@media (max-width:980px){
+  .d-shell{grid-template-columns:minmax(0,1fr)}
+  .d-shell>div,.d-main,.d-top{min-width:0;max-width:100%;width:100%}
+  .d-grid.d-g2,.d-g2,.d-g3,.d-form-grid{grid-template-columns:minmax(0,1fr)}
+}
+html,body{max-width:100%}
+.d-main img,.d-main svg,.d-main video,.d-main canvas{max-width:100%}
+.d-main pre,.d-card pre{overflow-x:auto;max-width:100%}
+
+/* ---- Sidebar: always its own scroll container (desktop sticky column and mobile/tablet drawer) ---- */
+.d-side{position:sticky;top:0;align-self:start;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;touch-action:pan-y}
+.d-side>*{flex:none}
+.d-side nav{flex:none}
+.d-side-foot{padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+.d-scrim{display:none}
+@media (max-width:980px){
+  .d-side{position:fixed;top:0;left:0;bottom:auto;width:min(300px,86vw);height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;z-index:100;transform:translateX(-105%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s;box-shadow:none;background:var(--card);border-right:1px solid var(--line)}
+  .d-side.is-open{transform:none;visibility:visible;transition:transform .25s ease;box-shadow:0 0 40px rgba(0,0,0,.35)}
+  .d-scrim{display:block;position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .25s ease}
+  .d-scrim.is-on{opacity:1;pointer-events:auto}
+  body.d-nav-open{overflow:hidden;touch-action:none}
+}
+@media (prefers-reduced-motion:reduce){.d-side,.d-scrim{transition:none!important}}
