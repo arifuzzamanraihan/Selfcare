@@ -7,7 +7,7 @@ Do this work when the user says to build next week. Do not start it before then.
 ## Standing rules to apply
 
 - One primary action per view, top right of the page header (`.d-top-actions` or `.sc-nav-cta`).
-- Row actions: first action stays visible; extra actions go in the overflow (kebab) menu.
+- Row actions: the first two actions stay visible; extra actions go in the overflow (kebab) menu.
 - Long forms: sticky footer action bar, Cancel on the left, primary on the right.
 - Destructive actions: danger style plus a confirm dialog.
 - Options (selects, filters, toggles, tabs, kebab) have a clear label and a sensible default. Long lists (`> 12` options) are searchable. Filters sit in one bar (`.d-tools`).

@@ -69,7 +69,7 @@ Field types: `text`, `textarea`, `number`, `select`, `checks`, `toggle`, `image`
 These apply to every dashboard and website screen.
 
 - **One primary action per view**, placed at the top right of the sticky page header (`.d-top-actions` in the portal, `.sc-nav-cta` on public and vendor sites). A second control in that cluster must be a soft button. If two primary classes are rendered, CSS demotes every primary after the first.
-- **Row actions** sit in the right-hand column. If a row has more than two visible actions, the first stays in the row and the rest open from a kebab menu (`.d-more`). Destructive actions stay danger-styled and still use the confirm dialog (`data-confirm`).
+- **Row actions** sit in the right-hand column. If a row has more than two visible actions, the first two stay in the row and the rest open from a kebab menu (`.d-more`). Destructive actions stay danger-styled and still use the confirm dialog (`data-confirm`).
 - **Long forms** use a sticky footer bar (`.d-form-actions-sticky` or `.sc-form-actions`): Cancel on the left, the primary save/create button on the right.
 - **Options** (selects, filters, toggles, tabs, kebab) have a visible label and a sensible default. A select with more than 12 options gets `data-searchable` and a search box. Filters stay together in `.d-tools`.
 - **Touch and fit**: interactive controls are at least 44px tall. Screens must fit 360–1440px in light and dark mode with no overlapping or off-screen controls. On a phone the header actions wrap onto their own row, and the form action bar stays sticky above the home indicator.

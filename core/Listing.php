@@ -156,8 +156,9 @@ final class Listing
                     }
                 } else {
                     $h .= $draw($vis[0], $row);
+                    $h .= $draw($vis[1], $row);
                     $h .= '<div class="d-more"><button type="button" class="d-act d-more-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">' . icon('more', 16) . '</button><div class="d-more-menu" hidden>';
-                    foreach (array_slice($vis, 1) as $a) {
+                    foreach (array_slice($vis, 2) as $a) {
                         $h .= $draw($a, $row);
                     }
                     $h .= '</div></div>';

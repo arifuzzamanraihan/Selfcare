@@ -50,7 +50,7 @@ Hospital departments (OPD/IPD/ICU/OT/wards/beds), doctor portal, patient portal 
 Shared layout rules for page actions, applied first to Clinic, Hospital and Pharmacy portals plus the public home and register pages. Other screens inherit the components and are listed in `docs/CHECKLIST-uiux.md` for next week.
 
 - `templates/dash/layout.php`: the page primary moves into the sticky `.d-top` header (title and subtitle on the left, actions on the right, before the theme and user). The old `.d-phead` action row is gone.
-- `core/Listing.php`: more than two row actions put the first one in the row and the rest in a kebab (`.d-more`). Filter lists with more than 12 options are searchable.
+- `core/Listing.php`: more than two row actions keep the first two in the row and put the rest in a kebab (`.d-more`). Filter lists with more than 12 options are searchable.
 - `core/Crud.php`: form footer is sticky, Cancel on the left, primary on the right. Selects with more than 12 options are searchable (`data-searchable`).
 - `public/css/selfcare-dash.css`, `public/css/selfcare-ui.css`, `public/js/selfcare-app.js`: 44px touch targets, overflow menu positioning, searchable select UI, one visible primary in the header (later primaries are visually demoted).
 - Public header: Sign in (soft) + Register (primary) in `.sc-nav-cta`. Vendor sites: Book (primary) + Sign in (soft). Register: Cancel + Create my account in a sticky `.sc-form-actions` bar.
