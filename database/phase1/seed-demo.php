@@ -6,7 +6,7 @@
 // Safe to run twice: vendors that already exist are skipped. Random passwords are written only to the --creds file.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports'] as $f) {
     if (is_file(dirname(__DIR__, 2) . '/core/' . $f . '.php')) {
         require_once dirname(__DIR__, 2) . '/core/' . $f . '.php';
     }

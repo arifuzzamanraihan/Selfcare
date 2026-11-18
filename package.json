@@ -1,7 +1,0 @@
-{
-    "name": "selfcare-hospital",
-    "private": true,
-    "license": "UNLICENSED",
-    "description": "Selfcare — proprietary. No npm dependencies; frontend is hand-written vanilla CSS/JS in public/ (see AGENTS.md).",
-    "scripts": {}
-}

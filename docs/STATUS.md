@@ -1,0 +1,32 @@
+# Self Care – vendor type status
+
+Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit e524b62): website, portal, staff/roles, requests queue, invoices/forms/reports, currency, full-width dashboards, super-admin profile + impersonation.
+
+| Wave | Type | Planned type-specific features | Website | Portal base | Type features | Reports/invoices/forms | Status |
+|---|---|---|---|---|---|---|---|
+| Wave 1 | Pharmacy | stock, expiry, batches, sales/POS, suppliers | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Pathology laboratory | samples, test catalogue, results, reports | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Hospital | OPD/IPD, beds, doctors, wards | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Clinic | appointments, doctors, billing | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Specialty clinic | appointments, procedures | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Dental clinic | chart, treatment plans | done | done | pending | generic done, type-specific pending | pending |
+| Wave 2 | Eye clinic | exams, optical | done | done | pending | generic done, type-specific pending | pending |
+| Wave 3 | Diagnostic center | orders, reports | done | done | pending | generic done, type-specific pending | pending |
+| Wave 3 | Imaging and radiology center | studies, reports | done | done | pending | generic done, type-specific pending | pending |
+| Wave 3 | Dialysis center | sessions, machines, schedule | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Maternity and child care | antenatal, vaccination | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Mental health center | sessions, notes | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Traditional and alternative medicine | remedies, consultations | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Nursing home | residents, care plans | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Rehabilitation and physiotherapy | plans, sessions | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Telemedicine provider | video consults | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Home care and nursing | visits, caregivers | done | done | pending | generic done, type-specific pending | pending |
+| Wave 4 | Medical equipment supplier | catalogue, rentals, orders | done | done | pending | generic done, type-specific pending | pending |
+
+## Open platform items
+- Wildcard SSL (needs one.com DNS creds or Cloudflare token); per-vendor SSL worker written, not deployed (SAN cert covers current 23 vendor hosts).
+- Outgoing mail relay (port 25 blocked).
+- Old live hospital data not migrated.
+- Repo cleanup: not started.

@@ -1,241 +1,160 @@
-# Self Care
+<p align="center">
+  <img src="docs/branding/logo-2400x768.png" alt="Self Care" width="420">
+</p>
 
-> **PROPRIETARY — © 2026 Selfcare. All rights reserved.** This repository
-> contains Selfcare-owned code only. **No third-party code or licences are
-> permitted** — see `AGENTS.md` (hard agent rules) and root `LICENSE`.
+<h3 align="center">One calm place to run a healthcare business.</h3>
 
-Self Care is a multi-hospital management system. Hospitals can register, subscribe to a plan, and run their own branded site at a unique slug, while a master (super admin) account manages the platform.
+<p align="center">
+  A multi-vendor healthcare SaaS. Hospitals, clinics, laboratories, pharmacies, blood banks, ambulance services and 14 other kinds of care provider each get their own <b>public website</b>, their own <b>staff portal</b> and a <b>subscription plan</b>, all run from one platform.<br>
+  Plain PHP, plain CSS, plain JavaScript. No framework, no packages, no build step.
+</p>
 
-## Features
+<p align="center">
+  <a href="docs/INSTALL.md">Install</a> ·
+  <a href="docs/DEPLOY.md">Deploy</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/ROLES.md">Roles and access</a> ·
+  <a href="docs/vendor-types.md">Vendor types</a> ·
+  <a href="https://selfcare.easybzi.com">Live demo</a>
+</p>
 
-- Super admin panel for hospitals, subscription plans, transactions, and landing-page content
-- Per-hospital admin panel covering staff, patients, appointments, billing, pharmacy, labs, beds, blood bank, reports, and more
-- IPD and OPD workflows (visits, diagnoses, prescriptions, charges, payments, timelines)
-- Hospital public pages at `/h/{username}` (about, services, doctors, appointments, contact)
-- Subscription plans with editable price and duration, including a free plan
-- Multi-currency and multi-language support
-- Optional payment gateways: Stripe, PayPal, Razorpay, Paystack, Paytm, Flutterwave, PhonePe
-- Optional SMS (Twilio), Zoom live consultations, and Google reCAPTCHA
-- Export to Excel in most list modules
+![Super admin overview](docs/screenshots/admin-overview.png)
 
-## Tech stack
+---
 
-| Component | Version |
+## What is in it
+
+| Area | What you get |
 | --- | --- |
-| PHP | 8.1 or later — vanilla PHP built-ins only (PDO, curl, openssl) |
-| Database | MySQL 5.7+ / 8.x or MariaDB 10.x via PDO |
-| Frontend | Hand-written vanilla CSS / JavaScript in `public/` — no libraries |
+| **Public site** | Landing page, pricing, provider directory, free services, registration, sign in, forgot password |
+| **Vendor website** | One site per vendor at `name.yourdomain.com` (or its own custom domain), built from the vendor's type: services, doctors, tests, fleet, FAQ, gallery, news, request form |
+| **Vendor portal** | Overview with charts, requests queue (approve, reject with a reason, cancel), staff and roles, team and people lists, invoices, printed forms, reports, stock, website editor, custom domains |
+| **Super admin** | Overview of every vendor type, vendor profiles, add / edit / suspend / soft-delete / restore / purge vendors, registration approvals, "Open portal" impersonation (audited), plans, platform invoices, currencies, site content |
+| **Access control** | 44 roles, least privilege per vendor type, time-boxed and shift-based access, full audit log of every permission change |
+| **Money** | Plans and subscriptions, invoices, receipts, credit notes, PDF output, amount in words, nine currencies (PKR, BDT, USD, INR, CAD, EUR, GBP, AED, SAR) with per-vendor currency |
+| **Safety** | CSRF on every form, throttled sign-in, password-set links, one-time hand-off tokens between hosts, soft delete with typed confirmation |
 
-No frameworks, packages, SDKs, CDNs, or third-party licences. Legacy code
-that still calls old framework APIs is Selfcare hospital logic being
-rewritten to the stack above — do not re-add any dependency to run it.
+### 20 vendor types
 
-## Requirements
+Hospital · Clinic · Specialty clinic · Dental clinic · Eye clinic · Maternity and child care · Mental health center · Traditional and alternative medicine · Dialysis center · Diagnostic center · Pathology laboratory · Imaging and radiology center · Pharmacy · Nursing home · Rehabilitation and physiotherapy · Blood bank · Ambulance service · Telemedicine provider · Home care and nursing · Medical equipment supplier.
 
-- PHP 8.1+ with built-in extensions: `curl`, `fileinfo`, `gd`, `intl`, `json`, `mbstring`, `openssl`, `pdo`, `pdo_mysql`, `xml`, `zip`
-- MySQL or MariaDB
-- No Composer packages, no Node/npm packages, no build tools
-- Optional PHP.ini increases for large uploads: `upload_max_filesize=50M`, `post_max_size=100M`, `max_file_uploads=50`
+Each type belongs to a *family* (clinical, diagnostics, pharmacy, bloodbank, ambulance, residential, equipment …). A family is one website template plus one portal template; see [docs/vendor-types.md](docs/vendor-types.md).
 
-Self Care must be served from a domain, subdomain, or `php artisan serve`. It will **not** work correctly from a subfolder such as `http://localhost/selfcare`.
+## Screenshots
 
-## Run on localhost
+| | |
+| --- | --- |
+| ![Vendors](docs/screenshots/admin-vendors.png) <br> **Vendors** — every organisation, add and manage | ![Vendor profile](docs/screenshots/admin-vendor-profile.png) <br> **Vendor profile** — admins, plan, invoices, domains |
+| ![Registration requests](docs/screenshots/admin-registration-requests.png) <br> **Registration requests** — approve, reject, cancel | ![Currencies](docs/screenshots/admin-currencies.png) <br> **Currencies** — platform default and per-vendor |
+| ![Portal impersonation](docs/screenshots/portal-impersonation.png) <br> **Open portal** — super admin inside a vendor, with return banner | ![Pharmacy portal](docs/screenshots/portal-overview-pharmacy.png) <br> **Pharmacy portal** overview |
+| ![Home](docs/screenshots/public-home.png) <br> **Landing page** | ![Directory](docs/screenshots/public-directory.png) <br> **Provider directory** |
+| ![Hospital website](docs/screenshots/vendor-website-hospital.png) <br> **Hospital website** | ![Dark mode](docs/screenshots/admin-overview-dark.png) <br> **Solid dark mode** |
 
-A longer version of these steps is in [docs/localhost-setup.md](docs/localhost-setup.md).
+Phones are first-class: tables become cards under 700 px.
 
-### 1. Clone the repository
+<p align="center"><img src="docs/screenshots/admin-overview-mobile.png" alt="Mobile" width="260"></p>
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    V([Visitor]) --> W[Apache / PHP built-in server]
+    W --> FC[public/index.php<br/>front controller]
+    FC --> B[core/bootstrap.php]
+    B --> T{Host name?}
+    T -- "selfcare.example.com" --> M[Main site<br/>public, auth, super admin]
+    T -- "pharmacy.example.com" --> S[Vendor website + portal]
+    T -- "care.customer.com" --> D[(sc_domains)] --> S
+    M --> DB[(MySQL / MariaDB)]
+    S --> DB
+```
+
+The host name decides which vendor you are talking to (**tenancy by host**). Every vendor row, user, invoice, request and setting carries a `tenant_id`, and every query filters on it.
+
+### Tenant and signup flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor O as New organisation
+    participant S as Self Care (public)
+    participant A as Super admin
+    participant V as Vendor site and portal
+    O->>S: Register (type, name, web address, admin)
+    S->>S: Save as pending request (no login yet)
+    A->>S: Review request
+    alt Approve
+        A->>S: Approve
+        S->>V: Create tenant, site, roles, plan, admin
+        S-->>O: Set-password link (email or shown once)
+        S->>V: Queue HTTPS certificate for the new address
+    else Reject or cancel
+        A->>S: Reject with a reason
+        S-->>O: Reason by email
+    end
+```
+
+### Roles and access
+
+```mermaid
+flowchart TB
+    SA[Super Admin<br/>platform] -->|Open portal, audited| VA
+    subgraph Vendor
+      VA[Vendor Admin / Owner] --> R[Roles = rows of departments<br/>44 roles, per-type defaults]
+      R --> P[Permissions<br/>manage_users, manage_invoices, manage_medicines ...]
+      R --> W[Time windows + weekly shifts]
+      VA -->|grants only what it holds itself| ST[Staff]
+    end
+    ST --> L[(permission_change_log)]
+    VA --> L
+    SA --> L
+```
+
+Details: [docs/ROLES.md](docs/ROLES.md).
+
+## Quick start
 
 ```bash
 git clone https://github.com/arifuzzamanraihan/Selfcare.git
 cd Selfcare
+cp .env.example .env              # edit DB_* (and TENANT_SUFFIX / MAIN_HOST for vendor subdomains)
+php database/phase1/install.php   # creates tables, seeds vendor types, plans and currencies
+php database/phase1/seed-demo.php --creds=/tmp/selfcare-credentials.txt   # optional demo vendors
+php -S 127.0.0.1:8080 -t public bin/router.php
 ```
 
-### 2. Install PHP dependencies
+Open <http://127.0.0.1:8080>. Full guide, including subdomains on localhost: [docs/INSTALL.md](docs/INSTALL.md).
 
-```bash
-composer install
+Requirements: PHP 8.1+ (`pdo_mysql`, `mbstring`, `openssl`, `gd`, `curl`, `fileinfo`, `intl`), MySQL 5.7+ or MariaDB 10.x. No Composer, no npm.
+
+## Repository layout
+
+```text
+core/            application code (router, auth, access, tenancy, billing, PDF, listing, charts, currency ...)
+  routes/        public · auth · site · portal · admin · documents
+  config/        vendor types, roles, permissions, document catalogue
+templates/       PHP views (public site, vendor sites, dashboards)
+public/          web root: index.php, css/, js/, img/, uploads/
+database/phase1/ install.php, schema.sql, migrations, demo seeder
+bin/             router.php (dev server), ssl-worker.php (HTTPS automation)
+docs/            guides, branding, screenshots
+legacy/laravel/  the original Laravel-era code, kept for reference only. Not executed.
 ```
 
-### 3. Environment file and app key
+## Documentation
 
-```bash
-cp .env.example .env
-php artisan key:generate
-```
-
-### 4. Create a database
-
-In MySQL or MariaDB, create an empty database, for example:
-
-```sql
-CREATE DATABASE selfcare CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-Then edit `.env`:
-
-```
-APP_NAME="Self Care"
-APP_URL=http://localhost:8000
-DB_DATABASE=selfcare
-DB_USERNAME=root
-DB_PASSWORD=your_database_password
-```
-
-Keep `MAIL_DRIVER=log` for local work so email is written to `storage/logs` instead of being sent.
-
-### 5. Import the database
-
-The official product install uses a SQL dump rather than `php artisan migrate --seed`.
-
-From a MySQL client (or phpMyAdmin):
-
-```bash
-mysql -u root -p selfcare < database/selfcare.sql
-```
-
-- `database/selfcare.sql` — clean install (platform + super admin only)
-- `database/dummy-selfcare.sql` — optional demo data with sample hospitals and staff
-
-Do **not** run `php artisan migrate` against a freshly imported dump unless you are following an upgrade guide. The dump already includes the migration history.
-
-### 6. Storage link and permissions
-
-```bash
-php artisan storage:link
-chmod -R ug+rwx storage bootstrap/cache
-```
-
-### 7. Frontend assets
-
-Compiled CSS, JavaScript, and images already ship in `public/`. You can skip npm for a first run.
-
-If you edit files under `resources/assets` or `webpack.mix.js`:
-
-```bash
-npm install
-npm run dev      # or: npm run prod
-```
-
-### 8. Start the app
-
-```bash
-php artisan serve
-```
-
-Open [http://localhost:8000](http://localhost:8000).
-
-On Windows, XAMPP/WAMP users should create a virtual host whose document root is the `public/` directory, for example `selfcare.test`. Do not point the vhost at the project root or at a subfolder URL. If you use a custom hostname other than `localhost` or `127.0.0.1`, add it to `central_domains` in `config/tenancy.php`.
-
-### 9. First login
-
-Importing `database/selfcare.sql` creates the original product demo accounts. They are starter accounts only.
-
-- Create your own super admin (or change the demo account password) before using the system for anything real.
-- After login, open Super Admin → Settings and set the application name to **Self Care**, the logo to `web/img/selfcare-logo.png`, and the favicon to `web/img/selfcare-favicon.ico`.
-- Register a test hospital from the landing page (or from the super admin panel) and confirm its public pages at `/h/{username}`, where `{username}` is the hospital slug chosen at registration.
-
-Do not use production passwords in `.env` or in this repository.
-
-## Hospital slug URLs
-
-Each registered hospital has a public site at:
-
-```
-http://localhost:8000/h/{username}
-```
-
-Examples: `/h/city-hospital`, `/h/demo`. The hospital admin signs in at the main login page; tenancy is resolved from the hospital username/slug.
-
-## Mail / SMTP
-
-For local development, leave `MAIL_DRIVER=log`.
-
-To send real email, set these in `.env` (and in Super Admin mail settings if the panel overrides them):
-
-```
-MAIL_DRIVER=smtp
-MAIL_HOST=mail.example.com
-MAIL_PORT=587
-MAIL_USERNAME=your_smtp_username
-MAIL_PASSWORD=your_smtp_password
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=noreply@example.com
-MAIL_FROM_NAME="${APP_NAME}"
-```
-
-Port 587 with STARTTLS is the usual submission port. Outbound port 25 is often blocked by hosts. After changing mail settings, run `php artisan config:clear`.
-
-## Queues and the scheduler
-
-`.env.example` uses `QUEUE_CONNECTION=sync`, so jobs run inline and you do not need a queue worker for a basic local setup.
-
-If you switch the queue to `database` or `redis`, run a worker:
-
-```bash
-php artisan queue:work
-```
-
-Scheduled tasks (subscriptions, reminders, and similar) need the Laravel scheduler. Add this cron entry in production:
-
-```
-* * * * * cd /path/to/Selfcare && php artisan schedule:run >> /dev/null 2>&1
-```
-
-## Production deploy notes
-
-- Point the Apache (or nginx) document root at the `public/` directory, not the project root.
-- This app was deployed on Apache with aaPanel. After any vhost change, test the config (`apachectl -t`) before a graceful reload.
-- Enable HTTPS (for example Let's Encrypt) and redirect HTTP to HTTPS.
-- Set `APP_ENV=production`, `APP_DEBUG=false`, and `APP_URL` to your public HTTPS URL.
-- Set `chmod -R ug+rwx storage bootstrap/cache` and keep the web user as the owner of those paths.
-- Install the cron entry above for `schedule:run`.
-- Do not commit `.env`. Keep database, mail, and payment credentials only on the server.
-- Avoid `php artisan route:cache` until you have applied a fix for the duplicate route name described below.
-
-## Troubleshooting
-
-**500 error or "No application encryption key"**  
-Run `php artisan key:generate` and confirm `APP_KEY` is set in `.env`. Then `php artisan config:clear`.
-
-**SQLSTATE connection refused**  
-Check `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`. Confirm the database exists and the user can access it.
-
-**Blank pages / missing CSS**  
-The document root must be `public/`. Compiled assets live in `public/css`, `public/js`, `public/backend`, and `public/assets`. If you deleted them, run `npm install && npm run prod`.
-
-**`php artisan route:cache` fails with a duplicate route name `password.email`**  
-Laravel UI registers `password.email` via `Auth::routes()` in `routes/web.php`, and `routes/api.php` also names a route `password.email`. That clash is harmless at runtime but blocks `route:cache`. Use `php artisan route:clear` and skip route caching, or rename the API route before caching.
-
-**Hospital slug page 404**  
-The hospital must be registered and its username/slug must match the URL: `/h/{username}`. The `setTenantFromUsername` middleware resolves the tenant from that segment.
-
-**Permission denied writing logs or uploads**  
-`chmod -R ug+rwx storage bootstrap/cache` and ensure `php artisan storage:link` has been run.
-
-**Mails not sending**  
-With `MAIL_DRIVER=log`, check `storage/logs`. For SMTP, confirm port 587 is open, credentials are correct, and `php artisan config:clear` has been run. Some hosts block outbound port 25.
-
-**`composer install` fails on PHP version**  
-Use PHP 8.1 or newer (8.3 is fine). Check with `php -v`.
-
-## Project layout
-
-```
-app/                Application code (HTTP, Livewire, models, repositories)
-bootstrap/          Framework bootstrap and cache placeholders
-config/             Laravel and package configuration
-database/           Migrations, seeders, and official SQL dumps
-docs/               Local setup guide and Self Care branding artwork
-lang/               Translations
-public/             Web root (index.php, assets, Self Care logo and favicon)
-resources/          Views and frontend sources
-routes/             web.php, api.php, and related route files
-storage/            Logs, cache, sessions, and currency JSON
-tests/              PHPUnit tests
-```
+| Guide | |
+| --- | --- |
+| [INSTALL](docs/INSTALL.md) | Run it on your machine |
+| [DEPLOY](docs/DEPLOY.md) | Production: Apache, wildcard host, HTTPS automation, backups |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | Request lifecycle, modules, data model, security |
+| [ROLES](docs/ROLES.md) | Roles, permissions, impersonation, audit |
+| [Vendor types](docs/vendor-types.md) | The 20 types and their families |
+| [Documents and reports](docs/documents-and-reports.md) | Invoices, forms, reports, PDFs |
+| [UI system](docs/ui-system.md) | Listing, Crud and dashboard components |
+| [Platform guide](docs/platform-guide.md) | Plans, subscriptions, site content |
+| [Project status](docs/STATUS.md) | What is done per vendor type, and what is next |
 
 ## Licence
 
-Proprietary — © 2026 Selfcare. All rights reserved. See root `LICENSE`.
-No third-party licences apply to this repository, and none may be added.
-Agent rules: `AGENTS.md` and `.cursor/rules/proprietary-selfcare-no-third-party.mdc`.
+Proprietary. © 2026 Selfcare. All rights reserved. See [LICENSE](LICENSE).

@@ -1,7 +1,7 @@
 {
     "name": "selfcare/hospital",
     "type": "project",
-    "description": "Selfcare — proprietary multi-hospital management system. Selfcare-owned code only; no third-party dependencies (see AGENTS.md).",
+    "description": "Selfcare — proprietary multi-hospital management system. Selfcare-owned code only; no third-party dependencies.",
     "license": "proprietary",
     "require": {
         "php": "^8.1"
