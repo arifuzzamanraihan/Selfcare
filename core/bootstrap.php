@@ -2,78 +2,57 @@
 // Selfcare original front bootstrap. No framework, only PHP itself.
 declare(strict_types=1);
 
-require __DIR__ . '/Env.php';
-require __DIR__ . '/Database.php';
-require __DIR__ . '/Router.php';
-require __DIR__ . '/Auth.php';
-require __DIR__ . '/View.php';
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports'] as $f) {
+    if (is_file(__DIR__ . '/' . $f . '.php')) {
+        require_once __DIR__ . '/' . $f . '.php';
+    }
+}
 
-use Selfcare\Auth;
-use Selfcare\Database;
-use Selfcare\Env;
-use Selfcare\Router;
-use Selfcare\View;
+use Selfcare\App;
+
+// Safe session cookie and standard security headers.
+session_name('SELFCARESESSID');
+session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => Selfcare\is_https()]);
+session_start();
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'");
+if (Selfcare\is_https()) {
+    header('Strict-Transport-Security: max-age=15552000');
+}
 
 $root = dirname(__DIR__);
-$env = new Env();
-$env->load($root . '/.env');
-
-session_name('SELFCARESESSID');
-session_start();
-
-$db = new Database($env);
-$auth = new Auth($db);
-$view = new View($root . '/templates');
-$router = new Router();
-
-$goHome = static function (): void {
-    $base = strtok((string) ($_SERVER['REQUEST_URI'] ?? '/'), '?');
-    $pos = strpos($base, '/public');
-    header('Location: ' . ($pos === false ? '/' : substr($base, 0, $pos + 7) . '/'));
+try {
+    $app = new App($root);
+} catch (\Throwable $e) {
+    http_response_code(503);
+    echo '<!doctype html><meta charset="utf-8"><title>Unavailable</title><p style="font-family:sans-serif;padding:40px">Self Care is starting up. Please try again in a minute.</p>';
     exit;
-};
+}
+if ($app->db->val('SELECT COUNT(*) FROM sc_vendor_types') == 0) {
+    Selfcare\VendorTypes::seed($app->db);
+}
+Selfcare\Plans::seedDefaults($app->db);
 
-$router->get('/', static function () use ($view, $db, $auth): void {
-    $view->page('home', [
-        'title' => 'Selfcare',
-        'user' => $auth->user(),
-        'counts' => [
-            'Hospitals' => $db->count('tenants'),
-            'Users' => $db->count('users'),
-            'Doctors' => $db->count('doctors'),
-            'Patients' => $db->count('patients'),
-            'Departments' => $db->count('departments'),
-        ],
-    ]);
-});
-
-$router->get('/login', static function () use ($view, $auth): void {
-    $view->page('login', ['title' => 'Sign in — Selfcare', 'user' => $auth->user(), 'error' => '']);
-});
-
-$router->post('/login', static function () use ($view, $auth, $goHome): void {
-    $ok = $auth->attempt(
-        trim((string) ($_POST['email'] ?? '')),
-        (string) ($_POST['password'] ?? '')
-    );
-    if (!$ok) {
-        $view->page('login', ['title' => 'Sign in — Selfcare', 'user' => null, 'error' => 'Email or password is not correct.']);
-        return;
+foreach (['public', 'auth', 'site', 'portal', 'admin', 'documents'] as $r) {
+    $file = __DIR__ . '/routes/' . $r . '.php';
+    if (is_file($file)) {
+        (static function (App $app, string $file): void {
+            require $file;
+        })($app, $file);
     }
-    $goHome();
-});
-
-$router->post('/logout', static function () use ($auth, $goHome): void {
-    $auth->logout();
-    $goHome();
-});
-
-$router->get('/health', static function () use ($db): void {
-    header('Content-Type: application/json');
-    echo json_encode(['app' => 'Selfcare', 'database' => $db->healthy()]);
-});
+}
 
 $uri = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
-$pos = strpos($uri, '/public');
-$path = $pos === false ? $uri : substr($uri, $pos + 7);
-$router->dispatch((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'), $path === '' ? '/' : $path);
+$bp = Selfcare\base_path();
+$path = ($bp !== '' && str_starts_with($uri, $bp)) ? substr($uri, strlen($bp)) : $uri;
+$path = rtrim($path === '' ? '/' : $path, '/') ?: '/';
+$method = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
+if ($method === 'POST' && !Selfcare\csrf_ok()) {
+    $app->error(419, 'Your session timed out. Go back, reload the page and try again.', 'Please try again');
+}
+if ($app->hostSlug === '' || ($app->hostSlug !== null && $app->hostVendor === null)) {
+    $app->error(404, 'There is no provider at this address.', 'Address not found');
+}
+$app->router->dispatch($method, $path);

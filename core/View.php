@@ -10,18 +10,31 @@ final class View
     {
     }
 
-    /** @param array<string,mixed> $data */
-    public function page(string $template, array $data = []): void
+    /**
+     * Renders a template inside a layout. Pass 'layout' => 'dash/layout' to pick another layout.
+     * @param array<string,mixed> $vars
+     */
+    public function page(string $template, array $vars = []): void
     {
-        extract($data, EXTR_SKIP);
+        $layout = (string) ($vars['layout'] ?? 'layout');
+        unset($vars['layout']);
+        $content = $this->partial($template, $vars);
+        $vars['content'] = $content;
+        extract($vars, EXTR_SKIP);
+        require $this->templateDir . '/' . $layout . '.php';
+    }
+
+    /** Renders a template and returns the HTML. @param array<string,mixed> $vars */
+    public function partial(string $template, array $vars = []): string
+    {
+        extract($vars, EXTR_SKIP);
         ob_start();
         require $this->templateDir . '/' . $template . '.php';
-        $content = (string) ob_get_clean();
-        require $this->templateDir . '/layout.php';
+        return (string) ob_get_clean();
     }
 }
 
-function e(string $value): string
+function e(?string $value): string
 {
-    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
