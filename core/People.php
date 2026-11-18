@@ -159,6 +159,12 @@ final class People
         if ($id && $row === null) {
             return 'That person was not found.';
         }
+        if ($row !== null) {
+            $g = $this->guardTarget($kind, $row);
+            if ($g !== null) {
+                return $g;
+            }
+        }
         if (!$id) {
             $lim = $this->app->plans->limitError($tid, $kind === 'patients' ? 'patients' : 'staff');
             if ($lim !== null) {
