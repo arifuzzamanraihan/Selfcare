@@ -346,7 +346,7 @@ final class Access
                 'manage_notice_board' => in_array('news', $kinds, true),
                 'manage_rx', 'view_rx' => Rx::forType($typeSlug) !== null,
                 'manage_medicines' => isset($used[$perm]) || in_array($family, ['pharmacy', 'bloodbank', 'equipment'], true),
-                'manage_blood_bank', 'manage_prescriptions' => isset($used[$perm]),
+                'manage_blood_bank', 'manage_prescriptions', 'manage_ipd' => isset($used[$perm]),
                 default => true,
             };
             if ($ok) {

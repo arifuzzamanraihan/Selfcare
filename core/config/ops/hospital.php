@@ -10,7 +10,7 @@ $wardTypes = ['General ward' => 'General ward', 'Private room' => 'Private room'
 
 /** Beds that can be given to a patient now, plus the one the record already has. */
 $freeBeds = static function (Selfcare\Portal $p, ?array $row, bool $all): array {
-    $rows = app()->db->all("SELECT code, title, cat, amount, status FROM sc_records WHERE tenant_id = ? AND module = 'beds' AND deleted_at IS NULL AND (status = 'available' OR code = ?) ORDER BY title, code", [$p->tenantId, (string) ($row['cat'] ?? '')]);
+    $rows = \Selfcare\app()->db->all("SELECT code, title, cat, amount, status FROM sc_records WHERE tenant_id = ? AND module = 'beds' AND deleted_at IS NULL AND (status = 'available' OR code = ?) ORDER BY title, code", [$p->tenantId, (string) ($row['cat'] ?? '')]);
     $o = [];
     foreach ($rows as $r) {
         $o[(string) $r['code']] = trim($r['code'] . ' · ' . $r['title'] . ' · ' . $r['cat'] . ($r['status'] !== 'available' ? ' (current)' : ''));
@@ -21,7 +21,7 @@ $freeBeds = static function (Selfcare\Portal $p, ?array $row, bool $all): array 
 return [
     'beds' => [
         'types' => ['hospital'], 'title' => 'Wards and beds', 'singular' => 'bed', 'icon' => 'bed', 'group' => 'Hospital',
-        'perm' => 'manage_appointments', 'prefix' => '', 'code_required' => true, 'sub' => 'Every bed with its ward, daily charge and state. Free, occupied, being cleaned or under repair.',
+        'perm' => 'manage_ipd', 'prefix' => '', 'code_required' => true, 'sub' => 'Every bed with its ward, daily charge and state. Free, occupied, being cleaned or under repair.',
         'fields' => [
             'code' => ['label' => 'Bed number', 'required' => true, 'max' => 40, 'placeholder' => 'ICU-01'],
             'title' => ['label' => 'Ward or room', 'required' => true, 'max' => 190, 'placeholder' => 'Medical ICU'],
@@ -48,7 +48,7 @@ return [
     ],
     'admissions' => [
         'types' => ['hospital'], 'title' => 'Admissions (IPD)', 'singular' => 'admission', 'icon' => 'users', 'group' => 'Hospital',
-        'perm' => 'manage_appointments', 'prefix' => 'ADM-', 'sub' => 'Patients in the wards: book a bed, admit, move to another bed or ward, discharge and bill the stay.',
+        'perm' => 'manage_ipd', 'prefix' => 'ADM-', 'sub' => 'Patients in the wards: book a bed, admit, move to another bed or ward, discharge and bill the stay.',
         'fields' => [
             'person_id' => ['label' => 'Registered patient', 'type' => 'select', 'options' => 'patients', 'blank_label' => 'New patient (type the name below)'],
             'title' => ['label' => 'Patient name', 'required' => true, 'max' => 190],
@@ -85,7 +85,7 @@ return [
     ],
     'emergency' => [
         'types' => ['hospital'], 'title' => 'Emergency', 'singular' => 'emergency case', 'icon' => 'heart', 'group' => 'Hospital',
-        'perm' => 'manage_appointments', 'prefix' => '', 'number' => 'daily', 'queue' => true, 'call' => 'treat', 'board' => ['now' => ['in_treatment'], 'wait' => ['waiting']],
+        'perm' => 'manage_ipd', 'prefix' => '', 'number' => 'daily', 'queue' => true, 'call' => 'treat', 'board' => ['now' => ['in_treatment'], 'wait' => ['waiting']],
         'sub' => 'Triage board. The sickest patient goes first: drag a case up or use the arrows. Numbers are given automatically each day.',
         'fields' => [
             'person_id' => ['label' => 'Registered patient', 'type' => 'select', 'options' => 'patients', 'blank_label' => 'Unknown / new (type the name below)'],
@@ -119,7 +119,7 @@ return [
     ],
     'theatre' => [
         'types' => ['hospital'], 'title' => 'Operation theatre', 'singular' => 'operation', 'icon' => 'cal', 'group' => 'Hospital',
-        'perm' => 'manage_appointments', 'prefix' => 'OT-', 'slot' => ['cols' => ['cat', 'date1', 'place_b'], 'status' => ['scheduled', 'in_progress'], 'msg' => 'That theatre is already booked at that time. Choose another time or theatre.'],
+        'perm' => 'manage_ipd', 'prefix' => 'OT-', 'slot' => ['cols' => ['cat', 'date1', 'place_b'], 'status' => ['scheduled', 'in_progress'], 'msg' => 'That theatre is already booked at that time. Choose another time or theatre.'],
         'sub' => 'Book operations by theatre and time. A theatre cannot be booked twice at the same time.',
         'fields' => [
             'person_id' => ['label' => 'Registered patient', 'type' => 'select', 'options' => 'patients', 'blank_label' => 'New patient (type the name below)'],

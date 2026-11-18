@@ -7,7 +7,7 @@ namespace Selfcare;
 final class RoleUi
 {
     /** Module of the plan that a permission belongs to. */
-    public const MODULE = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing', 'manage_rx' => 'documents', 'view_rx' => 'documents'];
+    public const MODULE = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing', 'manage_rx' => 'documents', 'view_rx' => 'documents', 'manage_ipd' => 'documents'];
 
     /**
      * @param list<string> $perms        modules to show
