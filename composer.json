@@ -1,0 +1,21 @@
+{
+    "name": "selfcare/hospital",
+    "type": "project",
+    "description": "Selfcare — proprietary multi-hospital management system. Selfcare-owned code only; no third-party dependencies (see AGENTS.md).",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.1"
+    },
+    "require-dev": {},
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": [
+            "app/helpers.php"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
