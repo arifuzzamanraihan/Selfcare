@@ -47,7 +47,7 @@ $go = static function (string $ok, string $to, ?string $err = null): void {
 };
 
 // ------------------------------------------------------------------ overview
-$app->router->get('/admin', static function () use ($app, $adminUser, $page, $card, $stat, $billing): void {
+$app->router->get('/admin', static function () use ($app, $adminUser, $page, $card, $stat, $btn, $billing): void {
     $u = $adminUser();
     $db = $app->db;
     $plat = \Selfcare\Currency::platform();
@@ -107,11 +107,11 @@ $app->router->get('/admin', static function () use ($app, $adminUser, $page, $ca
     $cols = array_map(static fn ($m) => [$m[0], (int) ($got[$m[1]] ?? 0)], $months);
     $h .= '<div class="d-grid d-g2">' . $card('Vendors per kind', \Selfcare\Charts::bars($bars)) . '<div class="d-stack">' . $card('By group', \Selfcare\Charts::bars($famBars)) . $card('Monthly revenue by plan (' . $plat . ')', \Selfcare\Charts::bars($byPlan, 'No active subscriptions yet.')) . '</div></div>';
     $h .= $card('New vendors per month', \Selfcare\Charts::columns($cols, 'No sign ups in the last 12 months yet.'));
-    $page($u, 'overview', 'Overview', $h, ['sub' => 'The whole platform at a glance. Click a kind to open its vendors.']);
+    $page($u, 'overview', 'Overview', $h, ['sub' => 'The whole platform at a glance. Click a kind to open its vendors.', 'actions' => $btn('Add vendor', url('admin/vendors/new'))]);
 });
 
 // ------------------------------------------------------------------ vendors
-$app->router->get('/admin/vendors', static function () use ($app, $adminUser, $page, $card): void {
+$app->router->get('/admin/vendors', static function () use ($app, $adminUser, $page, $card, $btn): void {
     $u = $adminUser();
     if (isset($_GET['kind']) && !isset($_GET['f_type'])) {
         $_GET['f_type'] = (string) $_GET['kind'];
@@ -130,9 +130,9 @@ $app->router->get('/admin/vendors', static function () use ($app, $adminUser, $p
             ['label' => 'Website', 'icon' => 'globe', 'url' => fn ($r) => app()->tenant->siteUrl((string) $r['tenant_username']), 'if' => fn ($r) => $r['status'] !== 'deleted'],
             ['label' => 'Delete', 'icon' => 'trash', 'danger' => true, 'url' => fn ($r) => url('admin/vendors/' . $r['id'] . '/delete'), 'if' => fn ($r) => $r['status'] !== 'deleted'],
             ['label' => 'Restore', 'icon' => 'check', 'method' => 'post', 'url' => fn ($r) => url('admin/vendors/' . $r['id'] . '/restore'), 'if' => fn ($r) => $r['status'] === 'deleted', 'confirm' => 'Restore this vendor?']],
-        'empty' => ['title' => 'No vendors yet', 'text' => 'Vendors appear here when they register.'],
+        'empty' => ['title' => 'No vendors yet', 'text' => 'Add one yourself, or they appear here when they register and you approve them.', 'cta' => ['label' => 'Add vendor', 'url' => url('admin/vendors/new')]],
     ]);
-    $page($u, 'vendors', 'Vendors', $card('', $html), ['sub' => 'Every registered organisation. Open one to change its plan.']);
+    $page($u, 'vendors', 'Vendors', $card('', $html), ['sub' => 'Every registered organisation. Open one to change its plan.', 'actions' => $btn('Add vendor', url('admin/vendors/new'))]);
 });
 // ------------------------------------------------------------------ add vendor, edit vendor, open portal, delete / restore / purge
 $planOptions = static function () use ($app): array {
@@ -645,7 +645,7 @@ $approveRequest = static function (int $id, array $u) use ($app): ?string {
     return null;
 };
 
-$app->router->get('/admin/requests', static function () use ($app, $adminUser, $page, $card, $reqStates, $reqBadge): void {
+$app->router->get('/admin/requests', static function () use ($app, $adminUser, $page, $card, $btn, $reqStates, $reqBadge): void {
     $u = $adminUser();
     if (!isset($_GET['f_status'])) {
         $_GET['f_status'] = 'pending';
@@ -664,7 +664,7 @@ $app->router->get('/admin/requests', static function () use ($app, $adminUser, $
             ['label' => 'Delete', 'icon' => 'trash', 'method' => 'post', 'danger' => true, 'url' => fn ($r) => url('admin/requests/' . $r['id'] . '/delete'), 'if' => fn ($r) => in_array($r['status'], ['rejected', 'cancelled'], true), 'confirm' => 'Delete this request for good?']],
         'empty' => ['title' => 'No requests here', 'text' => 'New registrations from the public sign up page wait here until you approve them.'],
     ]);
-    $page($u, 'requests', 'Registration requests', $card('', $html), ['sub' => 'New organisations wait here. Nothing goes live and nobody can sign in until you approve.']);
+    $page($u, 'requests', 'Registration requests', $card('', $html), ['sub' => 'New organisations wait here. Nothing goes live and nobody can sign in until you approve.', 'actions' => $btn('Add vendor', url('admin/vendors/new'))]);
 });
 $app->router->get('/admin/requests/{id}', static function (array $a) use ($app, $adminUser, $page, $card, $reqBadge, $planOptions, $typeOptions): void {
     $u = $adminUser();

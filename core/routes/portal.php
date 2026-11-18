@@ -140,7 +140,7 @@ $app->router->get('/portal/mine', static function () use ($app, $dash, $card): v
 
 // ------------------------------------------------------------------ requests (appointments, bookings, orders, enquiries)
 $reqTone = ['new' => 'warn', 'confirmed' => 'info', 'done' => 'ok', 'cancelled' => 'mute', 'rejected' => 'bad'];
-$app->router->get('/portal/requests', static function () use ($app, $dash, $card, $reqTone): void {
+$app->router->get('/portal/requests', static function () use ($app, $dash, $card, $reqTone, $btn): void {
     $p = Portal::boot($app);
     $p->need('manage_appointments');
     if (!isset($_GET['f_status'])) {
@@ -158,7 +158,40 @@ $app->router->get('/portal/requests', static function () use ($app, $dash, $card
         'actions' => [['label' => 'Open', 'icon' => 'eye', 'url' => fn ($r) => url('portal/requests/' . $r['id'])], $act('approve', 'Approve', 'check', 'open', 'Approve this request?'), $act('done', 'Done', 'check', 'confirmed'), $act('cancel', 'Cancel', 'x', 'live', 'Cancel this request?')],
         'empty' => ['title' => 'No ' . $lab . ' here', 'text' => 'People can send one from your website. Share your website address to get the first one.'],
     ]);
-    $dash($p, 'requests', $p->label('requests', 'Requests'), $card('', $html), ['sub' => 'Sent from your website. Open one to approve, reject with a reason or cancel.']);
+    $dash($p, 'requests', $p->label('requests', 'Requests'), $card('', $html), ['sub' => 'Sent from your website. Open one to approve, reject with a reason or cancel.', 'actions' => $p->writable() ? $btn('Add ' . rtrim($lab, 's'), url('portal/requests/new')) : '']);
+});
+// walk-in or phone request typed in by staff
+$reqFields = static fn (): array => [
+    'name' => ['label' => 'Name', 'required' => true, 'max' => 160], 'phone' => ['label' => 'Phone', 'required' => true, 'max' => 40, 'type' => 'tel'],
+    'email' => ['label' => 'Email', 'type' => 'email', 'max' => 191], 'preferred_date' => ['label' => 'Date', 'type' => 'date', 'required' => true, 'default' => date('Y-m-d')],
+    'message' => ['label' => 'Note', 'type' => 'textarea', 'max' => 1000, 'rows' => 3],
+];
+$app->router->get('/portal/requests/new', static function () use ($app, $dash, $card, $reqFields): void {
+    $p = Portal::boot($app);
+    $p->need('manage_appointments');
+    $p->needWritable();
+    $h = '<form class="d-form" method="post" action="' . e(url('portal/requests/new')) . '">' . csrf_field() . '<div class="d-form-grid">';
+    foreach ($reqFields() as $n => $f) {
+        $h .= Crud::field($n, $f, old($n, (string) ($f['default'] ?? '')));
+    }
+    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e(url('portal/requests')) . '">Cancel</a></div></form>';
+    clear_old();
+    $dash($p, 'requests', 'Add ' . rtrim(strtolower($p->label('requests', 'request')), 's'), $card('', $h), ['sub' => 'For people who phone or walk in. It joins the same list as website requests.']);
+});
+$app->router->post('/portal/requests/new', static function () use ($app, $reqFields): void {
+    $p = Portal::boot($app);
+    $p->need('manage_appointments');
+    $p->needWritable();
+    [$d, $err] = Crud::collect($reqFields());
+    if ($err !== null) {
+        keep_old($_POST);
+        flash($err, 'bad');
+        redirect(url('portal/requests/new'));
+    }
+    $id = $app->db->insert('sc_appointment_requests', $d + ['tenant_id' => $p->tenantId, 'status' => 'new', 'created_at' => date('Y-m-d H:i:s')]);
+    $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'request_added', null, ['id' => $id]);
+    flash('Saved.', 'ok');
+    redirect(url('portal/requests/' . $id));
 });
 $app->router->get('/portal/requests/{id}', static function (array $a) use ($app, $dash, $card, $reqTone, $btn): void {
     $p = Portal::boot($app);
