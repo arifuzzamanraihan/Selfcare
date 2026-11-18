@@ -9,6 +9,7 @@ require dirname(__DIR__, 2) . '/core/Database.php';
 require dirname(__DIR__, 2) . '/core/VendorTypes.php';
 require dirname(__DIR__, 2) . '/core/Plans.php';
 require dirname(__DIR__, 2) . '/core/Auth.php';
+require dirname(__DIR__, 2) . '/core/Currency.php';
 
 $env = new Selfcare\Env();
 $env->load(dirname(__DIR__, 2) . '/.env');
@@ -38,6 +39,8 @@ if (!$hasUsers) {
     $run(__DIR__ . '/legacy-core.sql');
 }
 $run(__DIR__ . '/schema.sql');
+$run(__DIR__ . '/migrate-r4.sql'); // idempotent: adds columns that older installs do not have
 Selfcare\Plans::seedDefaults($db);
+echo "currencies added: " . Selfcare\Currency::seed($db) . "\n";
 echo "vendor types added: " . Selfcare\VendorTypes::seed($db) . "\n";
 echo "done\n";

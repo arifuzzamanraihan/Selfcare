@@ -65,7 +65,7 @@ if ($acc !== '') { $title_html = str_replace(e($acc), '<span class="acc">' . e($
   <div class="sc-grid g4" style="margin-top:32px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))"><?php foreach ($plans as $p): $lim = static fn ($v, $l) => $v === null ? 'Unlimited ' . $l : number_format((float) $v) . ' ' . $l; ?>
     <div class="sc-card sc-plan rv<?= $p['is_featured'] ? ' is-feat' : '' ?>">
       <h3><?= e($p['name']) ?><?= $p['is_featured'] ? ' <span class="sc-tag">Popular</span>' : '' ?></h3>
-      <div class="sc-price"><?= $p['price_label'] ? e((string) $p['price_label']) : ((float) $p['price'] == 0 ? 'Free' : e(money((float) $p['price'], (string) $p['currency'])) . '<small> / month</small>') ?></div>
+      <div class="sc-price"><?= $p['price_label'] ? e((string) $p['price_label']) : ((float) $p['price'] == 0 ? 'Free' : e(\Selfcare\Plans::priceText($p)) . '<small> / month</small>') ?></div>
       <p><?= e((string) $p['description']) ?></p>
       <?php if (!$p['price_label']): ?><ul><li><?= e($lim($p['max_staff'], 'staff')) ?></li><li><?= e($lim($p['max_patients'], 'patient records')) ?></li><li><?= e($lim($p['max_branches'], 'branch(es)')) ?></li><li><?= e((string) ($p['support_level'] ?: 'Community') . ' support') ?></li><?php if ($p['price_year']): ?><li>Yearly: <?= e(money((float) $p['price_year'], (string) $p['currency'])) ?></li><?php endif; ?></ul><?php endif; ?>
       <a class="sc-btn <?= $p['is_featured'] ? 'sc-btn-primary' : '' ?>" href="<?= e($p['price_label'] ? $main('') . '#contact' : $main('register')) ?>"><?= $p['price_label'] ? 'Talk to us' : 'Get started' ?></a>

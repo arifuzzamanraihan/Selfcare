@@ -69,4 +69,14 @@
     f.addEventListener('submit', function (e) { if (f._ok) return; e.preventDefault(); ask(f.getAttribute('data-confirm'), function () { f._ok = true; f.submit(); }); });
   });
   $$('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+  // web address field follows the name until the person types in it
+  $$('[data-slug-from]').forEach(function (inp) {
+    var src = document.getElementById(inp.getAttribute('data-slug-from'));
+    if (!src) return;
+    inp.addEventListener('input', function () { inp.dataset.touched = '1'; });
+    src.addEventListener('input', function () {
+      if (inp.dataset.touched === '1') return;
+      inp.value = src.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    });
+  });
 })();

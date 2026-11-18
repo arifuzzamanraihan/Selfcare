@@ -9,7 +9,7 @@ use function Selfcare\{csrf_field, dt, e, flash, icon, keep_old, clear_old, mone
 $dash = $app->dash;
 ['card' => $card, 'btn' => $btn] = $app->ui;
 $billing = new Billing($app->db);
-$cur = static fn (Portal $p): string => $billing->setting($p->tenantId, 'currency', 'USD');
+$cur = static fn (Portal $p): string => \Selfcare\Currency::forTenant($p->tenantId);
 $back = static function (string $okMsg, string $to, ?string $err = null): void {
     if ($err !== null) {
         flash($err, 'bad');
@@ -484,7 +484,7 @@ $app->router->get('/portal/settings', static function () use ($app, $dash, $card
     $p->need('manage_settings');
     $t = $p->tenantId;
     $h = '<form class="d-form" method="post" action="' . e(url('portal/settings')) . '">' . csrf_field() . '<div class="d-form-grid">'
-        . Crud::field('currency', ['label' => 'Currency on bills', 'type' => 'select', 'options' => ['USD' => 'US dollar', 'BDT' => 'Taka (BDT)', 'EUR' => 'Euro', 'GBP' => 'Pound', 'INR' => 'Rupee (INR)'], 'required' => true], $cur($p))
+        . Crud::field('currency', ['label' => 'Currency on bills', 'type' => 'select', 'options' => \Selfcare\Currency::options($cur($p)), 'required' => true, 'help' => 'Every amount in your portal, website, invoices, PDFs and reports uses this currency. Old invoices keep the currency they were made in.'], $cur($p))
         . Crud::field('doctor_commission_pct', ['label' => 'Doctor commission % (for the doctor report)', 'type' => 'number', 'step' => '0.01', 'min' => 0], $billing->setting($t, 'doctor_commission_pct', '0'))
         . Crud::field('bed_capacity', ['label' => 'Number of beds (for bed occupancy)', 'type' => 'number', 'min' => 0], $billing->setting($t, 'bed_capacity', '0'))
         . '</div><p class="d-help" style="margin-top:12px">The registration or licence number printed on every document is set under Profile and hours.</p><h3 style="margin-top:22px">Number prefixes</h3><p class="d-help">Each document type counts up from 1 on its own. The prefix is the letters in front, for example OPD-00042.</p><div class="d-form-grid">';
@@ -499,7 +499,7 @@ $app->router->post('/portal/settings', static function () use ($app, $billing, $
     $p->need('manage_settings');
     $p->needWritable();
     $t = $p->tenantId;
-    if (in_array((string) ($_POST['currency'] ?? ''), ['USD', 'BDT', 'EUR', 'GBP', 'INR'], true)) {
+    if (isset(\Selfcare\Currency::all(true)[(string) ($_POST['currency'] ?? '')])) {
         $billing->setSetting($t, 'currency', (string) $_POST['currency']);
     }
     foreach (['doctor_commission_pct' => 100.0, 'bed_capacity' => 100000.0] as $k => $max) {

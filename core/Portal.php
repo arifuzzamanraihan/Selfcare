@@ -61,6 +61,7 @@ final class Portal
         $p = new self($app);
         $p->user = $user;
         $p->tenantId = (string) $user['tenant_id'];
+        Currency::$context = Currency::forTenant($p->tenantId);
         $row = $app->db->one('SELECT tenant_username FROM tenants WHERE id = ?', [$p->tenantId]);
         $vendor = $row === null ? null : $app->tenant->bySlug((string) $row['tenant_username']);
         if ($vendor === null) {
@@ -177,6 +178,7 @@ final class Portal
         }
         $add('People', 'staff', 'Staff accounts', 'user', 'portal/staff', 'manage_users', 'staff');
         $add('Website', 'website', 'Profile and hours', 'globe', 'portal/website', 'manage_settings', 'website');
+        $add('Website', 'domains', 'Web addresses', 'globe', 'portal/domains', 'manage_settings', 'website');
         foreach ($t['sections'] as $s) {
             $perm = 'manage_settings';
             $mod = 'website';

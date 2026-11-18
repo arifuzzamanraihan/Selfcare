@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Selfcare\Vendors;
 use Selfcare\VendorTypes;
 use Selfcare\Tenant;
-use function Selfcare\{clear_old, flash, keep_old, redirect, slugify, url};
+use function Selfcare\{clear_old, flash, hop, keep_old, redirect, slugify, url};
 
 $authPage = static function (string $tpl, string $title, array $extra = []) use ($app): void {
     $app->view->page($tpl, ['title' => $title, 'user' => $app->auth->user(), 'layout' => 'layout', 'bare' => true] + $extra);
@@ -49,13 +49,17 @@ $app->router->post('/login', static function () use ($app, $authPage, $vendorOfU
     $app->throttle->clear('login', $who);
     $vendor = $vendorOfUser($uid);
     if ($vendor !== null) {
+        if ($vendor['status'] === 'deleted') {
+            $fail('Email or password is not correct.');
+            return;
+        }
         if ($vendor['status'] === 'suspended') {
             $fail('This account is suspended. Please contact Self Care.');
             return;
         }
         // main site in sub domain mode: send the user to their own address
         if ($app->tenant->suffix() !== '' && $app->hostSlug === null) {
-            redirect($app->vendorPortalUrl($vendor, 'auth/handoff') . '?token=' . $app->auth->makeHandoff($uid));
+            hop($app->vendorPortalUrl($vendor, 'auth/handoff') . '?token=' . $app->auth->makeHandoff($uid));
         }
         $row = $app->db->one('SELECT m.role_id, d.name AS role FROM model_has_roles m JOIN departments d ON d.id = m.role_id WHERE m.model_id = ? AND m.model_type = ? LIMIT 1', [$uid, Selfcare\Auth::ROLE_MODEL]);
         $block = $app->access->timeBlock((string) $vendor['id'], $uid, (string) ($row['role'] ?? 'Patient'));
@@ -68,7 +72,7 @@ $app->router->post('/login', static function () use ($app, $authPage, $vendorOfU
         return;
     }
     $app->auth->login($uid);
-    redirect($app->home($app->auth->user() ?? []));
+    hop($app->home($app->auth->user() ?? []));
 });
 
 // Main site -> vendor site: one-time token signs the user in on the vendor address.
@@ -82,8 +86,29 @@ $app->router->get('/auth/handoff', static function () use ($app, $vendorOfUser):
         flash('That sign in link expired. Please sign in again.', 'bad');
         redirect(url('login'));
     }
-    $app->auth->login($uid);
+    $imp = $app->auth->handoffImpersonator;
+    $app->auth->login($uid, $imp === null);
+    if ($imp !== null) {
+        $_SESSION['sc_impersonator'] = $imp; // set after login(), which clears it
+    }
     redirect(url('portal'));
+});
+
+// "Viewing as <vendor>": return to the super admin. CSRF-checked POST like every other POST.
+$app->router->post('/auth/return', static function () use ($app): void {
+    $imp = $app->auth->impersonator();
+    $me = $app->auth->user();
+    if ($imp === null || $me === null) {
+        redirect(url(''));
+    }
+    $slug = (string) ($me['tenant_id'] ?? '');
+    $app->access->log($slug, $imp, (int) $me['id'], null, 'impersonate_end', null, null, 'Returned to super admin');
+    $app->auth->logout();
+    if ($app->tenant->suffix() === '') {
+        $app->auth->login($imp, false); // one host: bring the super admin session back
+    }
+    flash('You are back as super admin.', 'ok');
+    hop($app->tenant->suffix() === '' ? url('admin/vendors/' . $slug) : $app->tenant->mainUrl('admin/vendors/' . $slug));
 });
 
 $app->router->post('/logout', static function () use ($app): void {
@@ -194,8 +219,8 @@ $app->router->post('/register', static function () use ($app, $authPage): void {
         $again('Please enter your organisation name (at least 3 letters) and your name.');
         return;
     }
-    if (!$app->tenant->validSlug($slug)) {
-        $again('The web address must be 3 to 40 letters, numbers or dashes, and cannot be a reserved word.');
+    if (($slugErr = Vendors::slugError($app, $slug)) !== null) {
+        $again($slugErr);
         return;
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -206,23 +231,18 @@ $app->router->post('/register', static function () use ($app, $authPage): void {
         $again(strlen($pw) < 8 ? 'Use at least 8 characters for the password.' : 'The two passwords do not match.');
         return;
     }
-    if ($app->db->val('SELECT COUNT(*) FROM tenants WHERE tenant_username = ? OR hospital_name = ?', [$slug, $name]) > 0) {
-        $again('That web address or organisation name is already registered.');
+    if ($app->db->val('SELECT COUNT(*) FROM tenants WHERE hospital_name = ?', [$name]) > 0 || $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE name = ? AND status = 'pending'", [$name]) > 0) {
+        $again('That organisation name is already registered or waiting for approval.');
         return;
     }
-    if ($app->db->val('SELECT COUNT(*) FROM users WHERE email = ?', [$email]) > 0) {
+    if ($app->db->val('SELECT COUNT(*) FROM users WHERE email = ?', [$email]) > 0 || $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE email = ? AND status = 'pending'", [$email]) > 0) {
         $again('That email already has an account. Try signing in.');
         return;
     }
     $app->throttle->hit('register', $app->ip());
-    $id = Vendors::create($app, ['type' => $type, 'name' => $name, 'slug' => $slug, 'city' => trim((string) ($_POST['city'] ?? '')) ?: null, 'phone' => trim((string) ($_POST['phone'] ?? '')) ?: null, 'first_name' => $first, 'last_name' => $last, 'email' => $email, 'password' => $pw]);
+    $planId = (int) ($_POST['plan_id'] ?? 0);
+    $app->db->insert('sc_registration_requests', ['type_slug' => $type, 'name' => $name, 'slug' => $slug, 'city' => trim((string) ($_POST['city'] ?? '')) ?: null, 'phone' => trim((string) ($_POST['phone'] ?? '')) ?: null, 'first_name' => mb_substr($first, 0, 120), 'last_name' => mb_substr($last, 0, 120), 'email' => $email,
+        'password_hash' => password_hash($pw, PASSWORD_BCRYPT), 'plan_id' => $planId > 0 && $app->plans->find($planId) !== null ? $planId : null, 'status' => 'pending', 'ip' => $app->ip(), 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
     clear_old();
-    $vendor = $app->tenant->bySlug($id);
-    flash('Welcome to Self Care. Your website is live and your portal is ready.', 'ok');
-    $uid = (int) $app->db->val('SELECT id FROM users WHERE email = ?', [$email]);
-    if ($app->tenant->suffix() !== '') {
-        redirect($app->vendorPortalUrl($vendor, 'auth/handoff') . '?token=' . $app->auth->makeHandoff($uid));
-    }
-    $app->auth->login($uid);
-    redirect(url('portal'));
+    $authPage('register_done', 'Registration received', ['name' => $name]);
 });

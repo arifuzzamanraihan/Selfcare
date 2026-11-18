@@ -20,6 +20,7 @@ final class App
     public Access $access;
     public Throttle $throttle;
     public Mailer $mailer;
+    public Domains $domains;
 
     /** null = main website, '' = bad sub domain, otherwise the vendor slug from the Host header. */
     public ?string $hostSlug = null;
@@ -50,9 +51,17 @@ final class App
         $this->access = new Access($this->db);
         $this->throttle = new Throttle($this->db);
         $this->mailer = new Mailer($this->env);
+        $this->domains = new Domains($this->db, $this->env, $this->tenant);
         $this->hostSlug = $this->tenant->slugFromHost();
         if ($this->hostSlug !== null && $this->hostSlug !== '') {
             $this->hostVendor = $this->tenant->bySlug($this->hostSlug);
+            if ($this->hostVendor !== null && $this->hostVendor['status'] === 'deleted') {
+                $this->hostVendor = null; // soft deleted: the address behaves as if it does not exist
+                $this->hostSlug = '';
+            }
+            if ($this->hostVendor !== null) {
+                Currency::$context = Currency::forTenant((string) $this->hostVendor['id']);
+            }
         }
     }
 

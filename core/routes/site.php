@@ -26,7 +26,7 @@ $siteData = static function (array $vendor) use ($app): array {
                 $data[$k] = $db->all('SELECT d.id, d.title, d.description, (SELECT COUNT(*) FROM doctors x WHERE x.doctor_department_id = d.id) AS doctors FROM doctor_departments d WHERE d.tenant_id = ? ORDER BY d.title', [$tid]);
                 break;
             case 'team':
-                $data[$k] = $db->all('SELECT d.id, d.specialist, d.description, d.appointment_charge, u.first_name, u.last_name, u.qualification, dd.title AS department FROM doctors d JOIN users u ON u.id = d.user_id AND u.status = 1 LEFT JOIN doctor_departments dd ON dd.id = d.doctor_department_id WHERE d.tenant_id = ? ORDER BY u.first_name', [$tid]);
+                $data[$k] = $db->all('SELECT d.id, d.specialist, d.description, d.appointment_charge, u.first_name, u.last_name, u.qualification, dd.title AS department FROM doctors d JOIN users u ON u.id = d.user_id AND u.status = 1 LEFT JOIN doctor_departments dd ON dd.id = d.doctor_department_id WHERE d.tenant_id = ? AND u.status = 1 AND u.deleted_at IS NULL ORDER BY u.first_name', [$tid]);
                 break;
             case 'text':
                 $data[$k] = $s((string) $sec['field']);
@@ -62,7 +62,7 @@ $app->siteHome = static function (array $vendor, string $prefix) use ($app, $sit
 };
 
 $siteDoctor = static function (array $vendor, int $id) use ($app, $siteData, $siteUrlFor): void {
-    $doc = $app->db->one('SELECT d.id, d.specialist, d.description, d.appointment_charge, u.first_name, u.last_name, u.qualification, dd.title AS department FROM doctors d JOIN users u ON u.id = d.user_id AND u.status = 1 LEFT JOIN doctor_departments dd ON dd.id = d.doctor_department_id WHERE d.id = ? AND d.tenant_id = ?', [$id, (string) $vendor['id']]);
+    $doc = $app->db->one('SELECT d.id, d.specialist, d.description, d.appointment_charge, u.first_name, u.last_name, u.qualification, dd.title AS department FROM doctors d JOIN users u ON u.id = d.user_id AND u.status = 1 LEFT JOIN doctor_departments dd ON dd.id = d.doctor_department_id WHERE d.id = ? AND d.tenant_id = ? AND u.status = 1 AND u.deleted_at IS NULL', [$id, (string) $vendor['id']]);
     if ($doc === null) {
         $app->error(404, 'We could not find that profile.');
     }

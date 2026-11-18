@@ -22,11 +22,14 @@ CREATE TABLE IF NOT EXISTS sc_vendor_types (
 CREATE TABLE IF NOT EXISTS sc_vendors (
   tenant_id VARCHAR(191) PRIMARY KEY,
   type_slug VARCHAR(60) NOT NULL DEFAULT 'hospital',
-  status VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT 'active | suspended',
+  status VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT 'active | suspended | deleted (soft delete)',
   city VARCHAR(120) NULL,
   phone VARCHAR(40) NULL,
   is_listed TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'show in the public directory',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL COMMENT 'soft delete time, NULL while the vendor exists',
+  deleted_by BIGINT UNSIGNED NULL,
+  prev_status VARCHAR(16) NULL COMMENT 'status before the soft delete, used by Restore',
   KEY sc_vendor_type (type_slug, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -101,7 +104,10 @@ CREATE TABLE IF NOT EXISTS sc_appointment_requests (
   department_id BIGINT UNSIGNED NULL,
   preferred_date DATE NOT NULL,
   message VARCHAR(1000) NULL,
-  status VARCHAR(16) NOT NULL DEFAULT 'new' COMMENT 'new | confirmed | done | cancelled',
+  status VARCHAR(16) NOT NULL DEFAULT 'new' COMMENT 'new | confirmed | done | cancelled | rejected',
+  reason VARCHAR(240) NULL COMMENT 'why it was rejected or cancelled',
+  decided_by BIGINT UNSIGNED NULL,
+  decided_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY sc_appt_tenant (tenant_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -136,6 +142,7 @@ CREATE TABLE IF NOT EXISTS sc_login_tokens (
   token_hash CHAR(64) NOT NULL,
   expires_at DATETIME NOT NULL,
   used_at DATETIME NULL,
+  impersonator_id BIGINT UNSIGNED NULL COMMENT 'super admin who opened this vendor portal (Open portal)',
   UNIQUE KEY sc_ltok_hash (token_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -366,3 +373,67 @@ CREATE TABLE IF NOT EXISTS sc_stock_items (
   KEY sc_stock_tenant (tenant_id, name),
   KEY sc_stock_exp (tenant_id, expiry_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Round 4: registration requests (public sign ups wait here until a super admin approves them)
+CREATE TABLE IF NOT EXISTS sc_registration_requests (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  type_slug VARCHAR(60) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  slug VARCHAR(60) NOT NULL,
+  city VARCHAR(120) NULL,
+  phone VARCHAR(40) NULL,
+  address VARCHAR(190) NULL,
+  first_name VARCHAR(120) NOT NULL,
+  last_name VARCHAR(120) NULL,
+  email VARCHAR(191) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL COMMENT 'bcrypt of the password chosen at sign up; copied to users on approval',
+  plan_id INT UNSIGNED NULL,
+  status VARCHAR(12) NOT NULL DEFAULT 'pending' COMMENT 'pending | approved | rejected | cancelled',
+  reason VARCHAR(255) NULL COMMENT 'why it was rejected',
+  admin_note VARCHAR(255) NULL,
+  tenant_id VARCHAR(191) NULL COMMENT 'set when approved',
+  ip VARCHAR(45) NULL,
+  decided_by BIGINT UNSIGNED NULL,
+  decided_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  KEY src_status (status, created_at),
+  KEY src_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Round 4: web addresses of a vendor (its sub domain and custom domains) and their SSL state
+CREATE TABLE IF NOT EXISTS sc_domains (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  host VARCHAR(190) NOT NULL,
+  kind VARCHAR(12) NOT NULL DEFAULT 'custom' COMMENT 'subdomain | custom',
+  status VARCHAR(14) NOT NULL DEFAULT 'pending_dns' COMMENT 'pending_dns | pending_cert | active | failed | removed',
+  last_error VARCHAR(255) NULL,
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  next_try_at DATETIME NULL,
+  dns_ok_at DATETIME NULL,
+  cert_at DATETIME NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  UNIQUE KEY scd_host (host),
+  KEY scd_tenant (tenant_id),
+  KEY scd_status (status, next_try_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sc_currencies (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(8) NOT NULL,
+  name VARCHAR(80) NOT NULL,
+  symbol VARCHAR(12) NOT NULL,
+  decimals TINYINT UNSIGNED NOT NULL DEFAULT 2,
+  symbol_pos VARCHAR(8) NOT NULL DEFAULT 'before' COMMENT 'before | after',
+  thousand_sep VARCHAR(2) NOT NULL DEFAULT ',',
+  decimal_sep VARCHAR(2) NOT NULL DEFAULT '.',
+  grouping VARCHAR(10) NOT NULL DEFAULT 'standard' COMMENT 'standard 1,234,567 | lakh 12,34,567',
+  major_name VARCHAR(40) NOT NULL COMMENT 'used in amount in words, e.g. Rupees',
+  minor_name VARCHAR(40) NOT NULL DEFAULT '' COMMENT 'e.g. Paisa',
+  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 0,
+  UNIQUE KEY cur_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

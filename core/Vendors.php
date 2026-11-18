@@ -25,12 +25,12 @@ final class Vendors
             $db->insert('tenants', ['id' => $slug, 'tenant_username' => $slug, 'hospital_name' => $in['name'], 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
             $uid = $db->insert('users', [
                 'department_id' => $adminRole, 'first_name' => $in['first_name'], 'last_name' => $in['last_name'] ?? '', 'email' => $in['email'],
-                'city' => $in['city'] ?? null, 'password' => password_hash((string) $in['password'], PASSWORD_BCRYPT), 'phone' => $in['phone'] ?? null,
+                'city' => $in['city'] ?? null, 'password' => $in['password_hash'] ?? password_hash((string) $in['password'], PASSWORD_BCRYPT), 'phone' => $in['phone'] ?? null,
                 'is_super_admin_default' => 0, 'gender' => 0, 'is_admin_default' => 1, 'status' => 1, 'language' => 'en',
                 'hospital_name' => $in['name'], 'tenant_id' => $slug, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
             ]);
             $db->insert('model_has_roles', ['role_id' => $adminRole, 'model_type' => Auth::ROLE_MODEL, 'model_id' => $uid]);
-            $db->insert('sc_vendors', ['tenant_id' => $slug, 'type_slug' => $type['slug'], 'status' => 'active', 'city' => $in['city'] ?? null, 'phone' => $in['phone'] ?? null, 'is_listed' => 1]);
+            $db->insert('sc_vendors', ['tenant_id' => $slug, 'type_slug' => $type['slug'], 'status' => in_array($in['status'] ?? 'active', ['active', 'suspended'], true) ? $in['status'] ?? 'active' : 'active', 'city' => $in['city'] ?? null, 'phone' => $in['phone'] ?? null, 'is_listed' => 1]);
             $app->access->seedTenant($slug, $family);
             $planId = (int) ($in['plan_id'] ?? 0);
             if (!$planId) {
@@ -57,7 +57,53 @@ final class Vendors
             $db->rollBack();
             throw $e;
         }
+        try {
+            $app->domains->queueSubdomain($slug); // SSL for the new address (worker picks it up within minutes)
+        } catch (\Throwable) {
+        }
         return $slug;
+    }
+
+    /** Why a web address cannot be used, or null when it is free. Checks the rules, reserved words, vendors and waiting requests. */
+    public static function slugError(App $app, string $slug, ?int $exceptRequest = null): ?string
+    {
+        if (!$app->tenant->validSlug($slug)) {
+            return 'The web address must be 3 to 40 letters, numbers or dashes, and cannot be a reserved word.';
+        }
+        if ($app->db->val('SELECT COUNT(*) FROM tenants WHERE tenant_username = ? OR id = ?', [$slug, $slug]) > 0) {
+            return 'That web address is already taken.';
+        }
+        if ($app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE slug = ? AND status = 'pending' AND id <> ?", [$slug, (int) $exceptRequest]) > 0) {
+            return 'That web address is already asked for by a waiting registration.';
+        }
+        return null;
+    }
+
+    /** Deletes a vendor and everything that belongs to it for good. Only for vendors that are already soft deleted. */
+    public static function purge(Database $db, string $slug): void
+    {
+        $db->begin();
+        try {
+            $db->run('SET FOREIGN_KEY_CHECKS = 0');
+            $uids = array_column($db->all('SELECT id FROM users WHERE tenant_id = ?', [$slug]), 'id');
+            $db->run('DELETE i FROM sc_invoice_items i JOIN sc_invoices v ON v.id = i.invoice_id WHERE v.tenant_id = ?', [$slug]);
+            $db->run('DELETE p FROM sc_invoice_payments p JOIN sc_invoices v ON v.id = p.invoice_id WHERE v.tenant_id = ?', [$slug]);
+            foreach ($uids as $uid) {
+                $db->run('DELETE FROM model_has_roles WHERE model_id = ? AND model_type = ?', [(int) $uid, Auth::ROLE_MODEL]);
+                $db->run('DELETE FROM sc_password_resets WHERE user_id = ?', [(int) $uid]);
+                $db->run('DELETE FROM sc_login_tokens WHERE user_id = ?', [(int) $uid]);
+            }
+            foreach ($db->all("SELECT TABLE_NAME t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'tenant_id' AND TABLE_NAME NOT IN ('tenants', 'permission_change_log')") as $r) {
+                $db->run('DELETE FROM `' . str_replace('`', '', (string) $r['t']) . '` WHERE tenant_id = ?', [$slug]);
+            }
+            $db->run('DELETE FROM tenants WHERE id = ?', [$slug]);
+            $db->run('SET FOREIGN_KEY_CHECKS = 1');
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            $db->run('SET FOREIGN_KEY_CHECKS = 1');
+            throw $e;
+        }
     }
 
     /**

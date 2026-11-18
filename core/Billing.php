@@ -123,10 +123,9 @@ final class Billing
         return $v !== null && $v !== '' ? (string) $v : (string) ($this->cfg['invoices'][$docType]['prefix'] ?? 'DOC-');
     }
 
-    public static function fmt(float $amount, string $currency = 'USD'): string
+    public static function fmt(float $amount, ?string $currency = null): string
     {
-        $sym = ['USD' => '$', 'EUR' => '€', 'GBP' => '£', 'BDT' => '৳', 'INR' => '₹'][$currency] ?? ($currency . ' ');
-        return ($amount < 0 ? '-' : '') . $sym . number_format(abs($amount), 2);
+        return Currency::fmt($amount, $currency);
     }
 
     // ------------------------------------------------------------------ invoices

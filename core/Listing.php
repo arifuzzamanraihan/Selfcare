@@ -53,8 +53,12 @@ final class Listing
         foreach ($c['filters'] ?? [] as $name => $f) {
             $val = (string) ($_GET['f_' . $name] ?? '');
             if ($val !== '' && isset($f['options'][$val])) {
-                $where[] = $f['sql'];
-                $params[] = $val;
+                if (isset($f['sql_map'][$val])) {
+                    $where[] = $f['sql_map'][$val]; // fixed condition without a parameter, e.g. "deleted"
+                } else {
+                    $where[] = $f['sql'];
+                    $params[] = $val;
+                }
                 $activeFilters[$name] = $val;
             }
         }

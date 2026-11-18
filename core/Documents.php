@@ -59,15 +59,7 @@ final class Documents
     /** "Five Hundred Dollars and Fifty Cents Only". */
     public static function amountWords(float $amount, string $currency = 'USD'): string
     {
-        [$major, $minor] = ['USD' => ['Dollars', 'Cents'], 'BDT' => ['Taka', 'Paisa'], 'EUR' => ['Euro', 'Cents'], 'GBP' => ['Pounds', 'Pence'], 'INR' => ['Rupees', 'Paise']][$currency] ?? [$currency, 'Cents'];
-        $amount = round(abs($amount), 2);
-        $whole = (int) floor($amount);
-        $cents = (int) round(($amount - $whole) * 100);
-        $s = self::words($whole) . ' ' . $major;
-        if ($cents > 0) {
-            $s .= ' and ' . self::words($cents) . ' ' . $minor;
-        }
-        return $s . ' Only';
+        return Currency::words($amount, $currency);
     }
 
     /** Organisation block for the header. @return array<string,string> */

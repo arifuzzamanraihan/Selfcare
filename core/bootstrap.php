@@ -2,7 +2,7 @@
 // Selfcare original front bootstrap. No framework, only PHP itself.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports'] as $f) {
     if (is_file(__DIR__ . '/' . $f . '.php')) {
         require_once __DIR__ . '/' . $f . '.php';
     }

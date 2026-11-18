@@ -11,7 +11,7 @@ namespace Selfcare;
 final class Tenant
 {
     /** Names that can never be a vendor sub domain. */
-    private const BUILTIN_RESERVED = ['www', 'mail', 'smtp', 'imap', 'pop', 'ftp', 'ns1', 'ns2', 'admin', 'api', 'app', 'office', 'area', 'selfcare', 'staging', 'demo-admin', 'webmail', 'cpanel', 'status', 'static', 'cdn', 'assets', 'login', 'register', 'dashboard', 'h'];
+    private const BUILTIN_RESERVED = ['www', 'mail', 'smtp', 'imap', 'pop', 'ftp', 'ns1', 'ns2', 'admin', 'api', 'app', 'office', 'area', 'selfcare', 'staging', 'staging-selfcare', 'demo-admin', 'webmail', 'cpanel', 'status', 'static', 'cdn', 'assets', 'login', 'register', 'dashboard', 'h'];
 
     public function __construct(private Env $env, private Database $db)
     {
@@ -52,11 +52,28 @@ final class Tenant
         if ($host === strtolower($this->env->get('MAIN_HOST'))) {
             return null; // the main site, even when its name ends with the tenant suffix
         }
+        if ($host !== '' && ($suffix === '' || !str_ends_with($host, $suffix) || strlen($host) <= strlen($suffix))) {
+            $custom = $this->customDomainSlug($host);
+            if ($custom !== null) {
+                return $custom;
+            }
+        }
         if ($suffix === '' || $host === '' || !str_ends_with($host, $suffix) || strlen($host) <= strlen($suffix)) {
             return null;
         }
         $slug = substr($host, 0, -strlen($suffix));
         return $this->validSlug($slug) ? $slug : '';
+    }
+
+    /** Vendor slug for a custom domain a vendor added in its settings (table sc_domains), or null. */
+    public function customDomainSlug(string $host): ?string
+    {
+        try {
+            $slug = $this->db->val("SELECT tenant_id FROM sc_domains WHERE host = ? AND kind = 'custom' AND status <> 'removed' LIMIT 1", [$host]);
+        } catch (\Throwable) {
+            return null; // table not there yet
+        }
+        return $slug === null || $slug === false ? null : (string) $slug;
     }
 
     /** @return array<string,mixed>|null */

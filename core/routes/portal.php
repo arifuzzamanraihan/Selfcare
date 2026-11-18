@@ -16,6 +16,10 @@ $app->dash = static function (?Portal $p, string $active, string $title, string 
         } elseif (!empty($p->sub['ends_at']) && strtotime((string) $p->sub['ends_at']) < time() + 7 * 86400) {
             $banner = 'Your plan ends on ' . e(dt((string) $p->sub['ends_at'])) . '. Ask Self Care to renew it so nothing stops.';
         }
+        $imp = $app->auth->impersonator();
+        if ($imp !== null) {
+            $d['impBanner'] = '<span>You are viewing <b>' . e((string) $p->vendor['name']) . '</b> as super admin. Everything you do here is recorded.</span><form method="post" action="' . e(url('auth/return')) . '">' . csrf_field() . '<button class="d-btn d-btn-soft" type="submit">Return to super admin</button></form>';
+        }
         $d += [
             'nav' => $p->nav(), 'orgName' => $p->vendor['name'], 'orgSub' => $p->type['name'], 'user' => $p->user, 'roleLabel' => $app->access->roleLabel($p->role, $p->family),
             'banner' => $banner, 'siteLink' => $app->tenant->siteUrl((string) $p->vendor['slug']), 'orgLogo' => $app->site->get($p->tenantId, 'logo'), 'navHome' => 'portal',
@@ -71,13 +75,45 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
     }
     $h .= $stat('Plan', (string) $p->sub['plan_name'], 'layers', $app->plans->label($p->sub));
     $h .= '</div>';
+    $months = \Selfcare\Charts::months(6);
+    $since = date('Y-m-01', strtotime('-5 month'));
+    $lab = $p->label('requests', 'Requests');
+    $charts = '';
+    if ($p->can('manage_appointments')) {
+        $got = array_column($db->all("SELECT DATE_FORMAT(created_at, '%Y-%m') m, COUNT(*) n FROM sc_appointment_requests WHERE tenant_id = ? AND created_at >= ? GROUP BY m", [$t, $since]), 'n', 'm');
+        $charts .= $card($lab . ' per month', \Selfcare\Charts::columns(array_map(static fn ($m) => [$m[0], (int) ($got[$m[1]] ?? 0)], $months), 'No ' . strtolower($lab) . ' yet. Share your website address to get the first one.'));
+        $st = array_column($db->all('SELECT status, COUNT(*) n FROM sc_appointment_requests WHERE tenant_id = ? GROUP BY status', [$t]), 'n', 'status');
+        $names = ['new' => 'Waiting', 'confirmed' => 'Approved', 'done' => 'Done', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'];
+        $bars = [];
+        foreach ($names as $k => $n) {
+            $bars[] = [$n, (int) ($st[$k] ?? 0), url('portal/requests', ['f_status' => $k])];
+        }
+        $charts .= $card($lab . ' by state', \Selfcare\Charts::bars($bars));
+    }
+    if ($p->can('manage_invoices') && $p->module('billing')) {
+        $got = array_column($db->all("SELECT DATE_FORMAT(p.paid_at, '%Y-%m') m, SUM(p.amount) n FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND p.paid_at >= ? GROUP BY m", [$t, $since]), 'n', 'm');
+        $charts .= $card('Money collected per month', \Selfcare\Charts::columns(array_map(static fn ($m) => [$m[0], (float) ($got[$m[1]] ?? 0), money((float) ($got[$m[1]] ?? 0))], $months), 'No payments recorded yet.'));
+        $inv = array_column($db->all("SELECT status, COUNT(*) n FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' GROUP BY status", [$t]), 'n', 'status');
+        $bars = [];
+        foreach (['issued' => 'Open', 'paid' => 'Paid', 'void' => 'Void'] as $k => $n) {
+            $bars[] = [$n, (int) ($inv[$k] ?? 0), url('portal/billing')];
+        }
+        $charts .= $card('Invoices by state', \Selfcare\Charts::bars($bars));
+    }
+    if ($p->can('manage_users') && $p->module('staff')) {
+        $roles = $db->all("SELECT d.name, COUNT(*) n FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE u.tenant_id = ? AND u.deleted_at IS NULL AND d.name NOT IN ('Patient', 'Family Member', 'Referring Doctor', 'B2B Customer') GROUP BY d.name ORDER BY n DESC", [\Selfcare\Auth::ROLE_MODEL, $t]);
+        $charts .= $card('Team by role', \Selfcare\Charts::bars(array_map(fn ($r) => [$app->access->roleLabel((string) $r['name'], $p->family), (int) $r['n'], url('portal/staff')], $roles)));
+    }
+    if ($charts !== '') {
+        $h .= '<div class="d-grid d-g2">' . $charts . '</div>';
+    }
     if ($p->can('manage_appointments')) {
         $rows = $db->all('SELECT * FROM sc_appointment_requests WHERE tenant_id = ? ORDER BY id DESC LIMIT 6', [$t]);
         $r = '';
         foreach ($rows as $x) {
-            $r .= '<tr><td data-label="Name">' . e($x['name']) . '</td><td data-label="Phone">' . e($x['phone']) . '</td><td data-label="Date">' . e(dt($x['preferred_date'])) . '</td><td data-label="Status"><span class="d-badge is-' . ['new' => 'warn', 'confirmed' => 'info', 'done' => 'ok', 'cancelled' => 'mute'][$x['status']] . '">' . e(ucfirst($x['status'])) . '</span></td></tr>';
+            $r .= '<tr><td data-label="Name"><a href="' . e(url('portal/requests/' . $x['id'])) . '">' . e($x['name']) . '</a></td><td data-label="Phone">' . e($x['phone']) . '</td><td data-label="Date">' . e(dt($x['preferred_date'])) . '</td><td data-label="Status"><span class="d-badge is-' . (['new' => 'warn', 'confirmed' => 'info', 'done' => 'ok', 'cancelled' => 'mute', 'rejected' => 'bad'][$x['status']] ?? 'mute') . '">' . e(ucfirst($x['status'])) . '</span></td></tr>';
         }
-        $h .= $card('Latest ' . strtolower($p->label('requests', 'requests')), $rows ? '<div class="d-table-wrap"><table class="d-table"><thead><tr><th>Name</th><th>Phone</th><th>Date</th><th>Status</th></tr></thead><tbody>' . $r . '</tbody></table></div><p style="margin-top:12px">' . $btn('See all', url('portal/requests'), 'd-btn-soft') . '</p>' : '<div class="d-empty"><div class="d-empty-art">' . icon('cal', 28) . '</div><h3>Nothing yet</h3><p>When people send a request from your website it appears here.</p><a class="d-btn d-btn-primary" href="' . e($app->tenant->siteUrl((string) $p->vendor['slug'])) . '" target="_blank" rel="noopener">Open my website</a></div>');
+        $h .= $card('Latest ' . strtolower($lab), $rows ? '<div class="d-table-wrap"><table class="d-table"><thead><tr><th>Name</th><th>Phone</th><th>Date</th><th>Status</th></tr></thead><tbody>' . $r . '</tbody></table></div><p style="margin-top:12px">' . $btn('See all', url('portal/requests'), 'd-btn-soft') . '</p>' : '<p class="d-mute">Nothing yet.</p>');
     }
     $quick = '';
     foreach ([['manage_invoices', 'billing', 'portal/billing', 'Make an invoice', 'card'], ['manage_reports', 'reports', 'portal/reports', 'Open reports', 'chart'], ['manage_settings', 'website', 'portal/website', 'Edit my website', 'globe'], ['manage_users', 'staff', 'portal/staff', 'Add staff', 'user']] as [$perm, $mod, $path, $label, $ic]) {
@@ -102,35 +138,99 @@ $app->router->get('/portal/mine', static function () use ($app, $dash, $card): v
     $dash($p, 'mine', 'My requests', $card('', $rows ? '<div class="d-table-wrap"><table class="d-table"><thead><tr><th>Date</th><th>Note</th><th>Status</th></tr></thead><tbody>' . $h . '</tbody></table></div>' : '<div class="d-empty"><h3>No requests yet</h3><p>Requests you send from the website with your email appear here.</p></div>'));
 });
 
-// ------------------------------------------------------------------ requests
-$app->router->get('/portal/requests', static function () use ($app, $dash, $card): void {
+// ------------------------------------------------------------------ requests (appointments, bookings, orders, enquiries)
+$reqTone = ['new' => 'warn', 'confirmed' => 'info', 'done' => 'ok', 'cancelled' => 'mute', 'rejected' => 'bad'];
+$app->router->get('/portal/requests', static function () use ($app, $dash, $card, $reqTone): void {
     $p = Portal::boot($app);
     $p->need('manage_appointments');
-    $tone = ['new' => 'warn', 'confirmed' => 'info', 'done' => 'ok', 'cancelled' => 'mute'];
-    $act = static function (string $st, string $label, string $ic, ?string $when = null) use ($p) {
-        return ['label' => $label, 'icon' => $ic, 'method' => 'post', 'url' => fn ($r) => url('portal/requests/' . $r['id'] . '/' . $st), 'if' => fn ($r) => $p->writable() && $r['status'] !== $st];
-    };
+    if (!isset($_GET['f_status'])) {
+        $_GET['f_status'] = 'new';
+    }
+    $lab = strtolower($p->label('requests', 'requests'));
+    $act = static fn (string $st, string $label, string $ic, string $ok, string $confirm = '') => ['label' => $label, 'icon' => $ic, 'method' => 'post', 'url' => fn ($r) => url('portal/requests/' . $r['id'] . '/' . $st), 'if' => fn ($r) => $p->writable() && in_array($r['status'], $ok === 'open' ? ['new'] : ($ok === 'live' ? ['new', 'confirmed'] : ['confirmed']), true), 'confirm' => $confirm, 'danger' => $st === 'cancel'];
     $html = Listing::render($app->db, [
         'id' => 'requests', 'select' => 'r.*, u.first_name AS dfn, u.last_name AS dln', 'from' => 'sc_appointment_requests r LEFT JOIN doctors d ON d.id = r.doctor_id LEFT JOIN users u ON u.id = d.user_id',
         'where' => ['r.tenant_id = ?'], 'params' => [$p->tenantId], 'search' => ['r.name', 'r.phone', 'r.email', 'r.message'], 'search_hint' => 'Search by name, phone or note',
-        'filters' => ['status' => ['label' => 'Status', 'sql' => 'r.status = ?', 'options' => ['new' => 'New', 'confirmed' => 'Confirmed', 'done' => 'Done', 'cancelled' => 'Cancelled']]],
-        'columns' => ['name' => ['label' => 'Name', 'sort' => 'r.name'], 'phone' => ['label' => 'Phone'], 'preferred_date' => ['label' => 'Date', 'sort' => 'r.preferred_date', 'type' => 'date'], 'doctor' => ['label' => 'With', 'render' => fn ($r) => $r['dfn'] ? e('Dr. ' . $r['dfn'] . ' ' . $r['dln']) : '<span class="d-mute">Anyone</span>'], 'message' => ['label' => 'Note'], 'status' => ['label' => 'Status', 'sort' => 'r.status', 'type' => 'badge'], 'created_at' => ['label' => 'Received', 'sort' => 'r.id', 'type' => 'datetime']],
-        'badges' => ['status' => $tone], 'sort' => 'created_at', 'dir' => 'desc',
-        'actions' => [$act('confirmed', 'Confirm', 'check'), $act('done', 'Done', 'check'), $act('cancelled', 'Cancel', 'x')],
-        'empty' => ['title' => 'No ' . strtolower($p->label('requests', 'requests')) . ' yet', 'text' => 'People can send one from your website. Share your website address to get the first one.'],
+        'filters' => ['status' => ['label' => 'Status', 'sql' => 'r.status = ?', 'options' => ['new' => 'Waiting', 'confirmed' => 'Approved', 'done' => 'Done', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled']]],
+        'columns' => ['name' => ['label' => 'Name', 'sort' => 'r.name', 'render' => fn ($r) => '<a href="' . e(url('portal/requests/' . $r['id'])) . '"><b>' . e($r['name']) . '</b></a>'], 'phone' => ['label' => 'Phone'], 'preferred_date' => ['label' => 'Date', 'sort' => 'r.preferred_date', 'type' => 'date'],
+            'doctor' => ['label' => 'With', 'render' => fn ($r) => $r['dfn'] ? e(trim($r['dfn'] . ' ' . $r['dln'])) : '<span class="d-mute">Any</span>'], 'message' => ['label' => 'Note', 'render' => fn ($r) => e(mb_strimwidth((string) $r['message'], 0, 70, '…'))], 'status' => ['label' => 'Status', 'sort' => 'r.status', 'type' => 'badge'], 'created_at' => ['label' => 'Received', 'sort' => 'r.created_at', 'type' => 'date']],
+        'badges' => ['status' => $reqTone], 'sort' => 'created_at', 'dir' => 'desc',
+        'actions' => [['label' => 'Open', 'icon' => 'eye', 'url' => fn ($r) => url('portal/requests/' . $r['id'])], $act('approve', 'Approve', 'check', 'open', 'Approve this request?'), $act('done', 'Done', 'check', 'confirmed'), $act('cancel', 'Cancel', 'x', 'live', 'Cancel this request?')],
+        'empty' => ['title' => 'No ' . $lab . ' here', 'text' => 'People can send one from your website. Share your website address to get the first one.'],
     ]);
-    $dash($p, 'requests', $p->label('requests', 'Requests'), $card('', $html), ['sub' => 'Sent from your website. Update the status as you reply.']);
+    $dash($p, 'requests', $p->label('requests', 'Requests'), $card('', $html), ['sub' => 'Sent from your website. Open one to approve, reject with a reason or cancel.']);
 });
-$app->router->post('/portal/requests/{id}/{status}', static function (array $a) use ($app): void {
+$app->router->get('/portal/requests/{id}', static function (array $a) use ($app, $dash, $card, $reqTone, $btn): void {
     $p = Portal::boot($app);
     $p->need('manage_appointments');
-    $p->needWritable();
-    if (in_array($a['status'], ['confirmed', 'done', 'cancelled', 'new'], true)) {
-        $app->db->run('UPDATE sc_appointment_requests SET status = ? WHERE id = ? AND tenant_id = ?', [$a['status'], (int) $a['id'], $p->tenantId]);
-        flash('Updated.', 'ok');
+    $r = $app->db->one('SELECT r.*, u.first_name AS dfn, u.last_name AS dln FROM sc_appointment_requests r LEFT JOIN doctors d ON d.id = r.doctor_id LEFT JOIN users u ON u.id = d.user_id WHERE r.id = ? AND r.tenant_id = ?', [(int) $a['id'], $p->tenantId]);
+    if ($r === null) {
+        $app->error(404, 'We could not find that request.');
     }
-    redirect($_SERVER['HTTP_REFERER'] ?? url('portal/requests'));
+    $id = (int) $r['id'];
+    $w = $p->writable();
+    $form = static fn (string $path, string $label, string $cls, string $confirm = '') => '<form class="d-inline" method="post" action="' . e(url('portal/requests/' . $id . '/' . $path)) . '"' . ($confirm ? ' data-confirm="' . e($confirm) . '"' : '') . '>' . csrf_field() . '<button class="d-btn ' . $cls . '" type="submit">' . e($label) . '</button></form> ';
+    $by = $r['decided_by'] ? $app->db->one('SELECT first_name, last_name FROM users WHERE id = ?', [(int) $r['decided_by']]) : null;
+    $dl = '<dl class="d-kv"><dt>Status</dt><dd><span class="d-badge is-' . $reqTone[$r['status']] . '">' . e(['new' => 'Waiting', 'confirmed' => 'Approved', 'done' => 'Done', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'][$r['status']] ?? $r['status']) . '</span></dd><dt>Name</dt><dd><b>' . e($r['name']) . '</b></dd><dt>Phone</dt><dd><a href="tel:' . e((string) $r['phone']) . '">' . e($r['phone']) . '</a></dd><dt>Email</dt><dd>' . e((string) $r['email']) . '</dd><dt>Preferred date</dt><dd>' . e(dt((string) $r['preferred_date'])) . '</dd>'
+        . ($r['dfn'] ? '<dt>With</dt><dd>' . e(trim($r['dfn'] . ' ' . $r['dln'])) . '</dd>' : '') . '<dt>Note</dt><dd>' . e((string) $r['message']) . '</dd><dt>Received</dt><dd>' . e(dt((string) $r['created_at'], 'd M Y H:i')) . '</dd>'
+        . ($r['reason'] ? '<dt>Reason</dt><dd>' . e((string) $r['reason']) . '</dd>' : '') . ($r['decided_at'] ? '<dt>Decided</dt><dd>' . e(dt((string) $r['decided_at'], 'd M Y H:i')) . ($by ? ' by ' . e(trim($by['first_name'] . ' ' . $by['last_name'])) : '') . '</dd>' : '') . '</dl>';
+    $acts = '';
+    if ($w) {
+        if ($r['status'] === 'new') {
+            $acts .= $form('approve', 'Approve', 'd-btn-primary', 'Approve this request?');
+        }
+        if ($r['status'] === 'confirmed') {
+            $acts .= $form('done', 'Mark done', 'd-btn-primary');
+        }
+        if (in_array($r['status'], ['new', 'confirmed'], true)) {
+            $acts .= $form('cancel', 'Cancel', 'd-btn-soft', 'Cancel this request?');
+        }
+        if (in_array($r['status'], ['rejected', 'cancelled', 'done'], true)) {
+            $acts .= $form('reopen', 'Reopen', 'd-btn-soft');
+        }
+    }
+    $h = '<div class="d-grid d-g2">' . $card('Request #' . $id, $dl . ($acts ? '<p style="margin-top:14px">' . $acts . '</p>' : ''));
+    if ($w && $r['status'] === 'new') {
+        $h .= $card('Reject with a reason', '<p class="d-help">The reason is saved and emailed to ' . e($r['name']) . ' when they gave an email.</p><form class="d-form" method="post" action="' . e(url('portal/requests/' . $id . '/reject')) . '">' . csrf_field() . '<div class="d-form-grid">' . Crud::field('reason', ['label' => 'Reason', 'type' => 'textarea', 'required' => true, 'max' => 240, 'rows' => 3], '') . '</div><div class="d-form-actions"><button class="d-btn d-btn-danger" type="submit">Reject</button></div></form>');
+    }
+    $h .= '</div>';
+    $dash($p, 'requests', 'Request from ' . $r['name'], $h, ['actions' => $btn('Back to the list', url('portal/requests'), 'd-btn-soft')]);
 });
+$reqDo = static function (string $path, string $to, string $ok, bool $needReason = false) use ($app): void {
+    $app->router->post('/portal/requests/{id}/' . $path, static function (array $a) use ($app, $to, $ok, $needReason, $path): void {
+        $p = Portal::boot($app);
+        $p->need('manage_appointments');
+        $p->needWritable();
+        $id = (int) $a['id'];
+        $r = $app->db->one('SELECT * FROM sc_appointment_requests WHERE id = ? AND tenant_id = ?', [$id, $p->tenantId]);
+        if ($r === null) {
+            $app->error(404, 'We could not find that request.');
+        }
+        $reason = mb_substr(trim((string) ($_POST['reason'] ?? '')), 0, 240);
+        $allowed = ['approve' => ['new'], 'done' => ['confirmed'], 'cancel' => ['new', 'confirmed'], 'reject' => ['new'], 'reopen' => ['rejected', 'cancelled', 'done']][$path];
+        if ($needReason && $reason === '') {
+            flash('Please write the reason.', 'bad');
+            redirect(url('portal/requests/' . $id));
+        }
+        if (!in_array($r['status'], $allowed, true)) {
+            flash('This request is already ' . $r['status'] . '.', 'bad');
+            redirect(url('portal/requests/' . $id));
+        }
+        $app->db->run('UPDATE sc_appointment_requests SET status = ?, reason = ?, decided_by = ?, decided_at = NOW() WHERE id = ?', [$to, $needReason ? $reason : ($to === 'new' ? null : $r['reason']), (int) $p->user['id'], $id]);
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'request_' . $path, $r['status'], $to, 'Request #' . $id . ($reason !== '' ? ': ' . $reason : ''));
+        if ($r['email'] && in_array($path, ['approve', 'reject', 'cancel'], true)) {
+            $word = ['approve' => 'approved', 'reject' => 'not accepted', 'cancel' => 'cancelled'][$path];
+            $app->mailer->send((string) $r['email'], 'Your request to ' . $p->vendor['name'] . ' is ' . $word, 'Hello ' . $r['name'] . ",\n\nYour request for " . dt((string) $r['preferred_date']) . ' was ' . $word . ' by ' . $p->vendor['name'] . '.' . ($reason !== '' ? "\n\nReason: " . $reason : '') . "\n\n" . $p->vendor['name']);
+        }
+        flash($ok, 'ok');
+        redirect($_SERVER['HTTP_REFERER'] ?? url('portal/requests'));
+    });
+};
+$reqDo('approve', 'confirmed', 'Approved.');
+$reqDo('done', 'done', 'Marked done.');
+$reqDo('cancel', 'cancelled', 'Cancelled.');
+$reqDo('reject', 'rejected', 'Rejected. The reason was saved.', true);
+$reqDo('reopen', 'new', 'Reopened.');
 
 // ------------------------------------------------------------------ people (doctors / patients / staff)
 $peopleCfg = ['doctors' => ['manage_doctors', 'doctors', 'team', 'Add'], 'patients' => ['manage_patients', 'patients', 'people', 'Register'], 'staff' => ['manage_users', 'staff', null, 'Add']];
@@ -158,6 +258,47 @@ foreach ($peopleCfg as $kind => [$perm, $mod, $labelKey, $verb]) {
         }
         $dash($p, $kind, ($id ? 'Edit ' : 'New ') . ($kind === 'staff' ? 'staff member' : strtolower(rtrim($title($p), 's'))), $card('', $people->form($kind, $id)));
     };
+    $app->router->get('/portal/' . $kind . '/{id}/view', static function (array $a) use ($app, $dash, $card, $kind, $title, $guard, $btn): void {
+        $p = Portal::boot($app);
+        $guard($p);
+        $people = new People($app, $p);
+        $dash($p, $kind, 'Profile', $people->profile($kind, (int) $a['id']), ['actions' => $btn('Back to ' . strtolower($title($p)), url('portal/' . $kind), 'd-btn-soft')]);
+    });
+    $app->router->get('/portal/' . $kind . '/{id}/delete', static function (array $a) use ($app, $dash, $card, $kind, $guard): void {
+        $p = Portal::boot($app);
+        $guard($p);
+        $p->needWritable();
+        $people = new People($app, $p);
+        if ($people->find($kind, (int) $a['id']) === null) {
+            $app->error(404, 'We could not find that person.');
+        }
+        $dash($p, $kind, 'Delete', $card('', $people->deleteForm($kind, (int) $a['id'])));
+    });
+    $mutate = static function (string $path, callable $do, string $ok) use ($app, $kind, $guard, $posted): void {
+        $app->router->post('/portal/' . $kind . '/{id}/' . $path, static function (array $a) use ($app, $kind, $guard, $posted, $do, $ok): void {
+            $p = Portal::boot($app);
+            $guard($p);
+            $p->needWritable();
+            $err = $do(new People($app, $p), $kind, (int) $a['id']);
+            $posted($ok, url('portal/' . $kind . '/' . $a['id'] . '/view'), $err);
+        });
+    };
+    $mutate('suspend', static fn (People $pe, string $k, int $id) => $pe->setState($k, $id, 0), 'Account suspended.');
+    $mutate('activate', static fn (People $pe, string $k, int $id) => $pe->setState($k, $id, 1), 'Account activated.');
+    $mutate('restore', static fn (People $pe, string $k, int $id) => $pe->restore($k, $id), 'Restored. The account is suspended until you activate it.');
+    $mutate('reset', static fn (People $pe, string $k, int $id) => $pe->resetLink($k, $id, ($_POST['mode'] ?? 'email') !== 'link'), 'Done. If no email went out, the one-time link is shown on this page.');
+    $app->router->post('/portal/' . $kind . '/{id}/delete', static function (array $a) use ($app, $kind, $guard, $posted): void {
+        $p = Portal::boot($app);
+        $guard($p);
+        $p->needWritable();
+        $err = (new People($app, $p))->softDelete($kind, (int) $a['id'], (string) ($_POST['confirm'] ?? ''));
+        if ($err !== null) {
+            flash($err, 'bad');
+            redirect(url('portal/' . $kind . '/' . $a['id'] . '/delete'));
+        }
+        flash('Deleted. You can restore from the list, State = Deleted.', 'ok');
+        redirect(url('portal/' . $kind));
+    });
     $app->router->get('/portal/' . $kind . '/new', $form);
     $app->router->get('/portal/' . $kind . '/{id}', $form);
     $app->router->post('/portal/' . $kind . '/save', static function () use ($app, $kind, $guard, $posted): void {
@@ -242,6 +383,43 @@ $app->router->post('/portal/website', static function () use ($app, $profileFiel
         }
     }
     $posted('Saved. Your website is updated.', url('portal/website'));
+});
+
+// ------------------------------------------------------------------ web addresses (custom domains + SSL state)
+$app->router->get('/portal/domains', static function () use ($app, $dash, $card): void {
+    $p = Portal::boot($app);
+    $p->need('manage_settings', 'website');
+    $dash($p, 'domains', 'Web addresses', $card('', $app->domains->panel($p->tenantId, 'portal/domains')), ['sub' => 'Use your own domain for your website. We set up the HTTPS lock for you.']);
+});
+$app->router->post('/portal/domains/add', static function () use ($app, $posted): void {
+    $p = Portal::boot($app);
+    $p->need('manage_settings', 'website');
+    $p->needWritable();
+    $err = $app->domains->add($p->tenantId, (string) ($_POST['host'] ?? ''), (int) $p->user['id']);
+    if ($err === null) {
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'domain_added', null, (string) ($_POST['host'] ?? ''));
+    }
+    $posted('Domain added. Now set the DNS records shown below.', url('portal/domains'), $err);
+});
+$app->router->post('/portal/domains/verify/{id}', static function (array $a) use ($app): void {
+    $p = Portal::boot($app);
+    $p->need('manage_settings', 'website');
+    $row = $app->db->one('SELECT * FROM sc_domains WHERE id = ? AND tenant_id = ?', [(int) $a['id'], $p->tenantId]);
+    if ($row !== null) {
+        [$ok, $msg] = $app->domains->verify($row);
+        flash($ok ? 'DNS is right. We are getting the HTTPS certificate now, this takes a few minutes.' : $msg, $ok ? 'ok' : 'bad');
+    }
+    redirect(url('portal/domains'));
+});
+$app->router->post('/portal/domains/remove/{id}', static function (array $a) use ($app): void {
+    $p = Portal::boot($app);
+    $p->need('manage_settings', 'website');
+    $p->needWritable();
+    if ($app->domains->remove($p->tenantId, (int) $a['id'])) {
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'domain_removed', (int) $a['id'], null);
+        flash('Domain removed.', 'ok');
+    }
+    redirect(url('portal/domains'));
 });
 
 // ------------------------------------------------------------------ website content lists (Crud modules)

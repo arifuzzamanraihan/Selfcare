@@ -17,12 +17,13 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
 </head>
 <body class="d-body">
 <a class="sc-skip" href="#main">Skip to content</a>
+<?php if (!empty($impBanner)): ?><div class="d-imp" role="alert"><?= $impBanner ?></div><?php endif; ?>
 <div class="d-shell">
   <aside class="d-side" data-side aria-label="Menu">
     <a class="d-side-brand" href="<?= e(\Selfcare\url($navHome ?? 'portal')) ?>"><img src="<?= e($logo) ?>" width="32" height="32" alt=""><span>Self Care</span></a>
     <div class="d-org"><b><?= e((string) $orgName) ?></b><span><?= e((string) $orgSub) ?></span></div>
     <nav>
-      <?php foreach ($nav as $g): ?><div class="d-nav-g"><h5><?= e((string) $g['group']) ?></h5><?php foreach ($g['items'] as $i): ?><a href="<?= e($i['url']) ?>" class="<?= $active === $i['key'] ? 'is-on' : '' ?>"<?= $active === $i['key'] ? ' aria-current="page"' : '' ?>><?= icon((string) $i['icon'], 18) ?><span><?= e($i['label']) ?></span></a><?php endforeach; ?></div><?php endforeach; ?>
+      <?php foreach ($nav as $g): ?><div class="d-nav-g"><h5><?= e((string) $g['group']) ?></h5><?php foreach ($g['items'] as $i): ?><a href="<?= e($i['url']) ?>" class="<?= $active === $i['key'] ? 'is-on' : '' ?>"<?= $active === $i['key'] ? ' aria-current="page"' : '' ?>><?= icon((string) $i['icon'], 18) ?><span><?= e($i['label']) ?></span><?php if (!empty($i['badge'])): ?><em class="d-navbadge"><?= (int) $i['badge'] ?></em><?php endif; ?></a><?php endforeach; ?></div><?php endforeach; ?>
     </nav>
     <div class="d-side-foot">
       <?php if (!empty($siteLink)): ?><a class="d-btn d-btn-soft" href="<?= e($siteLink) ?>" target="_blank" rel="noopener"><?= icon('globe', 16) ?> View my website</a><?php endif; ?>

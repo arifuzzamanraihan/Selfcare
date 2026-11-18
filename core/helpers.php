@@ -41,6 +41,22 @@ function host_url(string $host, string $path = '', array $query = []): string
     return (is_https() ? 'https://' : 'http://') . $host . url($path, $query);
 }
 
+/**
+ * Redirect that may leave this host (main site <-> vendor site). A plain 302 after a form POST is blocked by the
+ * Content-Security-Policy form-action rule, so another host gets a tiny page that moves on by itself.
+ */
+function hop(string $to): never
+{
+    $host = parse_url($to, PHP_URL_HOST);
+    if ($host === null || $host === false || strcasecmp((string) $host . (($p = parse_url($to, PHP_URL_PORT)) ? ':' . $p : ''), (string) ($_SERVER['HTTP_HOST'] ?? '')) === 0) {
+        redirect($to);
+    }
+    header('Cache-Control: no-store');
+    header('Referrer-Policy: no-referrer');
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($to, ENT_QUOTES) . '"><title>One moment</title></head><body style="font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;text-align:center"><p>One moment, taking you there. <a href="' . htmlspecialchars($to, ENT_QUOTES) . '">Continue</a></p></body></html>';
+    exit;
+}
+
 function redirect(string $to): never
 {
     header('Location: ' . $to);
@@ -101,10 +117,9 @@ function slugify(string $s): string
     return substr($s, 0, 40);
 }
 
-function money(float $amount, string $currency = 'USD'): string
+function money(float $amount, ?string $currency = null): string
 {
-    $sym = ['USD' => '$', 'EUR' => '€', 'GBP' => '£', 'BDT' => '৳', 'INR' => '₹'][$currency] ?? ($currency . ' ');
-    return $sym . ($amount == floor($amount) ? number_format($amount, 0) : number_format($amount, 2));
+    return Currency::fmt($amount, $currency, true);
 }
 
 function dt(?string $value, string $fmt = 'd M Y'): string

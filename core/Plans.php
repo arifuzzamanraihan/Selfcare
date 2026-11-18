@@ -46,6 +46,35 @@ final class Plans
         return $this->db->one('SELECT * FROM sc_plans WHERE id = ?', [$id]);
     }
 
+    /** Extra prices typed as lines "PKR 8000". @return array<string,float> */
+    public static function otherPrices(array $plan): array
+    {
+        $out = [];
+        foreach (preg_split('/[\r\n,;]+/', (string) ($plan['other_prices'] ?? '')) ?: [] as $line) {
+            if (preg_match('/^\s*([A-Za-z]{3})\s*[:=]?\s*([0-9][0-9.]*)\s*$/', $line, $m)) {
+                $out[strtoupper($m[1])] = (float) $m[2];
+            }
+        }
+        return $out;
+    }
+
+    /** Monthly price to show: [amount, currency]. Uses the price in $want (default: platform currency) when the plan has one. @return array{0:float,1:string} */
+    public static function price(array $plan, ?string $want = null): array
+    {
+        $want = $want ?? Currency::platform();
+        if ((string) $plan['currency'] === $want) {
+            return [(float) $plan['price'], $want];
+        }
+        $o = self::otherPrices($plan);
+        return isset($o[$want]) ? [$o[$want], $want] : [(float) $plan['price'], (string) $plan['currency']];
+    }
+
+    public static function priceText(array $plan, ?string $want = null): string
+    {
+        [$a, $c] = self::price($plan, $want);
+        return Currency::fmt($a, $c, true);
+    }
+
     /** Is this plan offered to a vendor type? */
     public function fitsType(array $plan, string $typeSlug): bool
     {
@@ -120,6 +149,23 @@ final class Plans
                 'ends_at' => $len > 0 ? date('Y-m-d H:i:s', time() + $len * 86400) : null,
                 'status' => 'active', 'note' => $note !== null ? mb_substr($note, 0, 250) : null, 'assigned_by' => $by,
             ]);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    /** Gives a plan for an exact date range (ends null = never ends). */
+    public function assignRange(string $tenantId, int $planId, string $starts, ?string $ends, ?string $note, ?int $by): void
+    {
+        if ($this->find($planId) === null) {
+            throw new \InvalidArgumentException('Plan not found');
+        }
+        $this->db->begin();
+        try {
+            $this->db->run("UPDATE sc_subscriptions SET status = 'replaced' WHERE tenant_id = ? AND status = 'active'", [$tenantId]);
+            $this->db->insert('sc_subscriptions', ['tenant_id' => $tenantId, 'plan_id' => $planId, 'starts_at' => $starts, 'ends_at' => $ends, 'status' => 'active', 'note' => $note !== null ? mb_substr($note, 0, 250) : null, 'assigned_by' => $by]);
             $this->db->commit();
         } catch (\Throwable $e) {
             $this->db->rollBack();
