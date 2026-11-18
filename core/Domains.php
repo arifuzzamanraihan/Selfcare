@@ -113,6 +113,11 @@ final class Domains
     /** Marks a custom domain as ready for its certificate when DNS is right. @return array{0:bool,1:string} */
     public function verify(array $row): array
     {
+        if ($row['kind'] === 'subdomain') { // the address always points to us; just ask the worker to try again now
+            $now = date('Y-m-d H:i:s');
+            $this->db->run("UPDATE sc_domains SET status = 'pending_cert', attempts = 0, next_try_at = ?, updated_at = ? WHERE id = ? AND status <> 'active'", [$now, $now, (int) $row['id']]);
+            return [true, 'Queued. The certificate is requested within a few minutes.'];
+        }
         [$ok, $msg] = $this->checkDns((string) $row['host'], (string) $row['tenant_id']);
         $now = date('Y-m-d H:i:s');
         if ($ok && in_array($row['status'], ['pending_dns', 'failed'], true)) {
@@ -139,6 +144,9 @@ final class Domains
         foreach ($rows as $r) {
             [$lab, $cls] = $label[$r['status']] ?? [(string) $r['status'], 'mute'];
             $act = '';
+            if ($r['kind'] === 'subdomain' && $r['status'] !== 'active') {
+                $act .= '<form class="d-inline" method="post" action="' . e(url($postBase . '/verify/' . (int) $r['id'])) . '">' . csrf_field() . '<button class="d-act" type="submit">Try again now</button></form>';
+            }
             if ($r['kind'] === 'custom') {
                 $act .= '<form class="d-inline" method="post" action="' . e(url($postBase . '/verify/' . (int) $r['id'])) . '">' . csrf_field() . '<button class="d-act" type="submit">Check DNS now</button></form> ';
                 $act .= '<form class="d-inline" method="post" action="' . e(url($postBase . '/remove/' . (int) $r['id'])) . '" data-confirm="Remove this domain? Visitors will no longer reach your website on it.">' . csrf_field() . '<button class="d-act is-danger" type="submit">Remove</button></form>';

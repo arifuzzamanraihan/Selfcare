@@ -10,3 +10,5 @@ ALTER TABLE sc_plans ADD COLUMN IF NOT EXISTS other_prices TEXT NULL COMMENT 'ex
 ALTER TABLE sc_appointment_requests ADD COLUMN IF NOT EXISTS reason VARCHAR(240) NULL COMMENT 'why it was rejected or cancelled';
 ALTER TABLE sc_appointment_requests ADD COLUMN IF NOT EXISTS decided_by BIGINT UNSIGNED NULL;
 ALTER TABLE sc_appointment_requests ADD COLUMN IF NOT EXISTS decided_at DATETIME NULL;
+
+ALTER TABLE sc_domains ADD COLUMN IF NOT EXISTS cert_name VARCHAR(190) NULL AFTER cert_at;

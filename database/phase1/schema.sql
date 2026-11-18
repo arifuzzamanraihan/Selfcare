@@ -413,6 +413,7 @@ CREATE TABLE IF NOT EXISTS sc_domains (
   next_try_at DATETIME NULL,
   dns_ok_at DATETIME NULL,
   cert_at DATETIME NULL,
+  cert_name VARCHAR(190) NULL COMMENT 'host that names the certificate file (shared by batched addresses)',
   created_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,

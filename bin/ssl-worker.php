@@ -44,7 +44,8 @@ $sh = static function (string $cmd, ?int &$code = null): string {
 
 $confPath = static fn (string $host): string => $vhostDir . '/0.sc-' . $host . '.conf';
 
-$block = static function (string $host, bool $withSsl) use ($docroot, $certDir, $php): string {
+$block = static function (string $host, bool $withSsl, ?string $certHost = null) use ($docroot, $certDir, $php): string {
+    $certHost = $certHost ?? $host;
     $common = "    ServerAdmin webmaster@$host\n    DocumentRoot \"$docroot\"\n    ServerName $host\n    ErrorLog \"/www/wwwlogs/selfcare.easybzi.com-error_log\"\n    CustomLog \"/www/wwwlogs/selfcare.easybzi.com-access_log\" combined\n";
     $tail = "    <FilesMatch \\.php\$>\n        SetHandler \"$php\"\n    </FilesMatch>\n    <Files ~ (\\.user.ini|\\.htaccess|\\.git|\\.env|\\.svn|\\.project|LICENSE|README.md)\$>\n        Order allow,deny\n        Deny from all\n    </Files>\n    <Directory \"$docroot\">\n        Options FollowSymLinks\n        AllowOverride All\n        Require all granted\n        DirectoryIndex index.php index.html\n    </Directory>\n";
     $http = "<VirtualHost *:80>\n$common";
@@ -55,7 +56,7 @@ $block = static function (string $host, bool $withSsl) use ($docroot, $certDir, 
     if (!$withSsl) {
         return $http;
     }
-    return $http . "<VirtualHost *:443>\n$common    SSLEngine On\n    SSLCertificateFile $certDir/$host/fullchain.pem\n    SSLCertificateKeyFile $certDir/$host/privkey.pem\n    SSLProtocol All -SSLv2 -SSLv3 -TLSv1\n    SSLHonorCipherOrder On\n$tail</VirtualHost>\n";
+    return $http . "<VirtualHost *:443>\n$common    SSLEngine On\n    SSLCertificateFile $certDir/$certHost/fullchain.pem\n    SSLCertificateKeyFile $certDir/$certHost/privkey.pem\n    SSLProtocol All -SSLv2 -SSLv3 -TLSv1\n    SSLHonorCipherOrder On\n$tail</VirtualHost>\n";
 };
 
 /** Writes a vhost file, tests Apache, reloads. Puts the old file back when the test fails. */
@@ -102,7 +103,53 @@ foreach ($db->all("SELECT * FROM sc_domains WHERE status = 'removed' AND kind = 
     }
 }
 
-$todo = $db->all("SELECT * FROM sc_domains WHERE status IN ('pending_dns', 'pending_cert') AND (next_try_at IS NULL OR next_try_at <= ?) ORDER BY id LIMIT 4", [$now]);
+/** Does the installed certificate for $certHost cover every host and last 30 more days? */
+$certCovers = static function (string $certHost, array $hosts) use ($certDir, $sh): bool {
+    $f = $certDir . '/' . $certHost . '/fullchain.pem';
+    if (!is_file($f)) {
+        return false;
+    }
+    $sh('openssl x509 -noout -checkend 2592000 -in ' . escapeshellarg($f), $code);
+    if ($code !== 0) {
+        return false;
+    }
+    $san = $sh('openssl x509 -noout -ext subjectAltName -in ' . escapeshellarg($f));
+    foreach ($hosts as $h) {
+        if (stripos($san, 'DNS:' . $h) === false) {
+            return false;
+        }
+    }
+    return true;
+};
+
+/** Asks Let's Encrypt for one certificate covering $hosts (first one names it) and installs it. @return array{0:bool,1:string} */
+$issue = static function (array $hosts) use ($acme, $docroot, $certDir, $apachectl, $sh): array {
+    $main = $hosts[0];
+    $cmd = escapeshellarg($acme) . ' --issue --ecc --server letsencrypt -w ' . escapeshellarg($docroot) . ' --keylength ec-256';
+    foreach ($hosts as $h) {
+        $cmd .= ' -d ' . escapeshellarg($h);
+    }
+    $out = $sh($cmd, $code);
+    $have = is_file('/root/.acme.sh/' . $main . '_ecc/fullchain.cer');
+    if ($code !== 0 && !($code === 2 && $have)) {
+        return [false, 'Certificate was not issued yet: ' . trim((string) preg_replace('/\s+/', ' ', substr($out, -240)))];
+    }
+    @mkdir($certDir . '/' . $main, 0700, true);
+    $reload = escapeshellarg($apachectl . ' -t && ' . $apachectl . ' graceful');
+    $sh(escapeshellarg($acme) . ' --install-cert --ecc -d ' . escapeshellarg($main) . ' --key-file ' . escapeshellarg($certDir . '/' . $main . '/privkey.pem') . ' --fullchain-file ' . escapeshellarg($certDir . '/' . $main . '/fullchain.pem') . ' --reloadcmd ' . $reload, $code);
+    return is_file($certDir . '/' . $main . '/fullchain.pem') ? [true, ''] : [false, 'Certificate could not be installed.'];
+};
+
+$markActive = static function (array $d, string $certName) use ($db): void {
+    $db->run("UPDATE sc_domains SET status = 'active', cert_name = ?, cert_at = COALESCE(cert_at, NOW()), last_error = NULL, attempts = 0, updated_at = NOW() WHERE id = ?", [$certName, (int) $d['id']]);
+};
+
+// Let's Encrypt allows 50 new certificates per registered domain per week. Stay well below it.
+$weekly = (int) $db->val('SELECT COUNT(DISTINCT cert_name) FROM sc_domains WHERE cert_at >= ?', [date('Y-m-d H:i:s', time() - 7 * 86400)]);
+$budget = 40 - $weekly;
+
+$todo = $db->all("SELECT * FROM sc_domains WHERE status IN ('pending_dns', 'pending_cert') AND (next_try_at IS NULL OR next_try_at <= ?) ORDER BY id LIMIT 20", [$now]);
+$subs = [];
 foreach ($todo as $d) {
     $host = (string) $d['host'];
     if (!preg_match('/^[a-z0-9.-]+$/', $host)) {
@@ -118,33 +165,76 @@ foreach ($todo as $d) {
         $d['status'] = 'pending_cert';
         $log("$host: DNS is right");
     }
-    // 1. custom domains need their own virtual host so the HTTP-01 challenge lands in this app
-    if ($d['kind'] === 'custom' && !is_file($confPath($host))) {
-        if (!$applyConf($host, $block($host, false))) {
+    // a certificate that is already installed and valid is never ordered again
+    $existing = (string) ($d['cert_name'] ?? '') !== '' ? (string) $d['cert_name'] : $host;
+    if ($certCovers($existing, [$host])) {
+        if ($applyConf($host, $block($host, true, $existing))) {
+            $markActive($d, $existing);
+            $log("$host: already covered by the certificate of $existing");
+        } else {
+            $fail($d, 'Could not switch on HTTPS in the web server.');
+        }
+        continue;
+    }
+    if ($budget <= 0) {
+        $db->run('UPDATE sc_domains SET last_error = ?, next_try_at = ?, updated_at = NOW() WHERE id = ?', ['Waiting: weekly certificate limit reached, will retry automatically.', date('Y-m-d H:i:s', time() + 6 * 3600), (int) $d['id']]);
+        $log("$host: deferred (weekly limit)");
+        continue;
+    }
+    if ($d['kind'] === 'custom') {
+        // custom domains need their own virtual host so the HTTP-01 challenge lands in this app
+        if (!is_file($confPath($host)) && !$applyConf($host, $block($host, false))) {
             $fail($d, 'Could not add the web server entry.');
             continue;
         }
-    }
-    // 2. certificate
-    $out = $sh(escapeshellarg($acme) . ' --issue --ecc --server letsencrypt -d ' . escapeshellarg($host) . ' -w ' . escapeshellarg($docroot) . ' --keylength ec-256', $code);
-    $haveCert = is_file(getenv('HOME') . '/.acme.sh/' . $host . '_ecc/fullchain.cer') || is_file('/root/.acme.sh/' . $host . '_ecc/fullchain.cer');
-    if ($code !== 0 && !($code === 2 && $haveCert)) {
-        $line = trim((string) preg_replace('/\s+/', ' ', substr($out, -240)));
-        $fail($d, 'Certificate was not issued yet: ' . $line);
+        [$ok, $err] = $issue([$host]);
+        $budget--;
+        if (!$ok) {
+            $fail($d, $err);
+            continue;
+        }
+        if (!$applyConf($host, $block($host, true))) {
+            $fail($d, 'Could not switch on HTTPS in the web server.');
+            continue;
+        }
+        $markActive($d, $host);
+        $log("$host: HTTPS is live");
         continue;
     }
-    @mkdir($certDir . '/' . $host, 0700, true);
-    $reload = escapeshellarg($apachectl . ' -t && ' . $apachectl . ' graceful');
-    $inst = $sh(escapeshellarg($acme) . ' --install-cert --ecc -d ' . escapeshellarg($host) . ' --key-file ' . escapeshellarg($certDir . '/' . $host . '/privkey.pem') . ' --fullchain-file ' . escapeshellarg($certDir . '/' . $host . '/fullchain.pem') . ' --reloadcmd ' . $reload, $code);
-    if (!is_file($certDir . '/' . $host . '/fullchain.pem')) {
-        $fail($d, 'Certificate could not be installed.');
+    $subs[] = $d; // vendor sub domains are batched below
+}
+
+// Vendor sub domains: one certificate for up to 10 waiting addresses (one order instead of ten).
+$fresh = array_values(array_filter($subs, static fn ($d) => (int) $d['attempts'] === 0));
+$retry = array_values(array_filter($subs, static fn ($d) => (int) $d['attempts'] > 0));
+$chunks = array_merge(array_chunk($fresh, 10), array_map(static fn ($d) => [$d], $retry)); // a retry goes alone
+foreach ($chunks as $chunk) {
+    if ($budget <= 0) {
+        break;
+    }
+    $hosts = array_map(static fn ($d) => (string) $d['host'], $chunk);
+    [$ok, $err] = $issue($hosts);
+    $budget--;
+    if (!$ok && count($hosts) > 1) {
+        // one bad address must not block the others: order them one by one on the next run
+        foreach ($chunk as $d) {
+            $fail($d, $err);
+            $db->run('UPDATE sc_domains SET next_try_at = ? WHERE id = ?', [date('Y-m-d H:i:s', time() + 120), (int) $d['id']]);
+        }
+        $log('batch of ' . count($hosts) . ' failed, will retry: ' . $err);
         continue;
     }
-    // 3. full HTTPS virtual host for SNI
-    if (!$applyConf($host, $block($host, true))) {
-        $fail($d, 'Could not switch on HTTPS in the web server.');
-        continue;
+    foreach ($chunk as $d) {
+        $host = (string) $d['host'];
+        if (!$ok) {
+            $fail($d, $err);
+            continue;
+        }
+        if (!$applyConf($host, $block($host, true, $hosts[0]))) {
+            $fail($d, 'Could not switch on HTTPS in the web server.');
+            continue;
+        }
+        $markActive($d, $hosts[0]);
+        $log("$host: HTTPS is live (certificate $hosts[0], " . count($hosts) . ' address' . (count($hosts) > 1 ? 'es' : '') . ')');
     }
-    $db->run("UPDATE sc_domains SET status = 'active', cert_at = NOW(), last_error = NULL, attempts = 0, updated_at = NOW() WHERE id = ?", [(int) $d['id']]);
-    $log("$host: HTTPS is live");
 }
