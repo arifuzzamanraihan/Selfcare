@@ -106,3 +106,6 @@ html:not(.js) .rv{opacity:1;transform:none}
 [data-theme=dark] .sc-foot::before{background:var(--line);animation:none;height:1px}
 [data-theme=dark] .sc-hero,[data-theme=dark] .sc-section,[data-theme=dark] body{background-image:none}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .sc-btn-primary::after{display:none}:root:not([data-theme=light]) .sc-head{background:var(--bg);backdrop-filter:none}:root:not([data-theme=light]) .sc-foot::before{background:var(--line);animation:none;height:1px}}
+
+/* Public site header: collapse to the menu button earlier so long menus never overflow tablets */
+@media (max-width:1000px){.sc-burger{display:block}.sc-nav{display:none;position:absolute;left:0;right:0;top:100%;flex-direction:column;align-items:stretch;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px 18px;margin:0;max-height:calc(100dvh - 70px);overflow-y:auto}.sc-nav.is-open{display:flex}.sc-theme{align-self:flex-start}}
