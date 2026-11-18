@@ -572,6 +572,9 @@ final class Access
         if (isset($simple[$a])) {
             return $simple[$a];
         }
+        if ($a === 'medicines') {
+            return 'manage_rx';
+        }
         if ($a === 'prescriptions') {
             return $canManageRx ? 'manage_rx' : 'view_rx';
         }

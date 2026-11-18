@@ -7,7 +7,7 @@
 declare(strict_types=1);
 
 use Selfcare\{Billing, Crud, Documents, Listing, Portal, Rx};
-use function Selfcare\{csrf_field, dt, e, flash, icon, money, redirect, url};
+use function Selfcare\{clear_old, csrf_field, dt, e, flash, icon, keep_old, money, old, redirect, url};
 
 $dash = $app->dash;
 ['card' => $card, 'btn' => $btn, 'stat' => $stat] = $app->ui;
@@ -70,7 +70,24 @@ $formHtml = static function (Portal $p, array $cfg, ?array $row, array $items, a
     $extra = $row && $row['extra'] ? (array) json_decode((string) $row['extra'], true) : [];
     $sel = static fn (string $name, array $opts, string $val, string $blank = '', string $attr = ''): string => '<select name="' . e($name) . '" ' . $attr . '>' . ($blank !== '' ? '<option value="">' . e($blank) . '</option>' : '') . implode('', array_map(static fn ($o) => '<option value="' . e((string) $o) . '"' . ((string) $o === $val ? ' selected' : '') . '>' . e((string) $o) . '</option>', $opts)) . '</select>';
     $h = '<form class="d-form" method="post" action="' . e(url('portal/prescriptions/save')) . '" autocomplete="off" data-rx>' . csrf_field() . ($row ? '<input type="hidden" name="id" value="' . (int) $row['id'] . '">' : '');
-    $h .= '<datalist id="rx-drugs">' . implode('', array_map(static fn ($d) => '<option value="' . e($d) . '">', array_values(array_unique(array_merge($rx->usedDrugs($t), Rx::drugs()))))) . '</datalist>';
+    $meds = $rx->medsForPicker($t);
+    $keys = [];
+    $mapJs = [];
+    $dl = '';
+    foreach ($meds as $m) {
+        $nm = Rx::medLabel($m);
+        $key = $nm . ' · ' . trim(($m['strength'] ?? '') . ' ' . ($m['form'] ?? ''));
+        if (isset($keys[$key])) {
+            continue;
+        }
+        $keys[$key] = true;
+        $mapJs[$key] = ['name' => $nm, 'strength' => (string) $m['strength'], 'form' => (string) $m['form'], 'route' => (string) $m['route'], 'dose' => (string) $m['dose'], 'freq' => (string) $m['freq'], 'timing' => (string) $m['timing'], 'dur_n' => $m['dur_n'], 'dur_unit' => (string) $m['dur_unit']];
+        $dl .= '<option value="' . e($key) . '" label="' . e(trim(($m['brand'] ? $m['brand'] . ' · ' : '') . ($m['drug_class'] ?? ''))) . '">';
+    }
+    foreach ($rx->usedDrugs($t) as $u) {
+        $dl .= '<option value="' . e($u) . '">';
+    }
+    $h .= '<datalist id="rx-drugs">' . $dl . '</datalist><script type="application/json" id="rx-meds">' . str_replace('</', '<\/', (string) json_encode($mapJs, JSON_UNESCAPED_UNICODE)) . '</script>';
     $h .= '<datalist id="rx-freq">' . implode('', array_map(static fn ($d) => '<option value="' . e($d) . '">', $cfgAll['freq'])) . '</datalist>';
     // patient
     $h .= '<h3>Patient</h3><div class="d-form-grid">';
@@ -317,6 +334,7 @@ $saveRx = static function (Portal $p, array $cfg, array $post, ?array $row) use 
         $db->rollBack();
         throw $e;
     }
+    $rx->rememberMeds($t, $items, (int) $p->user['id']);
     $audit($p, $row === null ? 'rx_created' : 'rx_edited', null, ['id' => $id, 'patient_id' => $data['patient_id']]);
     return [$id, []];
 };
@@ -545,4 +563,155 @@ $app->router->get('/portal/prescriptions/{id}/pdf', static function (array $a) u
     [$p, $cfg] = $boot();
     $r = $load($p, $a);
     Documents::send($modelFor($p, $cfg, $r), preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) $r['rx_no']) . '.pdf');
+});
+
+// ---------------------------------------------------------------- medicine master (searchable list the doctors pick from)
+// /portal/medicines  list   /new  add   /{id}/edit   /{id}/delete   /{id}/restore.  Seeded with common Pakistan and Bangladesh medicines, then fully the vendor's own.
+$medFields = static function (array $cfg) use ($cfgAll): array {
+    $cls = static fn (array $a): array => array_combine($a, $a);
+    return [
+        'generic' => ['label' => 'Generic name', 'required' => true, 'max' => 190, 'help' => 'The active ingredient, for example Paracetamol.'],
+        'brand' => ['label' => 'Brand names', 'max' => 190, 'help' => 'Separate with a slash. The first one is printed on the prescription.'],
+        'strength' => ['label' => 'Strength', 'max' => 60], 'form' => ['label' => 'Form', 'type' => 'select', 'options' => $cls($cfg['forms'])],
+        'drug_class' => ['label' => 'Used for / class', 'max' => 80, 'help' => 'For example Antibiotic, Blood pressure, Pain and fever.'],
+        'route' => ['label' => 'Route', 'type' => 'select', 'options' => $cls($cfgAll['routes'])],
+        'dose' => ['label' => 'Usual dose', 'max' => 60, 'help' => 'Filled in for the doctor when this medicine is chosen.'],
+        'freq' => ['label' => 'How often', 'type' => 'select', 'options' => $cls($cfgAll['freq'])],
+        'timing' => ['label' => 'When to take', 'type' => 'select', 'options' => $cls(array_slice($cfgAll['timing'], 1)), 'blank_label' => 'Any time'],
+        'dur_n' => ['label' => 'Usual days', 'type' => 'number', 'min' => 0, 'max' => 999],
+        'dur_unit' => ['label' => 'Days, weeks or months', 'type' => 'select', 'options' => $cls($cfgAll['units']), 'default' => 'days'],
+    ];
+};
+$medBoot = static function (bool $write) use ($app): array {
+    $p = Portal::boot($app);
+    $cfg = Rx::forType((string) $p->type['slug']);
+    if ($cfg === null) {
+        $app->error(404, 'The medicine list is not used by your kind of organisation.');
+    }
+    $p->need('manage_rx', 'documents');
+    if ($write) {
+        $p->needWritable();
+    }
+    return [$p, $cfg];
+};
+$app->router->get('/portal/medicines', static function () use ($app, $medBoot, $page, $card, $btn, $stat, $db, $rx): void {
+    [$p, $cfg] = $medBoot(false);
+    $t = $p->tenantId;
+    $rx->seedMeds($t);
+    $w = $p->writable();
+    $n = static fn (string $sql): int => (int) $db->val($sql, [$t]);
+    $classes = array_column($db->all("SELECT DISTINCT drug_class FROM sc_medicines WHERE tenant_id = ? AND drug_class IS NOT NULL AND drug_class <> '' AND deleted_at IS NULL ORDER BY drug_class", [$t]), 'drug_class');
+    $tiles = '<div class="d-stats">' . $stat('Medicines in the list', (string) $n('SELECT COUNT(*) FROM sc_medicines WHERE tenant_id = ? AND deleted_at IS NULL AND active = 1'), 'pill')
+        . $stat('Added by your team', (string) $n("SELECT COUNT(*) FROM sc_medicines WHERE tenant_id = ? AND deleted_at IS NULL AND source <> 'seed'"), 'plus', 'new names are remembered from prescriptions')
+        . $stat('Switched off', (string) $n('SELECT COUNT(*) FROM sc_medicines WHERE tenant_id = ? AND deleted_at IS NULL AND active = 0'), 'x', 'hidden from the search') . '</div>';
+    $acts = [['label' => 'Edit', 'icon' => 'edit', 'if' => static fn ($r) => $w, 'url' => static fn ($r) => url('portal/medicines/' . $r['id'] . '/edit')],
+        ['label' => 'Switch off', 'icon' => 'x', 'method' => 'post', 'if' => static fn ($r) => $w && (int) $r['active'] === 1, 'url' => static fn ($r) => url('portal/medicines/' . $r['id'] . '/edit') . '?active=0'],
+        ['label' => 'Switch on', 'icon' => 'check', 'method' => 'post', 'if' => static fn ($r) => $w && (int) $r['active'] === 0, 'url' => static fn ($r) => url('portal/medicines/' . $r['id'] . '/edit') . '?active=1'],
+        ['label' => 'Delete', 'icon' => 'trash', 'danger' => true, 'method' => 'post', 'confirm' => 'Delete this medicine from your list? Old prescriptions are not changed.', 'if' => static fn ($r) => $w, 'url' => static fn ($r) => url('portal/medicines/' . $r['id'] . '/delete')]];
+    $list = Listing::render($db, [
+        'id' => 'meds', 'select' => 'm.*', 'from' => 'sc_medicines m', 'where' => ['m.tenant_id = ?', 'm.deleted_at IS NULL'], 'params' => [$t],
+        'search' => ['m.generic', 'm.brand', 'm.drug_class', 'm.strength'], 'search_hint' => 'Search by generic name, brand, strength or use',
+        'filters' => ['class' => ['label' => 'Used for', 'sql' => 'm.drug_class = ?', 'options' => array_combine($classes, $classes)], 'form' => ['label' => 'Form', 'sql' => 'm.form = ?', 'options' => array_combine($cfg['forms'], $cfg['forms'])],
+            'active' => ['label' => 'In search', 'sql' => 'm.active = ?', 'options' => ['1' => 'On', '0' => 'Switched off']]],
+        'columns' => [
+            'generic' => ['label' => 'Medicine', 'sort' => 'm.generic', 'render' => static fn ($r) => '<b>' . e((string) $r['generic']) . '</b>' . ($r['brand'] ? '<br><span class="d-mute">' . e((string) $r['brand']) . '</span>' : '')],
+            'strength' => ['label' => 'Strength', 'sort' => 'm.strength'], 'form' => ['label' => 'Form', 'sort' => 'm.form'], 'drug_class' => ['label' => 'Used for', 'sort' => 'm.drug_class'],
+            'dose' => ['label' => 'Usual dose', 'render' => static fn ($r) => e(trim((string) $r['dose'] . ' · ' . preg_replace('/ \(.*\)$/', '', (string) $r['freq']) . ($r['timing'] ? ' · ' . strtolower((string) $r['timing']) : ''), ' ·'))],
+            'active' => ['label' => 'In search', 'render' => static fn ($r) => (int) $r['active'] === 1 ? '<span class="d-badge is-ok">On</span>' : '<span class="d-badge is-mute">Off</span>'],
+        ],
+        'sort' => 'generic', 'dir' => 'asc', 'actions' => $acts,
+        'empty' => ['title' => 'No medicines found', 'text' => 'Add the medicines your doctors prescribe most. They appear in the search while writing a prescription.', 'cta' => $w ? ['label' => 'Add a medicine', 'url' => url('portal/medicines/new')] : null],
+    ]);
+    $page($p, 'Medicine list', $tiles . $card('', $list), ['sub' => 'Doctors search this list while writing a prescription. Choosing a medicine fills in the strength, form, dose and days.', 'actions' => $w ? $btn('Add a medicine', url('portal/medicines/new')) : '']);
+});
+$medForm = static function (Portal $p, array $cfg, ?array $row, string $action) use ($medFields, $card): string {
+    $h = '<form class="d-form" method="post" action="' . e($action) . '">' . csrf_field() . '<div class="d-form-grid">';
+    foreach ($medFields($cfg) as $n => $f) {
+        $h .= Crud::field($n, $f, old($n, (string) ($row[$n] ?? ($f['default'] ?? ''))));
+    }
+    $h .= '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e(url('portal/medicines')) . '">Cancel</a></div></form>';
+    clear_old();
+    return $card('', $h);
+};
+$app->router->get('/portal/medicines/new', static function () use ($medBoot, $page, $medForm): void {
+    [$p, $cfg] = $medBoot(true);
+    $page($p, 'Add a medicine', $medForm($p, $cfg, null, url('portal/medicines/new')), ['sub' => 'It appears in the search for every doctor of your team.']);
+});
+$medSave = static function (Portal $p, array $cfg, ?array $row) use ($medFields, $db, $app): ?string {
+    [$d, $err] = Crud::collect($medFields($cfg));
+    if ($err !== null) {
+        keep_old($_POST);
+        return (string) $err;
+    }
+    $dur = (int) ($d['dur_n'] ?? 0);
+    $d['dur_n'] = $dur > 0 ? min($dur, 999) : null;
+    if ($d['dur_n'] === null) {
+        $d['dur_unit'] = ($d['dur_unit'] ?? '') === 'ongoing' ? 'ongoing' : null;
+    }
+    foreach (['form', 'route', 'freq'] as $k) {
+        if (($d[$k] ?? '') !== '' && !in_array($d[$k], $k === 'form' ? $cfg['forms'] : ($k === 'route' ? Rx::cfg()['routes'] : Rx::cfg()['freq']), true)) {
+            $d[$k] = null;
+        }
+    }
+    $same = $db->val('SELECT id FROM sc_medicines WHERE tenant_id = ? AND deleted_at IS NULL AND generic = ? AND COALESCE(brand, "") = ? AND COALESCE(strength, "") = ? AND COALESCE(form, "") = ? AND id <> ? LIMIT 1',
+        [$p->tenantId, (string) $d['generic'], (string) ($d['brand'] ?? ''), (string) ($d['strength'] ?? ''), (string) ($d['form'] ?? ''), (int) ($row['id'] ?? 0)]);
+    if ($same) {
+        keep_old($_POST);
+        return 'This medicine with the same brand, strength and form is already in the list.';
+    }
+    $now = date('Y-m-d H:i:s');
+    if ($row === null) {
+        $id = $db->insert('sc_medicines', $d + ['tenant_id' => $p->tenantId, 'active' => 1, 'source' => 'vendor', 'created_by' => (int) $p->user['id'], 'created_at' => $now, 'updated_at' => $now]);
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'medicine_added', null, ['id' => $id, 'generic' => $d['generic']]);
+    } else {
+        $db->update('sc_medicines', $d + ['updated_at' => $now], 'id = ? AND tenant_id = ?', [(int) $row['id'], $p->tenantId]);
+        $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'medicine_edited', null, ['id' => (int) $row['id'], 'generic' => $d['generic']]);
+    }
+    return null;
+};
+$app->router->post('/portal/medicines/new', static function () use ($medBoot, $medSave): void {
+    [$p, $cfg] = $medBoot(true);
+    $e = $medSave($p, $cfg, null);
+    if ($e !== null) {
+        flash($e, 'bad');
+        redirect(url('portal/medicines/new'));
+    }
+    flash('Medicine added.', 'ok');
+    redirect(url('portal/medicines'));
+});
+$medLoad = static function (Portal $p, array $a) use ($db, $app): array {
+    $r = $db->one('SELECT * FROM sc_medicines WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL', [(int) $a['id'], $p->tenantId]);
+    if ($r === null) {
+        $app->error(404, 'We could not find that medicine.');
+    }
+    return $r;
+};
+$app->router->get('/portal/medicines/{id}/edit', static function (array $a) use ($medBoot, $page, $medForm, $medLoad): void {
+    [$p, $cfg] = $medBoot(true);
+    $r = $medLoad($p, $a);
+    $page($p, 'Edit ' . $r['generic'], $medForm($p, $cfg, $r, url('portal/medicines/' . $r['id'] . '/edit')));
+});
+$app->router->post('/portal/medicines/{id}/edit', static function (array $a) use ($medBoot, $medSave, $medLoad, $db): void {
+    [$p, $cfg] = $medBoot(true);
+    $r = $medLoad($p, $a);
+    if (isset($_GET['active'])) {
+        $db->update('sc_medicines', ['active' => $_GET['active'] === '1' ? 1 : 0, 'updated_at' => date('Y-m-d H:i:s')], 'id = ? AND tenant_id = ?', [(int) $r['id'], $p->tenantId]);
+        flash($_GET['active'] === '1' ? 'Switched on. Doctors can find it again.' : 'Switched off. It is hidden from the search.', 'ok');
+        redirect(url('portal/medicines'));
+    }
+    $e = $medSave($p, $cfg, $r);
+    if ($e !== null) {
+        flash($e, 'bad');
+        redirect(url('portal/medicines/' . $r['id'] . '/edit'));
+    }
+    flash('Saved.', 'ok');
+    redirect(url('portal/medicines'));
+});
+$app->router->post('/portal/medicines/{id}/delete', static function (array $a) use ($medBoot, $medLoad, $db, $app): void {
+    [$p] = $medBoot(true);
+    $r = $medLoad($p, $a);
+    $db->update('sc_medicines', ['deleted_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')], 'id = ? AND tenant_id = ?', [(int) $r['id'], $p->tenantId]);
+    $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'medicine_deleted', ['id' => (int) $r['id'], 'generic' => $r['generic']], null);
+    flash('Medicine deleted from your list.', 'ok');
+    redirect(url('portal/medicines'));
 });

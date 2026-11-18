@@ -119,6 +119,8 @@ $check('prescription states are valid and issued ones carry the time', "SELECT i
 $check('issued prescriptions have at least one medicine line', "SELECT r.id FROM sc_prescriptions r WHERE r.status = 'issued' AND r.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM sc_prescription_items i WHERE i.prescription_id = r.id)");
 $check('prescription copies point to a prescription of the same vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN sc_prescriptions o ON o.id = r.parent_id AND o.tenant_id = r.tenant_id WHERE r.parent_id IS NOT NULL AND o.id IS NULL');
 $check('saved medicine sets belong to an existing vendor', 'SELECT s.id FROM sc_rx_templates s LEFT JOIN tenants t ON t.id = s.tenant_id WHERE t.id IS NULL');
+$check('medicine list entries belong to an existing vendor', 'SELECT m.id FROM sc_medicines m LEFT JOIN tenants t ON t.id = m.tenant_id WHERE t.id IS NULL');
+$check('medicine list entries have a generic name and a valid state', "SELECT id FROM sc_medicines WHERE TRIM(generic) = '' OR active NOT IN (0, 1) OR source NOT IN ('seed', 'vendor', 'auto')");
 
 echo "audit\n";
 $check('audit lines belong to a vendor or the platform', "SELECT l.id FROM permission_change_log l LEFT JOIN tenants t ON t.id = l.tenant_id WHERE t.id IS NULL AND l.tenant_id NOT IN ('_platform', 'main')", true);

@@ -19,6 +19,18 @@
     wrap.appendChild(tpl.content.cloneNode(true)); wire(wrap.lastElementChild); renumber();
     var i = wrap.lastElementChild.querySelector('input'); if (i) i.focus();
   });
+  // medicine master: choosing a suggestion fills strength, form, dose, how often, when and days (only the boxes that are still empty)
+  var medsEl = document.getElementById('rx-meds'), meds = {};
+  try { meds = medsEl ? JSON.parse(medsEl.textContent) : {}; } catch (e) { meds = {}; }
+  wrap.addEventListener('change', function (ev) {
+    var t = ev.target; if (!t || t.name !== 'drug[]') return;
+    var m = meds[t.value]; if (!m) return;
+    t.value = m.name;
+    var line = t.closest('.rx-line');
+    function fill(n, v) { var e = line.querySelector('[name="' + n + '[]"]'); if (e && v !== null && v !== '' && !e.value) e.value = v; }
+    fill('strength', m.strength); fill('form', m.form); fill('route', m.route); fill('dose', m.dose); fill('freq', m.freq); fill('timing', m.timing); fill('dur_n', m.dur_n);
+    if (m.dur_unit) { var u = line.querySelector('[name="dur_unit[]"]'); if (u && m.dur_n) u.value = m.dur_unit; }
+  });
   var pick = form.querySelector('[data-patient]');
   function set(name, v) { var e = form.querySelector('[name=' + name + ']'); if (e && v !== null) e.value = v; }
   if (pick) pick.addEventListener('change', function () {

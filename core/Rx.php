@@ -226,6 +226,62 @@ final class Rx
         return array_column($this->db->all('SELECT drug, COUNT(*) n FROM sc_prescription_items WHERE tenant_id = ? GROUP BY drug ORDER BY n DESC, drug LIMIT 200', [$tenant]), 'drug');
     }
 
+    // ------------------------------------------------------------------ medicine master (sc_medicines)
+
+    /** Copies the starter list into a vendor's own list the first time it is needed. Returns how many were added. */
+    public function seedMeds(string $tenant): int
+    {
+        if ((int) $this->db->val('SELECT COUNT(*) FROM sc_medicines WHERE tenant_id = ?', [$tenant]) > 0) {
+            return 0;
+        }
+        $now = date('Y-m-d H:i:s');
+        $n = 0;
+        foreach (require __DIR__ . '/config/medicines.php' as $m) {
+            $this->db->insert('sc_medicines', ['tenant_id' => $tenant, 'generic' => $m['generic'], 'brand' => $m['brand'] ?: null, 'strength' => $m['strength'] ?: null, 'form' => $m['form'] ?: null,
+                'drug_class' => $m['class'] ?: null, 'route' => $m['route'] ?: null, 'dose' => $m['dose'] ?: null, 'freq' => $m['freq'] ?: null, 'timing' => $m['timing'] ?: null,
+                'dur_n' => $m['dur_n'], 'dur_unit' => $m['dur_unit'] ?: null, 'active' => 1, 'source' => 'seed', 'created_at' => $now, 'updated_at' => $now]);
+            $n++;
+        }
+        return $n;
+    }
+
+    /** The name printed on a prescription for a master entry: first brand (generic), or just the generic. */
+    public static function medLabel(array $m): string
+    {
+        $b = trim((string) explode('/', (string) ($m['brand'] ?? ''))[0]);
+        return $b !== '' ? $b . ' (' . $m['generic'] . ')' : (string) $m['generic'];
+    }
+
+    /** Active entries for the search box in the prescription editor. @return list<array<string,mixed>> */
+    public function medsForPicker(string $tenant): array
+    {
+        $this->seedMeds($tenant);
+        return $this->db->all('SELECT * FROM sc_medicines WHERE tenant_id = ? AND active = 1 AND deleted_at IS NULL ORDER BY generic, brand, strength', [$tenant]);
+    }
+
+    /** Adds a medicine typed in a prescription to the master when no entry matches its name, so the next search finds it. */
+    public function rememberMeds(string $tenant, array $items, int $userId): int
+    {
+        $n = 0;
+        foreach ($items as $it) {
+            $name = trim((string) ($it['drug'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $bare = trim((string) preg_replace('/\s*\(.*\)\s*$/u', '', $name));
+            $hit = $this->db->val("SELECT id FROM sc_medicines WHERE tenant_id = ? AND deleted_at IS NULL AND (generic = ? OR generic = ? OR brand LIKE ? OR brand LIKE ?) LIMIT 1", [$tenant, $name, $bare, $bare . '%', '%/ ' . $bare . '%']);
+            if ($hit) {
+                continue;
+            }
+            $now = date('Y-m-d H:i:s');
+            $this->db->insert('sc_medicines', ['tenant_id' => $tenant, 'generic' => mb_substr($name, 0, 190), 'strength' => ($it['strength'] ?? '') ?: null, 'form' => ($it['form'] ?? '') ?: null, 'route' => ($it['route'] ?? '') ?: null,
+                'dose' => ($it['dose'] ?? '') ?: null, 'freq' => ($it['freq'] ?? '') ?: null, 'timing' => ($it['timing'] ?? '') ?: null, 'dur_n' => ($it['dur_n'] ?? null) ?: null, 'dur_unit' => ($it['dur_unit'] ?? '') ?: null,
+                'active' => 1, 'source' => 'auto', 'created_by' => $userId, 'created_at' => $now, 'updated_at' => $now]);
+            $n++;
+        }
+        return $n;
+    }
+
     // ------------------------------------------------------------------ print model
 
     /** @return array<string,mixed> */

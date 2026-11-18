@@ -275,6 +275,9 @@ final class Portal
         }
         if (Rx::forType((string) ($this->type['slug'] ?? '')) !== null && ($this->can('manage_rx') || $this->can('view_rx')) && $this->module('documents')) {
             $all['Records'][] = ['key' => 'prescriptions', 'label' => 'Prescriptions', 'icon' => 'pill', 'url' => url('portal/prescriptions')];
+            if ($this->can('manage_rx')) {
+                $all['Records'][] = ['key' => 'medicines', 'label' => 'Medicine list', 'icon' => 'pill', 'url' => url('portal/medicines')];
+            }
         }
         if ($this->module('documents')) {
             // only when this role can fill in at least one form of this kind of vendor
