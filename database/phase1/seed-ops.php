@@ -305,6 +305,41 @@ $data['equipment-supplier']['service'] = [
 ];
 
 
+// hospital: beds, admissions (bed states match), emergency triage, theatre
+$beds = [];
+foreach ([['G', 'Medical ward A', 'General ward', 12, 'Floor 1', 8], ['P', 'Private rooms', 'Private room', 6, 'Floor 2', 30], ['ICU', 'Medical ICU', 'ICU', 6, 'Floor 3', 90], ['M', 'Maternity ward', 'Maternity', 4, 'Floor 2', 25]] as [$pre, $ward, $kind, $n, $floor, $rate]) {
+    for ($i = 1; $i <= $n; $i++) {
+        $beds[] = ['code' => $pre . '-' . sprintf('%02d', $i), 'title' => $ward, 'cat' => $kind, 'place_a' => $floor, 'amount' => $rate, 'status' => 'available', 'sort_order' => count($beds) + 1];
+    }
+}
+$bedState = ['G-01' => 'occupied', 'G-02' => 'occupied', 'P-01' => 'occupied', 'ICU-01' => 'occupied', 'G-03' => 'cleaning', 'P-06' => 'maintenance'];
+foreach ($beds as &$b) {
+    $b['status'] = $bedState[$b['code']] ?? 'available';
+}
+unset($b);
+$data['hospital']['beds'] = $beds;
+$data['hospital']['admissions'] = [
+    ['title' => 'Abdul Karim', 'phone' => '01711005001', 'party' => 'Self pay', 'cat' => 'G-01', 'tag' => 'Planned', 'date1' => $day(-3), 'place_b' => 100, 'status' => 'admitted', 'notes' => 'Pneumonia, IV antibiotics and oxygen.'],
+    ['title' => 'Rahima Begum', 'phone' => '01711005002', 'party' => 'City Insurance', 'cat' => 'G-02', 'tag' => 'Emergency', 'date1' => $day(-1), 'place_b' => 50, 'status' => 'admitted', 'notes' => 'Dehydration with gastroenteritis.'],
+    ['title' => 'Jamal Uddin', 'phone' => '01711005003', 'party' => 'Self pay', 'cat' => 'P-01', 'tag' => 'Planned', 'date1' => $day(-2), 'place_b' => 200, 'status' => 'admitted', 'notes' => 'Post-operative care after hernia repair.'],
+    ['title' => 'Shahida Akter', 'phone' => '01711005004', 'party' => 'Self pay', 'cat' => 'ICU-01', 'tag' => 'Emergency', 'date1' => $day(0), 'place_b' => 500, 'status' => 'admitted', 'notes' => 'Chest pain, monitored.'],
+    ['title' => 'Imran Chowdhury', 'phone' => '01711001004', 'party' => 'Self pay', 'cat' => 'G-03', 'tag' => 'Planned', 'date1' => $day(-6), 'date2' => $day(-1), 'qty' => 5, 'amount' => 40, 'place_b' => 0, 'status' => 'discharged', 'notes' => 'Fever, recovered.'],
+    ['title' => 'Mehnaz Begum', 'phone' => '01711001005', 'party' => 'Self pay', 'cat' => 'G-05', 'tag' => 'Planned', 'date1' => $day(1), 'place_b' => 0, 'status' => 'booked', 'notes' => 'Planned admission for tests.'],
+];
+$data['hospital']['emergency'] = [
+    ['title' => 'Unknown male', 'cat' => 'Ambulance', 'tag' => 'Red', 'date1' => $day(0), 'status' => 'in_treatment', 'notes' => 'Road traffic accident, head injury. GCS 9.'],
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'cat' => 'Walk-in', 'tag' => 'Orange', 'date1' => $day(0), 'status' => 'waiting', 'notes' => 'Severe chest pain for one hour.'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'cat' => 'Walk-in', 'tag' => 'Yellow', 'date1' => $day(0), 'status' => 'waiting', 'notes' => 'High fever and vomiting, child 6 years.'],
+    ['title' => 'Farhana Akter', 'phone' => '01711001003', 'cat' => 'Referred', 'tag' => 'Green', 'date1' => $day(0), 'status' => 'waiting', 'notes' => 'Deep cut on hand.'],
+    ['title' => 'Rafiq Islam', 'phone' => '01711001006', 'cat' => 'Walk-in', 'tag' => 'Blue', 'date1' => $day(0), 'status' => 'discharged', 'notes' => 'Minor sprain, bandaged and sent home.'],
+];
+$data['hospital']['theatre'] = [
+    ['title' => 'Jamal Uddin', 'phone' => '01711005003', 'place_a' => 'Hernia repair', 'cat' => 'OT-1', 'date1' => $day(-2), 'place_b' => '09:00', 'qty' => 1.5, 'amount' => 800, 'status' => 'done', 'notes' => 'Uneventful. Mesh repair.'],
+    ['title' => 'Mehnaz Begum', 'phone' => '01711001005', 'place_a' => 'Laparoscopic cholecystectomy', 'cat' => 'OT-1', 'date1' => $day(0), 'place_b' => '10:00', 'qty' => 2, 'amount' => 1200, 'status' => 'scheduled', 'notes' => 'Nil by mouth after midnight. Consent signed.'],
+    ['title' => 'Nusrat Jahan', 'phone' => '01711001001', 'place_a' => 'Caesarean section', 'cat' => 'Labour OT', 'date1' => $day(0), 'place_b' => '14:00', 'qty' => 1, 'amount' => 900, 'status' => 'scheduled'],
+    ['title' => 'Karim Hossain', 'phone' => '01711001002', 'place_a' => 'Fracture fixation', 'cat' => 'OT-2', 'date1' => $day(1), 'place_b' => '08:00', 'qty' => 3, 'amount' => 1500, 'status' => 'scheduled'],
+];
+
 $seeded = [];
 foreach ($data as $type => $modules) {
     $tenant = $demo[$type] ?? null;

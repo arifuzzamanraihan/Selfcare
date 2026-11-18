@@ -6,6 +6,8 @@ namespace Selfcare;
 
 final class Vendors
 {
+    /** Medical departments a hospital starts with (the vendor edits the list in the portal). */
+    public const HOSPITAL_DEPARTMENTS = ['General Medicine', 'General Surgery', 'Emergency Medicine', 'Paediatrics', 'Neonatology (NICU)', 'Obstetrics and Gynaecology', 'Orthopaedics', 'Cardiology', 'Neurology', 'Neurosurgery', 'Nephrology and Dialysis', 'Urology', 'Gastroenterology', 'Pulmonology and Chest', 'Oncology', 'ENT', 'Ophthalmology', 'Dental and Maxillofacial', 'Dermatology', 'Psychiatry', 'Endocrinology and Diabetes', 'Anaesthesia and Critical Care (ICU)', 'Radiology and Imaging', 'Pathology and Laboratory', 'Physiotherapy and Rehabilitation', 'Nutrition and Dietetics', 'Plastic and Burns', 'Vascular Surgery'];
     private const DEPARTMENTS = ['General Medicine', 'Paediatrics', 'Gynaecology', 'Orthopaedics', 'Cardiology', 'Dermatology'];
 
     /**
@@ -52,7 +54,7 @@ final class Vendors
             }
             $app->site->set($slug, 'hours_fri', 'Closed');
             if ($family === 'clinical') {
-                foreach (self::DEPARTMENTS as $title) {
+                foreach (($type['slug'] === 'hospital' ? self::HOSPITAL_DEPARTMENTS : self::DEPARTMENTS) as $title) {
                     $db->insert('doctor_departments', ['title' => $title, 'tenant_id' => $slug, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
                 }
             }

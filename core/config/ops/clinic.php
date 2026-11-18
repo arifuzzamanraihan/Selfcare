@@ -9,7 +9,7 @@ $date = static fn (string $label, array $extra = []): array => ['label' => $labe
 
 return [
     'tokens' => [
-        'types' => ['clinic'],
+        'types' => ['clinic', 'hospital'],
         'title' => 'Token queue', 'singular' => 'token', 'icon' => 'cal', 'group' => 'Clinic',
         'perm' => 'manage_appointments', 'prefix' => '', 'number' => 'daily',
         'queue' => true, 'call' => 'call', 'board' => ['now' => ['called', 'in_consult'], 'wait' => ['waiting']],

@@ -1,5 +1,13 @@
 # Developer changelog (shared files others may touch)
 
+## 2026-11-19 hospital (Builder A, touches Builder C's engine)
+- NEW `core/config/ops/hospital.php` (modules beds, admissions, emergency, theatre) for type `hospital`.
+- `core/config/ops/clinic.php`: the `tokens` module is now also for `hospital` (OPD queue + doctor workspace). Menu group shows "Hospital" for hospitals (`Portal.php`).
+- `core/routes/ops.php`: three small engine options, all optional and unused by other modules: flow `calc => 'bed_days'` (days x bed rate into qty/amount), `asset.release` (old asset goes to a status when the asset changes, used for bed transfer), module `slot` (one active booking per resource and time, used for theatres); `admissions` edit cannot change the bed of an admitted patient.
+- `core/Vendors.php`: `HOSPITAL_DEPARTMENTS` (28) seeded on registration; migration `migrate-20261119-000500-hospital-departments.sql` fills existing hospitals that still have the short list.
+- `core/Reports.php`: bed occupancy report reads the bed board when present.
+- Docs: `docs/CHECKLIST-core.md` (new), `docs/CHECKLIST-hospital.md` (rewritten). Tests: `tests/hospital.py`.
+
 ## 2026-11-18 clinic-only ship (Builder C)
 The work-list engine and the **clinic** token queue are in this deploy. Other type-specific lists are not switched on this week: their configs were removed from this branch (full copy kept on `builder-c-wave2-wip`). Checklists for the remaining types are in `docs/CHECKLIST-*.md`. Tokens are limited to vendor type `clinic`.
 

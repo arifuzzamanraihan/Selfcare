@@ -337,9 +337,28 @@ $app->router->post('/portal/ops/{m}/save', static function (array $a) use ($app,
     if ($old !== null && $key === 'trips' && in_array($old['status'], ['dispatched', 'onroute'], true)) {
         unset($d['cat']); // the vehicle of a trip on the road changes only by completing or cancelling it
     }
+    if ($old !== null && $key === 'admissions' && $old['status'] !== 'booked') {
+        unset($d['cat']); // the bed of a patient in hospital changes only through Move to another bed or Discharge
+    }
     if ($err === null && isset($d['code']) && $d['code'] !== '') {
         $dup = $app->db->val('SELECT COUNT(*) FROM sc_records WHERE tenant_id = ? AND module = ? AND code = ? AND id <> ? AND deleted_at IS NULL', [$p->tenantId, $key, $d['code'], $id]);
         $err = $dup ? 'Another record already uses "' . $d['code'] . '".' : null;
+    }
+    if ($err === null && !empty($m['slot'])) {
+        // One booking per resource and time (for example an operation theatre at 09:00 on a day).
+        $sl = $m['slot'];
+        $val = static fn (string $c) => array_key_exists($c, $d) ? $d[$c] : ($old[$c] ?? null);
+        $where = [];
+        $par = [$p->tenantId, $key, $id];
+        foreach ($sl['cols'] as $c) {
+            $where[] = $c . ' <=> ?';
+            $par[] = $val($c);
+        }
+        $in = implode(',', array_fill(0, count($sl['status']), '?'));
+        $newStatus = (string) ($d['status'] ?? $old['status'] ?? $m['initial']);
+        if (in_array($newStatus, $sl['status'], true) && $app->db->val("SELECT COUNT(*) FROM sc_records WHERE tenant_id = ? AND module = ? AND id <> ? AND deleted_at IS NULL AND " . implode(' AND ', $where) . " AND status IN ($in)", array_merge($par, $sl['status']))) {
+            $err = (string) $sl['msg'];
+        }
     }
     if ($err !== null) {
         keep_old($_POST);
@@ -574,6 +593,14 @@ $app->router->post('/portal/ops/{m}/{id}/do/{a}', static function (array $a) use
     foreach ($f['set'] ?? [] as $c => $v) {
         $upd[$c] = $v === 'today' ? date('Y-m-d') : $v;
     }
+    if (($f['calc'] ?? '') === 'bed_days') {
+        // Hospital stay: whole days from admission (at least one) times the daily charge of the bed the patient is in.
+        $rate = (float) $app->db->val("SELECT amount FROM sc_records WHERE tenant_id = ? AND module = 'beds' AND code = ? AND deleted_at IS NULL", [$p->tenantId, (string) ($row['cat'] ?? '')]);
+        $from = (string) ($row['date1'] ?? '') !== '' ? (string) $row['date1'] : date('Y-m-d');
+        $days = max(1, (int) floor((strtotime(date('Y-m-d')) - strtotime($from)) / 86400));
+        $upd['qty'] = $days;
+        $upd['amount'] = round($days * $rate, 2);
+    }
     if ($key === 'donors' && $a['a'] === 'donated') {
         $upd += ['date1' => date('Y-m-d'), 'date2' => date('Y-m-d', strtotime('+90 days')), 'qty' => (float) $row['qty'] + 1];
     }
@@ -594,6 +621,10 @@ $app->router->post('/portal/ops/{m}/{id}/do/{a}', static function (array $a) use
             $amod = (string) $as['module'];
             if ($acode !== '' && !empty($as['to'])) {
                 $app->db->run("UPDATE sc_records SET status = ?, updated_at = NOW() WHERE tenant_id = ? AND module = ? AND code = ? AND deleted_at IS NULL", [$as['to'], $p->tenantId, $amod, $acode]);
+            }
+            $oldCode = (string) ($row[$acol] ?? '');
+            if (!empty($as['release']) && $oldCode !== '' && $oldCode !== $acode) {
+                $app->db->run('UPDATE sc_records SET status = ?, updated_at = NOW() WHERE tenant_id = ? AND module = ? AND code = ? AND deleted_at IS NULL', [$as['release'], $p->tenantId, $amod, $oldCode]);
             }
         }
         $app->db->commit();

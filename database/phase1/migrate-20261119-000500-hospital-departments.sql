@@ -1,0 +1,8 @@
+-- Hospitals start with the full list of medical departments. Only hospitals that still have the old short list (6 or fewer) get the missing ones, so a list a vendor trimmed later is not brought back.
+INSERT INTO doctor_departments (title, tenant_id, created_at, updated_at)
+SELECT t.title, v.tenant_id, NOW(), NOW()
+FROM sc_vendors v
+JOIN (SELECT 'General Medicine' title UNION ALL SELECT 'General Surgery' UNION ALL SELECT 'Emergency Medicine' UNION ALL SELECT 'Paediatrics' UNION ALL SELECT 'Neonatology (NICU)' UNION ALL SELECT 'Obstetrics and Gynaecology' UNION ALL SELECT 'Orthopaedics' UNION ALL SELECT 'Cardiology' UNION ALL SELECT 'Neurology' UNION ALL SELECT 'Neurosurgery' UNION ALL SELECT 'Nephrology and Dialysis' UNION ALL SELECT 'Urology' UNION ALL SELECT 'Gastroenterology' UNION ALL SELECT 'Pulmonology and Chest' UNION ALL SELECT 'Oncology' UNION ALL SELECT 'ENT' UNION ALL SELECT 'Ophthalmology' UNION ALL SELECT 'Dental and Maxillofacial' UNION ALL SELECT 'Dermatology' UNION ALL SELECT 'Psychiatry' UNION ALL SELECT 'Endocrinology and Diabetes' UNION ALL SELECT 'Anaesthesia and Critical Care (ICU)' UNION ALL SELECT 'Radiology and Imaging' UNION ALL SELECT 'Pathology and Laboratory' UNION ALL SELECT 'Physiotherapy and Rehabilitation' UNION ALL SELECT 'Nutrition and Dietetics' UNION ALL SELECT 'Plastic and Burns' UNION ALL SELECT 'Vascular Surgery') t
+WHERE v.type_slug = 'hospital'
+  AND (SELECT COUNT(*) FROM doctor_departments x WHERE x.tenant_id = v.tenant_id) <= 6
+  AND NOT EXISTS (SELECT 1 FROM doctor_departments y WHERE y.tenant_id = v.tenant_id AND y.title = t.title);

@@ -247,8 +247,21 @@ final class Reports
                 }
                 $cols = $key === 'admission_register' ? [['No', 1.2], ['Admitted', 1.1], ['Patient', 2], ['Ward', 1.1], ['Bed', 0.8], ['Doctor', 1.6], ['Diagnosis', 2.2]] : [['No', 1.2], ['Discharged', 1.1], ['Patient', 2], ['Admission', 1.2], ['Doctor', 1.6], ['Condition', 1.2], ['Diagnosis', 2.2]];
                 return $res($cols, $out, [['Records', (string) count($out)]]);
-            case 'census':
             case 'bed_occupancy':
+                $bw = $db->all("SELECT title, SUM(status = 'occupied') used, SUM(status IN ('available','cleaning')) usable, COUNT(*) total FROM sc_records WHERE tenant_id = ? AND module = 'beds' AND deleted_at IS NULL GROUP BY title ORDER BY title", [$tid]);
+                if ($bw) {
+                    // The bed board (Wards and beds) is the source when the hospital keeps one.
+                    $out = [];
+                    $u = $t = 0;
+                    foreach ($bw as $r) {
+                        $out[] = [(string) $r['title'], (int) $r['used'] . ' of ' . (int) $r['total'] . ' (' . ((int) $r['total'] ? round((int) $r['used'] / (int) $r['total'] * 100) : 0) . '%)'];
+                        $u += (int) $r['used'];
+                        $t += (int) $r['total'];
+                    }
+                    return $res([['Ward', 3], ['Beds in use', 2, 'R']], $out, [['Beds in use', (string) $u], ['Beds in the hospital', (string) $t], ['Occupancy', $t ? round($u / $t * 100) . '%' : '0%']]);
+                }
+                // no break: no bed board, fall back to admission forms and the capacity setting
+            case 'census':
                 $adm = $this->docs((string) $tid, 'admission_form', '2000-01-01', date('Y-m-d'), '');
                 $dis = array_column(array_map(static fn ($d) => ['n' => (string) ($d['_d']['admission_no'] ?? '')], $this->docs((string) $tid, 'discharge_summary', '2000-01-01', date('Y-m-d'), '')), 'n');
                 $now = array_values(array_filter($adm, static fn ($d) => !in_array($d['doc_no'], $dis, true)));
