@@ -271,8 +271,9 @@ foreach ($peopleCfg as $kind => [$perm, $mod, $labelKey, $verb]) {
     $title = static fn (Portal $p): string => $labelKey ? $p->label($labelKey, ucfirst($kind)) : 'Staff accounts';
     $guard = static function (Portal $p) use ($perm, $mod, $labelKey): void {
         $p->need($perm, $mod);
-        if ($labelKey === 'people' && $p->label('people') === '') {
-            \Selfcare\app()->error(404, 'This part is not used by your kind of organisation.');
+        if (($labelKey === 'people' && $p->label('people') === '') || ($labelKey === 'team' && !$p->hasKind('team'))) {
+            flash('That list is not used by your kind of organisation.', 'info');
+            redirect(url('portal'));
         }
     };
     $app->router->get('/portal/' . $kind, static function () use ($app, $dash, $card, $btn, $kind, $title, $guard, $verb): void {
