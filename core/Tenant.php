@@ -49,6 +49,9 @@ final class Tenant
     {
         $suffix = $this->suffix();
         $host = self::requestHost();
+        if ($host === strtolower($this->env->get('MAIN_HOST'))) {
+            return null; // the main site, even when its name ends with the tenant suffix
+        }
         if ($suffix === '' || $host === '' || !str_ends_with($host, $suffix) || strlen($host) <= strlen($suffix)) {
             return null;
         }
