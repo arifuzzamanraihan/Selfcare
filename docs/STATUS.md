@@ -6,7 +6,7 @@ Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): webs
 |---|---|---|---|---|---|---|---|
 | Wave 1 | Pharmacy | stock, expiry, batches, sales/POS, suppliers | done | done | **done**: prescription orders (verify, dispense), suppliers, stock alerts (low, expiring, expired), stock movement ledger with adjust, overview tiles and charts | done | **live** |
 | Wave 1 | Pathology laboratory | samples, test catalogue, results, reports | done | done | **done**: samples workflow (collected, testing, result entered, delivered, rejected with reason), printable result report, overview tiles and charts (diagnostic centers get the same Samples list) | done | **live** |
-| Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | **done**: donor eligibility (90-day rest, record donation, then add the bag), blood units (screening, release, reserve, issue to a named recipient, discard with reason, automatic expiry by component), blood orders (given or could not give), overview tiles and charts by blood group | done | **live** |
 | Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | pending | generic done, type-specific pending | pending |
 | Wave 2 | Hospital | OPD/IPD, beds, doctors, wards | done | done | pending | generic done, type-specific pending | pending |
 | Wave 2 | Clinic | appointments, doctors, billing | done | done | pending | generic done, type-specific pending | pending |

@@ -52,6 +52,44 @@ $samples = [
 $data['laboratory'] = ['samples' => $samples];
 $data['diagnostic-center'] = ['samples' => array_slice($samples, 0, 4)];
 
+$g = ['A+', 'B+', 'O+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
+$donors = [];
+foreach ([['Rafiq Ahmed', 'O+', -120, 3], ['Mehnaz Karim', 'A+', -30, 2], ['Shahid Sarker', 'B+', -200, 5], ['Lamia Chowdhury', 'O-', -95, 1], ['Arif Hossain', 'AB+', -10, 4], ['Nusrat Jahan', 'A-', null, 0], ['Imran Khan', 'B-', -400, 7], ['Sabbir Rahman', 'O+', -60, 2]] as $i => [$n, $grp, $last, $cnt]) {
+    $next = $last === null ? null : $day($last + 90);
+    $st = $last === null ? 'eligible' : ($last + 90 > 0 ? 'resting' : 'eligible');
+    if ($n === 'Imran Khan') {
+        $st = 'deferred';
+    }
+    $donors[] = ['title' => $n, 'phone' => '0171' . (1000000 + $i * 1111), 'cat' => $grp, 'place_a' => ['Dhanmondi', 'Mirpur', 'Uttara', 'Banani', 'Gulshan', 'Mohammadpur', 'Badda', 'Motijheel'][$i], 'qty' => $cnt, 'date1' => $last === null ? null : $day($last), 'date2' => $next, 'status' => $st, 'notes' => $n === 'Imran Khan' ? 'Low haemoglobin, review in 6 months.' : null];
+}
+$units = [];
+foreach ([
+    ['Rafiq Ahmed', 'O+', 'Whole blood', 450, -5, 'available', 'Fridge 1'], ['Mehnaz Karim', 'A+', 'Packed red cells', 300, -30, 'available', 'Fridge 1'], ['Shahid Sarker', 'B+', 'Whole blood', 450, -33, 'available', 'Fridge 2'],
+    ['Lamia Chowdhury', 'O-', 'Platelets', 250, -3, 'available', 'Agitator'], ['Arif Hossain', 'AB+', 'Plasma', 200, -40, 'available', 'Freezer'], ['Sabbir Rahman', 'O+', 'Whole blood', 450, -1, 'quarantine', 'Screening shelf'],
+    ['Nusrat Jahan', 'A-', 'Whole blood', 450, -2, 'quarantine', 'Screening shelf'], ['Walk-in donor', 'B+', 'Packed red cells', 300, -12, 'reserved', 'Fridge 2'], ['Rafiq Ahmed', 'O+', 'Whole blood', 450, -20, 'issued', 'Fridge 1'],
+    ['Mehnaz Karim', 'A+', 'Whole blood', 450, -36, 'available', 'Fridge 1'], ['Shahid Sarker', 'B+', 'Platelets', 250, -4, 'discarded', 'Agitator'], ['Walk-in donor', 'AB-', 'Whole blood', 450, -10, 'available', 'Fridge 2'],
+] as $i => [$n, $grp, $comp, $ml, $col, $st, $loc]) {
+    $days = match ($comp) { 'Platelets' => 5, 'Plasma' => 365, default => 35 };
+    $r = ['title' => $n, 'cat' => $grp, 'party' => $comp, 'qty' => $ml, 'date1' => $day($col), 'date2' => $day($col + $days), 'place_b' => $loc, 'status' => $st, 'notes' => null];
+    if ($st === 'issued') {
+        $r['place_a'] = 'Ahmed Hossain, Dhaka Medical';
+    }
+    if ($st === 'reserved') {
+        $r['place_a'] = 'Ward 4, Square Hospital';
+    }
+    if ($st === 'discarded') {
+        $r['notes'] = 'Bag leaked.';
+    }
+    $units[] = $r;
+}
+$orders = [
+    ['title' => 'Kabir Hossain', 'party' => 'Dhaka Medical, Ward 7', 'phone' => '01711000777', 'cat' => 'O+', 'place_a' => 'Whole blood', 'qty' => 2, 'date1' => $day(0), 'status' => 'pending'],
+    ['title' => 'Salma Begum', 'party' => 'Square Hospital, ICU', 'phone' => '01711000888', 'cat' => 'A-', 'place_a' => 'Packed red cells', 'qty' => 1, 'date1' => $day(0), 'status' => 'pending'],
+    ['title' => 'Ahmed Hossain', 'party' => 'Dhaka Medical', 'phone' => '01711000999', 'cat' => 'O+', 'place_a' => 'Whole blood', 'qty' => 1, 'date1' => $day(-3), 'status' => 'fulfilled'],
+    ['title' => 'Child, name withheld', 'party' => 'Shishu Hospital', 'phone' => '01711000555', 'cat' => 'AB-', 'place_a' => 'Platelets', 'qty' => 2, 'date1' => $day(-5), 'status' => 'rejected', 'notes' => 'Why not? No platelets of this group in stock.'],
+];
+$data['blood-bank'] = ['donors' => $donors, 'units' => $units, 'bloodreq' => $orders];
+
 $seeded = [];
 foreach ($data as $type => $modules) {
     $tenant = $demo[$type] ?? null;
