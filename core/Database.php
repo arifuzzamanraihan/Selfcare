@@ -24,6 +24,12 @@ final class Database
         ]);
     }
 
+    /** Quotes a value for use inside a fixed SQL text (check scripts only; normal code uses placeholders). */
+    public function quote(string $v): string
+    {
+        return $this->pdo->quote($v);
+    }
+
     /** @return array<string,mixed>|null */
     public function one(string $sql, array $params = []): ?array
     {

@@ -473,6 +473,9 @@ $moduleFor = static function (Portal $p, string $key) use ($app): ?array {
         ];
     }
     if ($key === 'departments') {
+        if (!$p->hasKind('departments')) {
+            return null; // this kind of organisation has no departments list
+        }
         return $common + ['key' => 'departments', 'title' => 'Departments', 'singular' => 'Department', 'table' => 'doctor_departments', 'scope' => ['tenant_id' => $t],
             'fields' => ['title' => ['label' => 'Department name', 'required' => true, 'max' => 160], 'description' => ['label' => 'About the department', 'type' => 'textarea', 'max' => 1000]],
             'columns' => ['title' => ['label' => 'Department'], 'description' => ['label' => 'About']], 'search' => ['t.title'], 'sort' => 'title', 'empty' => 'Add the departments that doctors belong to.',

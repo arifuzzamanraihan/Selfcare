@@ -530,6 +530,10 @@ $stockPage = static function (callable $body) use ($app, $stockMod): callable {
     return static function (array $a) use ($app, $stockMod, $body): void {
         $p = Portal::boot($app);
         $p->need('manage_medicines', 'documents');
+        if (!in_array($p->family, ['pharmacy', 'bloodbank', 'equipment'], true)) {
+            flash('That list is not used by your kind of organisation.', 'info');
+            redirect(url('portal'));
+        }
         $body($p, new Crud($app->db, $stockMod($p)), $a);
     };
 };
@@ -538,6 +542,9 @@ $app->router->get('/portal/stock', $stockPage(static function (Portal $p, Crud $
 }));
 $stockForm = static function (Portal $p, Crud $c, array $a) use ($dash, $card): void {
     $id = isset($a['id']) ? (int) $a['id'] : null;
+    if ($id !== null && $c->find($id) === null) {
+        \Selfcare\app()->error(404, 'We could not find that item.');
+    }
     $dash($p, 'stock', $id ? 'Edit stock item' : 'Add a stock item', $card('', $c->form($id)));
 };
 $app->router->get('/portal/stock/new', $stockPage($stockForm));
