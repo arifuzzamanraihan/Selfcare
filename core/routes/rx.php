@@ -164,9 +164,16 @@ $formHtml = static function (Portal $p, array $cfg, ?array $row, array $items, a
     if ($hits) {
         $h .= '<div class="d-alert is-danger" style="margin-top:14px"><b>Check before you issue:</b><ul style="margin:6px 0 0 18px">' . implode('', array_map(static fn ($x) => '<li>' . e($x) . '</li>', $hits)) . '</ul><label class="d-check" style="margin-top:8px"><input type="checkbox" name="ack_allergy" value="1"><span>I have checked the allergy warning and want to issue this prescription.</span></label></div>';
     }
+    $qt = (int) ($pre['_queue'] ?? ($row['queue_record_id'] ?? 0));
+    if ($qt > 0) {
+        $h .= '<input type="hidden" name="queue_token" value="' . $qt . '"><div class="d-form-actions d-sticky-actions"><button class="d-btn d-btn-soft" type="submit" name="action" value="draft">Save draft</button><button class="d-btn d-btn-soft" type="submit" name="action" value="issue">Issue</button><button class="d-btn d-btn-primary" type="submit" name="action" value="issue_next">Issue and call next patient</button></div></form>';
+        return $h;
+    }
     $h .= '<div class="d-form-actions d-form-actions-sticky"><a class="d-btn d-btn-soft" href="' . e(url('portal/prescriptions')) . '">Cancel</a><button class="d-btn d-btn-soft" type="submit" name="action" value="draft">Save draft</button><button class="d-btn d-btn-primary" type="submit" name="action" value="issue">Save and issue</button></div></form>';
     return $h;
 };
+
+$app->rxForm = $formHtml;
 
 // ---------------------------------------------------------------- list
 $app->router->get('/portal/prescriptions', static function () use ($app, $boot, $page, $card, $btn, $stat, $badge, $tabs, $db, $rx): void {
@@ -355,7 +362,7 @@ $issueRx = static function (Portal $p, int $id, bool $ack) use ($app, $rx, $db, 
     $audit($p, 'rx_issued', ['status' => 'draft'], ['id' => $id, 'status' => 'issued']);
     return [];
 };
-$app->router->post('/portal/prescriptions/save', static function () use ($app, $boot, $saveRx, $issueRx, $rx, $load): void {
+$app->router->post('/portal/prescriptions/save', static function () use ($app, $boot, $saveRx, $issueRx, $rx, $load, $db): void {
     [$p, $cfg] = $boot(true);
     $p->needWritable();
     $row = null;
@@ -366,11 +373,32 @@ $app->router->post('/portal/prescriptions/save', static function () use ($app, $
             redirect(url('portal/prescriptions/' . $row['id']));
         }
     }
+    $qtok = (int) ($_POST['queue_token'] ?? 0);
+    $qrec = $qtok > 0 ? $db->one("SELECT * FROM sc_records WHERE id = ? AND tenant_id = ? AND module = 'tokens' AND deleted_at IS NULL", [$qtok, $p->tenantId]) : null;
+    $back = static fn (): string => url('portal/workspace', ['token' => (string) $qtok]);
     [$id, $err] = $saveRx($p, $cfg, $_POST, $row);
     if ($id === null) {
         $_SESSION['sc_rx_old'] = $_POST;
         flash(implode(' ', $err), 'bad');
-        redirect($row ? url('portal/prescriptions/' . $row['id'] . '/edit') : url('portal/prescriptions/new'));
+        redirect($qrec ? $back() : ($row ? url('portal/prescriptions/' . $row['id'] . '/edit') : url('portal/prescriptions/new')));
+    }
+    if ($qrec !== null) {
+        $db->run('UPDATE sc_prescriptions SET queue_record_id = ? WHERE id = ? AND tenant_id = ?', [$qtok, (int) $id, $p->tenantId]);
+        if (in_array($_POST['action'] ?? '', ['issue', 'issue_next'], true)) {
+            $problems = $issueRx($p, (int) $id, !empty($_POST['ack_allergy']));
+            if ($problems) {
+                flash('Saved as a draft, not issued yet. ' . implode(' ', $problems), 'bad');
+                redirect($back());
+            }
+            flash('Prescription issued.', 'ok');
+            if ($_POST['action'] === 'issue_next') {
+                $nx = Rx::queueAdvance($db, $p, (int) ($qrec['staff_id'] ?? 0), $qtok);
+                redirect($nx ? url('portal/workspace', ['token' => (string) $nx]) : url('portal/workspace'));
+            }
+            redirect($back());
+        }
+        flash('Draft saved.', 'ok');
+        redirect($back());
     }
     if (($_POST['action'] ?? '') === 'issue') {
         $problems = $issueRx($p, (int) $id, !empty($_POST['ack_allergy']));
@@ -457,6 +485,7 @@ $modelFor = static function (Portal $p, array $cfg, array $r) use ($app, $rx, $d
     $pt = $r['patient_id'] ? $db->one('SELECT patient_unique_id FROM patients WHERE id = ? AND tenant_id = ?', [(int) $r['patient_id'], $p->tenantId]) : null;
     return $rx->model($app, $p->tenantId, $r, $rx->items($p->tenantId, (int) $r['id']), $p->user, $cfg, $pt);
 };
+$app->rxModel = $modelFor;
 $app->router->get('/portal/prescriptions/blank', static function () use ($app, $boot, $rx): void {
     [$p, $cfg] = $boot();
     Documents::send($rx->model($app, $p->tenantId, null, [], $p->user, $cfg), 'prescription-pad.pdf');
@@ -556,6 +585,11 @@ $app->router->get('/portal/prescriptions/{id}', static function (array $a) use (
     $extra = '';
     if ($w && $r['status'] === 'issued') {
         $extra = $card('Cancel this prescription', '<form class="d-form" method="post" action="' . e(url('portal/prescriptions/' . $r['id'] . '/cancel')) . '" data-confirm="Cancel this prescription? It stays in the register.">' . csrf_field() . '<div class="d-field"><label for="f_reason">Reason</label><input id="f_reason" name="reason" maxlength="240" required></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-danger" type="submit">Cancel prescription</button></div></form>');
+    }
+    if ($w && $r['status'] === 'issued') {
+        $extra .= $card('Send to a pharmacy', '<p class="d-help">With the patient\'s agreement, the pharmacy gets this prescription as an order and the patient can follow it.</p>' . $rx->shareBox(url('portal/prescriptions/' . $r['id'] . '/send'), $r, 'staff'));
+    } elseif ($r['status'] === 'issued' && $rx->shares($t, (int) $r['id'])) {
+        $extra .= $card('Sent to a pharmacy', $rx->shareBox('#', $r, 'staff'));
     }
     $page($p, (string) $r['rx_no'], $bar . $alerts . $info . Documents::html($modelFor($p, $cfg, $r)) . $extra);
 });
@@ -714,4 +748,21 @@ $app->router->post('/portal/medicines/{id}/delete', static function (array $a) u
     $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'medicine_deleted', ['id' => (int) $r['id'], 'generic' => $r['generic']], null);
     flash('Medicine deleted from your list.', 'ok');
     redirect(url('portal/medicines'));
+});
+
+$app->router->post('/portal/prescriptions/{id}/send', static function (array $a) use ($boot, $load, $rx, $audit): void {
+    [$p] = $boot(true);
+    $p->needWritable();
+    $r = $load($p, $a);
+    $back = url('portal/prescriptions/' . $r['id']);
+    if (empty($_POST['agree'])) {
+        flash('Tick the box to confirm the patient agreed.', 'bad');
+        redirect($back);
+    }
+    $err = $rx->sendToPharmacy($r, (string) ($_POST['pharmacy'] ?? ''), 'staff', (int) $p->user['id'], (string) $p->vendor['name']);
+    if ($err === null) {
+        $audit($p, 'rx_sent_to_pharmacy', null, ['rx' => (int) $r['id'], 'to' => (string) $_POST['pharmacy'], 'by' => 'staff']);
+    }
+    flash($err ?? 'Sent to the pharmacy.', $err ? 'bad' : 'ok');
+    redirect($back);
 });

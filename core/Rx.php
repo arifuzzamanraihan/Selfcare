@@ -226,6 +226,113 @@ final class Rx
         return array_column($this->db->all('SELECT drug, COUNT(*) n FROM sc_prescription_items WHERE tenant_id = ? GROUP BY drug ORDER BY n DESC, drug LIMIT 200', [$tenant]), 'drug');
     }
 
+    // ------------------------------------------------------------------ doctor queue (tokens of the clinic work list, sc_records module "tokens")
+
+    /** Finishes the token being seen (if any) and starts the next waiting patient of this doctor. Returns the new token id or null. */
+    public static function queueAdvance(Database $db, Portal $p, int $doctorId, ?int $finishId): ?int
+    {
+        $t = $p->tenantId;
+        $uid = (int) $p->user['id'];
+        if ($finishId) {
+            $r = $db->one("SELECT id, status FROM sc_records WHERE id = ? AND tenant_id = ? AND module = 'tokens' AND deleted_at IS NULL", [$finishId, $t]);
+            if ($r !== null && in_array($r['status'], ['called', 'in_consult'], true)) {
+                $db->update('sc_records', ['status' => 'done', 'updated_at' => date('Y-m-d H:i:s')], 'id = ? AND tenant_id = ?', [$finishId, $t]);
+                Ops::event($db, $t, $finishId, 'tokens', 'finish', (string) $r['status'], 'done', $uid);
+            }
+        }
+        return self::queueStartNext($db, $p, $doctorId);
+    }
+
+    /** Starts the first waiting token for this doctor (or unassigned). */
+    public static function queueStartNext(Database $db, Portal $p, int $doctorId): ?int
+    {
+        $t = $p->tenantId;
+        $n = $db->one("SELECT id, status FROM sc_records WHERE tenant_id = ? AND module = 'tokens' AND deleted_at IS NULL AND date1 = ? AND status = 'waiting' AND (staff_id <=> ? OR staff_id IS NULL) ORDER BY (staff_id IS NULL) ASC, sort_order ASC, id ASC LIMIT 1", [$t, date('Y-m-d'), $doctorId ?: null]);
+        if ($doctorId === 0) {
+            $n = $db->one("SELECT id, status FROM sc_records WHERE tenant_id = ? AND module = 'tokens' AND deleted_at IS NULL AND date1 = ? AND status = 'waiting' ORDER BY sort_order ASC, id ASC LIMIT 1", [$t, date('Y-m-d')]);
+        }
+        if ($n === null) {
+            return null;
+        }
+        $db->update('sc_records', ['status' => 'in_consult', 'updated_at' => date('Y-m-d H:i:s')], 'id = ? AND tenant_id = ? AND status = ?', [(int) $n['id'], $t, 'waiting']);
+        Ops::event($db, $t, (int) $n['id'], 'tokens', 'start', 'waiting', 'in_consult', (int) $p->user['id']);
+        return (int) $n['id'];
+    }
+
+    // ------------------------------------------------------------------ send to a pharmacy (with the patient's agreement)
+
+    /** Pharmacies a prescription can be sent to: active, listed vendors of the pharmacy kind. @return list<array<string,mixed>> */
+    public function pharmacies(): array
+    {
+        return $this->db->all("SELECT v.tenant_id, t.hospital_name AS name, v.city FROM sc_vendors v JOIN tenants t ON t.id = v.tenant_id WHERE v.type_slug = 'pharmacy' AND v.status = 'active' AND v.deleted_at IS NULL AND v.is_listed = 1 ORDER BY t.hospital_name");
+    }
+
+    /** Sends an issued prescription to a pharmacy as a prescription order. Returns an error text or null. */
+    public function sendToPharmacy(array $rx, string $toTenant, string $by, int $userId, string $vendorName): ?string
+    {
+        if ($rx['status'] !== 'issued' || $rx['deleted_at'] !== null) {
+            return 'Only an issued prescription can be sent to a pharmacy.';
+        }
+        $ok = false;
+        foreach ($this->pharmacies() as $ph) {
+            $ok = $ok || $ph['tenant_id'] === $toTenant;
+        }
+        if (!$ok || $toTenant === $rx['tenant_id']) {
+            return 'Choose a pharmacy from the list.';
+        }
+        $open = (int) $this->db->val("SELECT COUNT(*) FROM sc_rx_shares s JOIN sc_records r ON r.id = s.record_id AND r.tenant_id = s.to_tenant WHERE s.tenant_id = ? AND s.prescription_id = ? AND s.to_tenant = ? AND r.status <> 'cancelled' AND r.deleted_at IS NULL", [$rx['tenant_id'], (int) $rx['id'], $toTenant]);
+        if ($open > 0) {
+            return 'This prescription is already with that pharmacy.';
+        }
+        $items = $this->items((string) $rx['tenant_id'], (int) $rx['id']);
+        $lines = [];
+        foreach ($items as $i => $it) {
+            $lines[] = ($i + 1) . '. ' . trim($it['drug'] . ' ' . ($it['strength'] ?? '') . ' ' . ($it['form'] ?? '')) . ' - ' . trim(($it['dose'] ?? '') . ', ' . preg_replace('/ \(.*\)$/', '', (string) ($it['freq'] ?? '')) . ($it['timing'] ? ', ' . strtolower((string) $it['timing']) : '') . ($it['dur_n'] ? ', ' . $it['dur_n'] . ' ' . $it['dur_unit'] : ''), ', ') . ($it['qty'] ? ' (qty ' . $it['qty'] . ')' : '') . ($it['instruction'] ? ' - ' . $it['instruction'] : '');
+        }
+        $notes = $rx['rx_no'] . ' from ' . $vendorName . ', ' . $rx['rx_date'] . "\nAllergies: " . ($rx['allergies'] ?: 'not recorded') . "\n" . implode("\n", $lines);
+        $now = date('Y-m-d H:i:s');
+        $day = date('Y-m-d');
+        $this->db->begin();
+        try {
+            $rid = $this->db->insert('sc_records', ['tenant_id' => $toTenant, 'module' => 'rx', 'code' => Ops::code($this->db, $toTenant, 'rx', 'RX-'), 'title' => mb_substr((string) $rx['patient_name'], 0, 190),
+                'party' => mb_substr((string) $rx['doctor_name'] . ' (' . $vendorName . ')', 0, 190), 'phone' => $rx['patient_phone'] ?: null, 'cat' => 'Website', 'date1' => $day, 'status' => 'received', 'notes' => mb_substr($notes, 0, 4000),
+                'sort_order' => Ops::nextSort($this->db, $toTenant, 'rx', $day), 'meta' => json_encode(['from' => $rx['tenant_id'], 'rx_no' => $rx['rx_no'], 'sent_by' => $by]), 'created_at' => $now, 'updated_at' => $now]);
+            $this->db->insert('sc_rx_shares', ['tenant_id' => $rx['tenant_id'], 'prescription_id' => (int) $rx['id'], 'patient_id' => $rx['patient_id'] ?: null, 'to_tenant' => $toTenant, 'record_id' => $rid, 'sent_by' => $by, 'sent_user_id' => $userId, 'consent' => 1, 'created_at' => $now]);
+            Ops::event($this->db, $toTenant, $rid, 'rx', 'created', null, 'received', null, 'Sent with the patient\'s agreement from ' . $vendorName);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+        return null;
+    }
+
+    /** Where a prescription was sent and how far the pharmacy got. @return list<array<string,mixed>> */
+    public function shares(string $tenant, int $rxId): array
+    {
+        return $this->db->all('SELECT s.id, s.to_tenant, s.created_at, s.sent_by, t.hospital_name AS pharmacy, r.status, r.code FROM sc_rx_shares s JOIN tenants t ON t.id = s.to_tenant LEFT JOIN sc_records r ON r.id = s.record_id AND r.tenant_id = s.to_tenant WHERE s.tenant_id = ? AND s.prescription_id = ? ORDER BY s.id DESC', [$tenant, $rxId]);
+    }
+
+    /** The "send to a pharmacy" box with what was already sent. */
+    public function shareBox(string $action, array $rx, string $who): string
+    {
+        $tone = ['received' => 'is-warn', 'verified' => 'is-info', 'dispensed' => 'is-ok', 'cancelled' => 'is-mute'];
+        $lab = ['received' => 'Received', 'verified' => 'Checked by the pharmacist', 'dispensed' => 'Medicines handed over', 'cancelled' => 'Cancelled'];
+        $h = '';
+        foreach ($this->shares((string) $rx['tenant_id'], (int) $rx['id']) as $s) {
+            $h .= '<li><b>' . e((string) $s['pharmacy']) . '</b> · ' . e(dt((string) $s['created_at'], 'd M Y H:i')) . ' · <span class="d-badge ' . ($tone[$s['status'] ?? ''] ?? 'is-mute') . '">' . e($lab[$s['status'] ?? ''] ?? 'Sent') . '</span></li>';
+        }
+        $opts = '<option value="">Choose a pharmacy…</option>';
+        foreach ($this->pharmacies() as $ph) {
+            $opts .= '<option value="' . e((string) $ph['tenant_id']) . '">' . e((string) $ph['name'] . ($ph['city'] ? ' (' . $ph['city'] . ')' : '')) . '</option>';
+        }
+        $agree = $who === 'patient' ? 'I agree to share this prescription with the pharmacy I chose.' : 'The patient agreed to send this prescription to the pharmacy.';
+        return ($h !== '' ? '<ul style="margin:0 0 12px 18px">' . $h . '</ul>' : '') . '<form class="d-form" method="post" action="' . e($action) . '">' . csrf_field()
+            . '<div class="d-form-grid"><div class="d-field"><label for="f_pharmacy">Pharmacy</label><select id="f_pharmacy" name="pharmacy" required>' . $opts . '</select></div></div>'
+            . '<label class="d-check" style="margin:10px 0"><input type="checkbox" name="agree" value="1" required><span>' . e($agree) . ' Only the medicines, your name and phone are shared.</span></label>'
+            . '<div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Send to pharmacy</button></div></form>';
+    }
+
     // ------------------------------------------------------------------ medicine master (sc_medicines)
 
     /** Copies the starter list into a vendor's own list the first time it is needed. Returns how many were added. */

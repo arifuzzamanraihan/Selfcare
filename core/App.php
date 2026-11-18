@@ -32,6 +32,12 @@ final class App
     /** Renders a dashboard page: ($portalOrNull, $active, $title, $html, $options). Set in routes/portal.php. */
     public ?\Closure $dash = null;
     public ?\Closure $adminPage = null;
+    /** Prescription editor markup, set by core/routes/rx.php and reused by the doctor workspace. */
+    public ?\Closure $rxForm = null;
+    /** Prescription print model, set by core/routes/rx.php (used by the patient pages). */
+    public ?\Closure $rxModel = null;
+    /** Patient overview page, set by core/routes/mycare.php. */
+    public ?\Closure $myOverview = null;
     /** Small HTML builders shared by route files (card, btn, stat). @var array<string,\Closure> */
     public array $ui = [];
 

@@ -572,6 +572,9 @@ final class Access
         if (isset($simple[$a])) {
             return $simple[$a];
         }
+        if ($a === 'workspace') {
+            return 'manage_rx';
+        }
         if ($a === 'medicines') {
             return 'manage_rx';
         }

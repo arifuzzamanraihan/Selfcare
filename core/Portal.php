@@ -228,6 +228,14 @@ final class Portal
         };
         if ($this->isSide()) {
             $all['Menu'][] = ['key' => 'overview', 'label' => 'Overview', 'icon' => 'home', 'url' => url('portal')];
+            if ($this->role === 'Patient') {
+                if (Rx::forType((string) ($this->type['slug'] ?? '')) !== null && $this->module('documents')) {
+                    $all['Menu'][] = ['key' => 'my-rx', 'label' => 'My prescriptions', 'icon' => 'pill', 'url' => url('portal/my/prescriptions')];
+                }
+                $all['Menu'][] = ['key' => 'my-bills', 'label' => 'My bills', 'icon' => 'card', 'url' => url('portal/my/bills')];
+                $all['Menu'][] = ['key' => 'my-records', 'label' => 'My reports and forms', 'icon' => 'file', 'url' => url('portal/my/records')];
+                $all['Menu'][] = ['key' => 'my-visits', 'label' => 'My visits', 'icon' => 'clock', 'url' => url('portal/my/visits')];
+            }
             $all['Menu'][] = ['key' => 'mine', 'label' => 'My requests', 'icon' => 'cal', 'url' => url('portal/mine')];
             $all['Menu'][] = ['key' => 'account', 'label' => 'My account', 'icon' => 'user', 'url' => url('portal/account')];
             return $this->shape($all);
@@ -275,6 +283,11 @@ final class Portal
         }
         if (Rx::forType((string) ($this->type['slug'] ?? '')) !== null && ($this->can('manage_rx') || $this->can('view_rx')) && $this->module('documents')) {
             $all['Records'][] = ['key' => 'prescriptions', 'label' => 'Prescriptions', 'icon' => 'pill', 'url' => url('portal/prescriptions')];
+            if ($this->can('manage_rx') && Ops::all()['tokens'] ?? null) {
+                if (in_array((string) $this->type['slug'], Ops::all()['tokens']['types'], true)) {
+                    array_splice($all['Main'], 1, 0, [['key' => 'workspace', 'label' => 'Doctor workspace', 'icon' => 'stethoscope', 'url' => url('portal/workspace')]]);
+                }
+            }
             if ($this->can('manage_rx')) {
                 $all['Records'][] = ['key' => 'medicines', 'label' => 'Medicine list', 'icon' => 'pill', 'url' => url('portal/medicines')];
             }

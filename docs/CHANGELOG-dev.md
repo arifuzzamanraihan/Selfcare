@@ -75,3 +75,11 @@ Long page titles on phones wrap onto a second line instead of being cut off with
 ## 2026-11-19 type card names wrap at words (builder B)
 
 Vendor type cards on phones wrap their names at word boundaries instead of mid-word. Below 380px the name sits on its own row so short labels such as Hospital stay intact.
+
+## 2026-11-18 medicine master, doctor workspace, patient "My care", send-to-pharmacy (builder A)
+- Migrations are now picked up by `install.php` with `glob('migrate-2*.sql')` in name order (builder C: you can drop your explicit line, it is harmless either way). New: `migrate-20261118-231000-medicine-master.sql` (sc_medicines), `-233000-rx-queue-link.sql` (sc_prescriptions.queue_record_id), `-234500-rx-shares.sql` (sc_rx_shares).
+- **Doctor workspace builds on builder C's clinic work list "tokens"** (sc_records module `tokens`, daily numbers, `sort_order` drag reorder, `Ops::event`). Nothing in the queue engine was changed. New: `core/routes/workspace.php` (`/portal/workspace`, call-next, start/skip/requeue/finish), `Rx::queueAdvance/queueStartNext`. The prescription editor (`core/routes/rx.php`) is exposed as `$app->rxForm` and shows "Issue and call next patient" when it gets `_queue`. If you change token statuses (`waiting, called, in_consult, done, skipped`), update `Rx::queueAdvance`.
+- **Patient "My care"** (role Patient on the vendor site): `core/routes/mycare.php` (`/portal/my/prescriptions|bills|records|visits`, PDFs). Reads only rows with `patients.user_id = me`. Sidebar for Patient is built in `Portal::nav`.
+- **Send to a pharmacy**: `Rx::sendToPharmacy` creates a `rx` order (status `received`) in the pharmacy with the patient's agreement, `sc_rx_shares` keeps the link. The pharmacy order flow (verify, dispense, Make invoice) is unchanged.
+- App has three new public closures set by routes: `$app->rxForm`, `$app->rxModel`, `$app->myOverview` (declared in `core/App.php`).
+- Tests: `tests/meds.py`, `tests/workspace.py`, `tests/mycare.py`, `tests/chain.py` (each prints N/N).

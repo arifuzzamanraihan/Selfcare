@@ -119,6 +119,9 @@ $check('prescription states are valid and issued ones carry the time', "SELECT i
 $check('issued prescriptions have at least one medicine line', "SELECT r.id FROM sc_prescriptions r WHERE r.status = 'issued' AND r.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM sc_prescription_items i WHERE i.prescription_id = r.id)");
 $check('prescription copies point to a prescription of the same vendor', 'SELECT r.id FROM sc_prescriptions r LEFT JOIN sc_prescriptions o ON o.id = r.parent_id AND o.tenant_id = r.tenant_id WHERE r.parent_id IS NOT NULL AND o.id IS NULL');
 $check('saved medicine sets belong to an existing vendor', 'SELECT s.id FROM sc_rx_templates s LEFT JOIN tenants t ON t.id = s.tenant_id WHERE t.id IS NULL');
+$check('prescriptions sent to a pharmacy point to a prescription of the same vendor', 'SELECT s.id FROM sc_rx_shares s LEFT JOIN sc_prescriptions r ON r.id = s.prescription_id AND r.tenant_id = s.tenant_id WHERE r.id IS NULL');
+$check('prescriptions sent to a pharmacy became an order of that pharmacy', "SELECT s.id FROM sc_rx_shares s LEFT JOIN sc_records o ON o.id = s.record_id AND o.tenant_id = s.to_tenant AND o.module = 'rx' WHERE o.id IS NULL");
+$check('prescriptions written from the workspace point to a token of the same vendor', "SELECT r.id FROM sc_prescriptions r LEFT JOIN sc_records k ON k.id = r.queue_record_id AND k.tenant_id = r.tenant_id AND k.module = 'tokens' WHERE r.queue_record_id IS NOT NULL AND k.id IS NULL");
 $check('medicine list entries belong to an existing vendor', 'SELECT m.id FROM sc_medicines m LEFT JOIN tenants t ON t.id = m.tenant_id WHERE t.id IS NULL');
 $check('medicine list entries have a generic name and a valid state', "SELECT id FROM sc_medicines WHERE TRIM(generic) = '' OR active NOT IN (0, 1) OR source NOT IN ('seed', 'vendor', 'auto')");
 

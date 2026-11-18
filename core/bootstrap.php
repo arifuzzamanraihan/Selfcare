@@ -35,7 +35,7 @@ if ($app->db->val('SELECT COUNT(*) FROM sc_vendor_types') == 0) {
 }
 Selfcare\Plans::seedDefaults($app->db);
 
-foreach (['public', 'auth', 'site', 'portal', 'admin', 'documents', 'ops', 'accounts', 'rx', 'roletpl'] as $r) {
+foreach (['public', 'auth', 'site', 'portal', 'admin', 'documents', 'ops', 'accounts', 'rx', 'workspace', 'mycare', 'roletpl'] as $r) {
     $file = __DIR__ . '/routes/' . $r . '.php';
     if (is_file($file)) {
         (static function (App $app, string $file): void {

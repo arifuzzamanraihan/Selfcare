@@ -52,6 +52,9 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
     $p = Portal::boot($app);
     $db = $app->db;
     $t = $p->tenantId;
+    if ($p->isSide() && $app->myOverview !== null && $p->role === 'Patient') {
+        ($app->myOverview)($p);
+    }
     if ($p->isSide()) {
         $mine = $db->all('SELECT * FROM sc_appointment_requests WHERE tenant_id = ? AND email = ? ORDER BY id DESC LIMIT 5', [$t, $p->user['email']]);
         $h = $card('Welcome, ' . $p->user['first_name'], '<p>This is your page at ' . e($p->vendor['name']) . '. You can see your requests and update your details.</p>' . $btn('My requests', url('portal/mine')) . ' ' . $btn('My account', url('portal/account'), 'd-btn-soft'));
