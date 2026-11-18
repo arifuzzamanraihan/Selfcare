@@ -4,7 +4,7 @@
 // Safe to run twice: a module that already has rows for a vendor is skipped. Only the demo vendors are touched.
 declare(strict_types=1);
 
-foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Ops'] as $f) {
+foreach (['Env', 'Database', 'Router', 'View', 'helpers', 'Auth', 'Throttle', 'Mailer', 'Tenant', 'Site', 'Plans', 'Access', 'VendorTypes', 'Listing', 'Crud', 'Vendors', 'Domains', 'Currency', 'Charts', 'App', 'Portal', 'People', 'Billing', 'Pdf', 'Documents', 'Reports', 'Accounts', 'Ops'] as $f) {
     if (is_file(dirname(__DIR__, 2) . '/core/' . $f . '.php')) {
         require_once dirname(__DIR__, 2) . '/core/' . $f . '.php';
     }
@@ -140,5 +140,41 @@ foreach ($db->all("SELECT id, tenant_id, quantity FROM sc_stock_items WHERE tena
     }
     $db->insert('sc_stock_moves', ['tenant_id' => $it['tenant_id'], 'item_id' => (int) $it['id'], 'change_qty' => $it['quantity'], 'balance' => $it['quantity'], 'reason' => 'opening', 'note' => 'Opening stock', 'user_id' => null, 'created_at' => date('Y-m-d H:i:s', strtotime('-20 days'))]);
     $seeded[] = 'ledger#' . $it['id'];
+}
+// accounts: a month of expenses, one donation and one bill to pay for each demo vendor (only vendors that have none yet)
+$demoTenants = ['brightsmile', 'carehome', 'citygeneral', 'clearscan', 'diagnosticplus', 'docnow', 'evergreencare', 'greenvalley', 'heartcare', 'herbalcare', 'lakeside', 'lifeline', 'medequip', 'medicopharma', 'mindwell', 'motherhood', 'movewell', 'precisionlab', 'rapidambulance', 'renalcare', 'sunriseclinic', 'tinyclinic', 'visionplus'];
+$acc = new \Selfcare\Accounts($db, new \Selfcare\Billing($db));
+foreach ($demoTenants as $vi => $t) {
+    if (($only !== null && !in_array($t, $only, true)) || !$db->val('SELECT COUNT(*) FROM sc_vendors WHERE tenant_id = ?', [$t]) || $db->val('SELECT COUNT(*) FROM sc_ledger WHERE tenant_id = ?', [$t])) {
+        continue;
+    }
+    $type = (string) $db->val('SELECT type_slug FROM sc_vendors WHERE tenant_id = ?', [$t]);
+    $special = match ($type) { 'ambulance' => ['Fuel and vehicle costs', 'Fuel for the fleet', 'Padma Oil', 310.0], 'pharmacy' => ['Medicines and consumables', 'Stock from the depot', 'Square Pharmaceuticals depot', 540.0], 'blood-bank' => ['Medical supplies', 'Blood bags and test kits', 'LabAid Supplies', 420.0], 'laboratory', 'diagnostic-center', 'imaging-center' => ['Medical supplies', 'Reagents and film', 'BioTech Supplies', 380.0], 'equipment-supplier' => ['Equipment and repairs', 'Spare parts', 'Parts Hub', 260.0], default => ['Medical supplies', 'Gloves, syringes and dressings', 'City Medical Store', 180.0] };
+    $rows = [
+        ['expense', 'Salaries and wages', 'Staff salaries', 'Payroll', 1200.0 + $vi * 15, 'Bank transfer', 'paid', -26],
+        ['expense', 'Rent', 'Monthly rent', 'Landlord', 450.0 + $vi * 5, 'Bank transfer', 'paid', -24],
+        ['expense', 'Electricity, water and gas', 'Utility bills', 'DESCO', 95.5, 'Cash', 'paid', -12],
+        ['expense', 'Internet and phone', 'Broadband and phones', 'Link3', 30.0, 'Mobile banking', 'paid', -9],
+        ['expense', $special[0], $special[1], $special[2], $special[3], 'Cash', 'paid', -5],
+        ['expense', 'Cleaning and laundry', 'Weekly cleaning', 'CleanCo', 40.0, 'Cash', 'paid', -2],
+        ['expense', $special[0], $special[1] . ' (invoice to pay)', $special[2], 150.0, 'Cash', 'due', -3],
+        ['income', 'Donations and grants', 'Community donation', 'Well-wisher', 250.0, 'Cash', 'paid', -7],
+    ];
+    foreach ($rows as [$kind, $cat, $desc, $party, $amt, $meth, $st, $off]) {
+        $d = $day($off);
+        $db->insert('sc_ledger', ['tenant_id' => $t, 'kind' => $kind, 'code' => $acc->code($t, $kind), 'entry_date' => $d, 'category' => $cat, 'party' => $party, 'description' => $desc, 'amount' => $amt, 'method' => $meth, 'status' => $st, 'due_date' => $st === 'due' ? $day(7) : null, 'paid_at' => $st === 'paid' ? $d . ' 11:00:00' : null, 'created_at' => $now, 'updated_at' => $now]);
+    }
+    $seeded[] = "$t/ledger=" . count($rows);
+}
+// an opening cash balance that keeps the demo cash book above zero (only where the vendor has not set one)
+foreach ($demoTenants as $t) {
+    if (($only !== null && !in_array($t, $only, true)) || !$db->val('SELECT COUNT(*) FROM sc_ledger WHERE tenant_id = ?', [$t]) || $db->val("SELECT COUNT(*) FROM settings WHERE tenant_id = ? AND `key` = 'acc_opening'", [$t])) {
+        continue;
+    }
+    $bal = $acc->balanceBefore($t, date('Y-m-d', strtotime('+1 day')));
+    if ($bal < 2000) {
+        (new \Selfcare\Billing($db))->setSetting($t, 'acc_opening', (string) ((int) ceil((2000 - $bal) / 1000) * 1000));
+        $seeded[] = "$t/opening";
+    }
 }
 echo $seeded ? 'seeded ' . implode(', ', $seeded) . "\n" : "nothing to seed\n";

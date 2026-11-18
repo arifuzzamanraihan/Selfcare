@@ -45,31 +45,44 @@ Legend: **Y** works end to end today, **P** partly, **-** missing. Intake = regi
 
 | Kind | Intake | Service | Rx | Bill | Accounts | Records | Reports | Main gaps (research in RESEARCH.md) |
 |---|---|---|---|---|---|---|---|---|
-| Hospital | Y | P | P | Y | - | P | Y | structured prescription, IPD beds and admissions, token queue, accounts |
-| Clinic | Y | P | P | Y | - | P | Y | structured prescription, token queue, doctor-wise share, accounts |
-| Specialty clinic | Y | P | P | Y | - | P | Y | prescription, procedure records, accounts |
-| Dental clinic | Y | P | P | Y | - | P | Y | treatment plan and tooth chart, prescription, accounts |
-| Eye clinic | Y | P | P | Y | - | P | Y | eye exam, optical orders, prescription, accounts |
-| Diagnostic centre | Y | Y (samples) | n/a | Y | - | P | Y | test catalogue with ranges, validation, accounts |
-| Imaging centre | Y | - | n/a | Y | - | P | Y | study orders and radiology reports, accounts |
-| Dialysis centre | Y | - | P | Y | - | P | Y | session schedule and machines, accounts |
-| Maternity | Y | - | P | Y | - | P | Y | antenatal and vaccination schedules, accounts |
-| Mental health | Y | - | P | Y | - | P | Y | session notes, treatment plans, accounts |
-| Traditional medicine | Y | - | P | Y | - | P | Y | consultation with remedy prescription, accounts |
-| Nursing home | Y | - | n/a | Y | - | P | Y | residents, care plans, medication chart, accounts |
-| Rehabilitation | Y | - | n/a | Y | - | P | Y | plans and sessions, accounts |
-| Pathology lab | Y | Y | n/a | Y | - | Y | Y | test catalogue with ranges, validation, critical values, accounts |
-| Pharmacy | Y | Y | Y (orders) | Y | - | Y | Y | batch FEFO, purchase/GRN, controlled-drug register, accounts |
-| Blood bank | Y | Y | n/a | Y | - | Y | Y | TTI results, crossmatch, reaction log, accounts |
-| Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y (from trip) | - | Y (history with times) | Y | crew roster, run sheet, maintenance log, accounts |
-| Telemedicine | Y | - | P | Y | - | P | Y | slots and video link, prescription, accounts |
-| Home care | Y | - | n/a | Y | - | P | Y | visit schedule, caregiver roster, accounts |
-| Equipment supplier | Y | - | n/a | Y | - | P | Y | rentals and orders, service log, accounts |
+| Hospital | Y | P | P | Y | - | P | Y | structured prescription, IPD beds and admissions, token queue |
+| Clinic | Y | P | P | Y | - | P | Y | structured prescription, token queue, doctor-wise share |
+| Specialty clinic | Y | P | P | Y | - | P | Y | prescription, procedure records |
+| Dental clinic | Y | P | P | Y | - | P | Y | treatment plan and tooth chart, prescription |
+| Eye clinic | Y | P | P | Y | - | P | Y | eye exam, optical orders, prescription |
+| Diagnostic centre | Y | Y (samples) | n/a | Y | - | P | Y | test catalogue with ranges, validation |
+| Imaging centre | Y | - | n/a | Y | - | P | Y | study orders and radiology reports |
+| Dialysis centre | Y | - | P | Y | - | P | Y | session schedule and machines |
+| Maternity | Y | - | P | Y | - | P | Y | antenatal and vaccination schedules |
+| Mental health | Y | - | P | Y | - | P | Y | session notes, treatment plans |
+| Traditional medicine | Y | - | P | Y | - | P | Y | consultation with remedy prescription |
+| Nursing home | Y | - | n/a | Y | - | P | Y | residents, care plans, medication chart |
+| Rehabilitation | Y | - | n/a | Y | - | P | Y | plans and sessions |
+| Pathology lab | Y | Y | n/a | Y | - | Y | Y | test catalogue with ranges, validation, critical values |
+| Pharmacy | Y | Y | Y (orders) | Y | - | Y | Y | batch FEFO, purchase/GRN, controlled-drug register |
+| Blood bank | Y | Y | n/a | Y | - | Y | Y | TTI results, crossmatch, reaction log |
+| Ambulance | Y | Y (vehicles, trips, dispatch) | n/a | Y | - | Y (history with times) | Y | crew roster, run sheet, maintenance log |
+| Telemedicine | Y | - | P | Y | - | P | Y | slots and video link, prescription |
+| Home care | Y | - | n/a | Y | - | P | Y | visit schedule, caregiver roster |
+| Equipment supplier | Y | - | n/a | Y | - | P | Y | rentals and orders, service log |
 
-Cross-cutting gaps, built in this order: (1) Accounts for every kind, (2) structured Prescriptions with PDF and history, (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
+Cross-cutting gaps, built in this order: (1) Accounts for every kind (done, live), (2) structured Prescriptions with PDF and history, (3) dynamic roles with per-feature permissions, (4) the type-specific rows above, wave by wave.
 
 ## Shared work-list features added with ambulance
 
 - **History with times** on every work-list record (`sc_record_events`, removed with the record): added, each step, deleted, brought back, invoice made, with who and the time since the step before. Existing records got a first line on deploy.
 - **Make invoice** from a record: ambulance trip, lab sample, blood order, pharmacy prescription order. The invoice form is pre-filled (name, phone, reference, trip fields, first line), the record keeps the invoice id and shows it with Paid/Unpaid. Another vendor's record cannot be used to pre-fill or link (tested in the isolation run).
 - **Make trip / order / sample from a website request** on the request page, with name, phone, date and note already filled in.
+
+## Accounts for every kind (step 2)
+
+Every vendor type has **Accounts** (Money → Accounts), permission `manage_accounts` (Accountant and Branch Manager by default, Admin always; module `billing`, so every type has it):
+- Cash basis. Money in = invoice payments (voided invoices left out, credit notes applied to an invoice are not cash) + other income typed in; money out = expenses paid, refunds paid ('Refund paid' notes), supplier invoices paid.
+- Overview: cash on hand, in/out today, income/expenses/profit this month, to collect (unpaid invoices), to pay (bills and supplier invoices), 6-month charts, spending by category, latest movements.
+- Daily cash summary per day (start, in, out, end, by payment method) with PDF and print; cash book for any period with PDF; opening balance set once by the vendor.
+- Expenses and other income (`sc_ledger`, codes EXP-/INC-, categories, party, method, attachment-free): add, edit, soft delete and restore; bills to pay later with due date; **Dues** page (to collect with ageing, to pay) and a Pay now action that stamps method and time.
+- Reports: Cash book, Income and expenses by category, Expense register, Payables; on the Reports page of every kind.
+- Overview tiles on the portal home: Cash in today, Expenses this month.
+- Integrity checks: ledger tenant, amounts, status/paid_at, codes unique per vendor and kind (5 checks). Isolation test: ledger ids of another vendor refused on view/pay/delete/restore/save; accounts pages and PDFs never contain another vendor's money.
+- Tests: accounts end to end (36 checks) and all 23 demo vendors open every accounts page; isolation 31,486 checks.
+- Not built yet (future): day-end closing with drawer count and period lock, doctor payout shares, double-entry journals / trial balance.

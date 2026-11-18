@@ -50,3 +50,8 @@ Gap: priority and timestamps, crew roster, run sheet, maintenance log, invoice f
 - Telemedicine: appointment slot, video link, e-prescription, payment before the call.
 - Home care: visit schedule, caregiver roster, visit log, package billing.
 - Equipment supplier: catalogue, rental and sale orders, return and service log, customer dues.
+
+### Accounts for clinics, hospitals and suppliers (Medbus, CluvixHealth, Shafa HMS, OctoMediCare, Yuktii; Nov 2026)
+Must have: income posted from billing automatically (no re-entry); expense heads with party and method; supplier payables with due dates and payment history; patient receivables with ageing; cash book and daily cash summary by payment method; opening balance; profit and loss by period; refunds and credit notes carrying a reason; audit trail on every posting; PDF/export for the accountant.
+Built (live): all of the above on a cash basis, with the cash book, daily summary, dues and four reports, per vendor.
+Gap: day-end closing against the drawer count with locked periods, doctor payout shares, double-entry journals and trial balance, bank statement matching.

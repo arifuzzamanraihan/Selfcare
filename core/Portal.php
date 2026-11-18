@@ -197,6 +197,7 @@ final class Portal
         $add('Website', 'c-free-services', 'Free services', 'heart', 'portal/c/free-services', 'manage_free_services', 'free_services');
         $add('Website', 'messages', 'Messages', 'mail', 'portal/messages', 'view_messages', 'messages');
         $add('Money', 'billing', 'Invoices and bills', 'card', 'portal/billing', 'manage_invoices', 'billing');
+        $add('Money', 'accounts', 'Accounts', 'chart', 'portal/accounts', 'manage_accounts', 'billing');
         $add('Money', 'reports', 'Reports', 'chart', 'portal/reports', 'manage_reports', 'reports');
         if (in_array($this->family, ['pharmacy', 'bloodbank', 'equipment'], true)) {
             $add('Money', 'stock', 'Stock', 'box', 'portal/stock', 'manage_medicines', 'documents');

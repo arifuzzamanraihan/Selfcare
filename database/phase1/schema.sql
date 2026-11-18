@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS free_services (
 INSERT INTO permissions (name, guard_name, created_at, updated_at)
 SELECT n, 'web', NOW(), NOW() FROM (
   SELECT 'manage_catalog' AS n UNION ALL SELECT 'manage_free_services' UNION ALL SELECT 'view_messages'
-  UNION ALL SELECT 'manage_access' UNION ALL SELECT 'view_plan'
+  UNION ALL SELECT 'manage_access' UNION ALL SELECT 'view_plan' UNION ALL SELECT 'manage_accounts'
 ) x WHERE NOT EXISTS (SELECT 1 FROM permissions p WHERE p.name = x.n);
 
 -- ---------------------------------------------------------------------------
@@ -467,6 +467,32 @@ CREATE TABLE IF NOT EXISTS sc_records (
   KEY sc_rec_code (tenant_id, module, code),
   KEY sc_rec_d1 (tenant_id, module, date1),
   KEY sc_rec_d2 (tenant_id, module, date2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Accounts: expenses and other income that are typed in (invoice payments come from billing). Cash basis, see core/Accounts.php.
+CREATE TABLE IF NOT EXISTS sc_ledger (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  kind VARCHAR(8) NOT NULL COMMENT 'expense | income',
+  code VARCHAR(30) NULL,
+  entry_date DATE NOT NULL,
+  category VARCHAR(60) NOT NULL,
+  party VARCHAR(190) NULL COMMENT 'paid to / received from',
+  description VARCHAR(255) NULL,
+  amount DECIMAL(14,2) NOT NULL,
+  method VARCHAR(40) NOT NULL DEFAULT 'Cash',
+  reference VARCHAR(120) NULL,
+  status VARCHAR(8) NOT NULL DEFAULT 'paid' COMMENT 'paid | due (a bill to pay later)',
+  due_date DATE NULL,
+  paid_at DATETIME NULL COMMENT 'when the money moved; NULL while due',
+  user_id BIGINT UNSIGNED NULL COMMENT 'users.id of the staff member paid (salary), same vendor',
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  KEY sc_led_kind (tenant_id, kind, entry_date),
+  KEY sc_led_paid (tenant_id, status, paid_at),
+  KEY sc_led_code (tenant_id, kind, code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Who did what to a work-list record and when (state changes, created, deleted). Removed with the record.

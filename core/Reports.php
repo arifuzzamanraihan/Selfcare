@@ -11,6 +11,10 @@ final class Reports
     /** key => [label, description, tables read] */
     public const META = [
         'daily_collection' => ['Daily collection', 'Money received each day, by payment method.', 'sc_invoice_payments, sc_invoices'],
+        'cash_book' => ['Cash book (day by day)', 'Money in and out each day with the cash at the end of the day.', 'sc_invoice_payments, sc_ledger'],
+        'income_expense' => ['Income and expenses', 'Money in and out by category, and the profit, on a cash basis.', 'sc_invoice_payments, sc_ledger'],
+        'expense_register' => ['Expense register', 'Every expense and bill in the period.', 'sc_ledger'],
+        'payables' => ['Bills and supplier dues', 'What the vendor still has to pay.', 'sc_ledger, sc_invoices'],
         'monthly_collection' => ['Monthly collection', 'Billed, collected and outstanding for each month.', 'sc_invoices'],
         'revenue_by_item' => ['Revenue by service / item', 'Quantity and revenue for each service, product or test.', 'sc_invoice_items, sc_invoices'],
         'dues' => ['Dues and outstanding', 'Unpaid invoices with age of the debt.', 'sc_invoices'],
@@ -44,7 +48,7 @@ final class Reports
         'p_receivables' => ['Subscription dues', 'Unpaid subscription invoices.', 'sc_invoices'],
     ];
 
-    private const COMMON = ['daily_collection', 'monthly_collection', 'revenue_by_item', 'dues', 'invoice_register', 'payments_register', 'free_services_delivered'];
+    private const COMMON = ['daily_collection', 'cash_book', 'income_expense', 'expense_register', 'payables', 'monthly_collection', 'revenue_by_item', 'dues', 'invoice_register', 'payments_register', 'free_services_delivered'];
 
     /** Reports per family (plus automatic registers of the forms a vendor uses). @return list<string> */
     public static function forFamily(string $family, string $typeSlug): array
@@ -91,6 +95,40 @@ final class Reports
         $sumCol = static fn (array $rows, int $i) => array_sum(array_map(static fn ($r) => (float) str_replace([',', '$', '€', '£', '৳', '₹'], '', (string) ($r[$i] ?? 0)), $rows));
 
         switch ($key) {
+            case 'cash_book':
+                $acc = new Accounts($db, $this->billing);
+                $days = $acc->daily((string) $tid, $from, $to);
+                $open = $acc->balanceBefore((string) $tid, $from);
+                $in = array_sum(array_column($days, 'in'));
+                $outv = array_sum(array_column($days, 'out'));
+                $out = array_map(static fn ($d) => [dt($d['d']), (string) $d['n'], $d['in'] > 0 ? $fm($d['in']) : '', $d['out'] > 0 ? $fm($d['out']) : '', $fm($d['close'])], $days);
+                return $res([['Date', 1.6], ['Entries', 0.9, 'R'], ['Money in', 1.6, 'R'], ['Money out', 1.6, 'R'], ['Cash at end of day', 1.8, 'R']], $out, [['Cash at start', $fm($open)], ['Money in', $fm($in)], ['Money out', $fm($outv)], ['Cash at end', $fm($open + $in - $outv)]]);
+            case 'income_expense':
+                $acc = new Accounts($db, $this->billing);
+                $cat = ['in' => [], 'out' => []];
+                foreach ($acc->movements((string) $tid, $from, $to) as $x) {
+                    $cat[$x['dir']][(string) $x['cat']] = ($cat[$x['dir']][(string) $x['cat']] ?? 0) + (float) $x['amount'];
+                }
+                $out = [];
+                foreach (['in' => 'Income', 'out' => 'Expense'] as $dir => $lab) {
+                    arsort($cat[$dir]);
+                    foreach ($cat[$dir] as $c => $v) {
+                        $out[] = [$lab, (string) $c, $fm($v)];
+                    }
+                }
+                $ti = array_sum($cat['in']);
+                $to2 = array_sum($cat['out']);
+                return $res([['Type', 1.2], ['Category', 3.2], ['Amount', 1.6, 'R']], $out, [['Income', $fm($ti)], ['Expenses', $fm($to2)], [$ti - $to2 >= 0 ? 'Profit' : 'Loss', $fm(abs($ti - $to2))]]);
+            case 'expense_register':
+                $rows = $db->all("SELECT * FROM sc_ledger WHERE tenant_id = ? AND kind = 'expense' AND deleted_at IS NULL AND entry_date BETWEEN ? AND ?" . ($q !== '' ? ' AND (party LIKE ? OR category LIKE ? OR code LIKE ?)' : '') . ' ORDER BY entry_date, id', $q !== '' ? [$tid, $from, $to, $like, $like, $like] : [$tid, $from, $to]);
+                $out = array_map(fn ($r) => [(string) $r['code'], dt((string) $r['entry_date']), (string) $r['category'], (string) $r['party'], (string) $r['method'], $r['status'] === 'due' ? 'To pay' : 'Paid', $fm($r['amount'])], $rows);
+                return $res([['No', 1.2], ['Date', 1.2], ['Category', 2.2], ['Paid to', 2], ['Method', 1.2], ['State', 0.9], ['Amount', 1.4, 'R']], $out, [['Entries', (string) count($rows)], ['Total', $fm(array_sum(array_column($rows, 'amount')))], ['Still to pay', $fm(array_sum(array_map(static fn ($r) => $r['status'] === 'due' ? (float) $r['amount'] : 0, $rows)))]]);
+            case 'payables':
+                $acc = new Accounts($db, $this->billing);
+                $rows = $acc->payable((string) $tid);
+                $b = Accounts::ageing($rows, 'amount');
+                $out = array_map(fn ($r) => [(string) $r['ref'], dt((string) $r['d']), (string) $r['party'], (string) $r['label'], $r['due_date'] ? dt((string) $r['due_date']) : '', $fm($r['amount']), max(0, (int) $r['age']) . ' d'], $rows);
+                return $res([['No', 1.3], ['Date', 1.2], ['To', 2.2], ['For', 2], ['Pay by', 1.2], ['Amount', 1.4, 'R'], ['Late', 0.8, 'R']], $out, [['Total to pay', $fm(array_sum($b))], ['Not late', $fm($b[0])], ['1-30 days late', $fm($b[1])], ['Over 30 days late', $fm($b[2] + $b[3])]]);
             case 'daily_collection':
                 $rows = $db->all('SELECT DATE(p.paid_at) d, p.method, COUNT(*) n, SUM(p.amount) amt FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = ? AND i.status <> ? AND DATE(p.paid_at) BETWEEN ? AND ? AND ' . $this->billing->notCreditSql('i') . ' AND (p.note IS NULL OR p.note NOT LIKE \'Credit note%\') GROUP BY DATE(p.paid_at), p.method ORDER BY d', [$tid, 'vendor', 'void', $from, $to]);
                 $days = [];

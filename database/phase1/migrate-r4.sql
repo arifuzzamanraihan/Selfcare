@@ -20,3 +20,11 @@ ALTER TABLE sc_records ADD COLUMN IF NOT EXISTS invoice_id BIGINT UNSIGNED NULL 
 INSERT INTO sc_record_events (tenant_id, record_id, module, action, from_status, to_status, user_id, created_at)
   SELECT r.tenant_id, r.id, r.module, 'created', NULL, r.status, r.created_by, COALESCE(r.created_at, NOW()) FROM sc_records r
   WHERE NOT EXISTS (SELECT 1 FROM sc_record_events e WHERE e.record_id = r.id);
+
+-- accounts permission: vendors that already saved their role grants give it to Accountant and Branch Manager (idempotent)
+INSERT INTO permissions (name, guard_name, created_at, updated_at)
+  SELECT 'manage_accounts', 'web', NOW(), NOW() FROM (SELECT 1) x WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'manage_accounts');
+INSERT INTO tenant_role_has_permissions (tenant_id, role_id, permission_id)
+  SELECT g.tenant_id, g.role_id, p.id FROM (SELECT DISTINCT t.tenant_id, t.role_id FROM tenant_role_has_permissions t JOIN departments d ON d.id = t.role_id WHERE d.name IN ('Accountant', 'Branch Manager') AND t.permission_id <> 0) g
+  JOIN permissions p ON p.name = 'manage_accounts'
+  WHERE NOT EXISTS (SELECT 1 FROM tenant_role_has_permissions x WHERE x.tenant_id = g.tenant_id AND x.role_id = g.role_id AND x.permission_id = p.id);

@@ -70,6 +70,13 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
         $h .= $stat('Collected this month', money((float) $db->val("SELECT COALESCE(SUM(p.amount),0) FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND " . (new \Selfcare\Billing($db))->notCreditSql('i') . " AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%') AND p.paid_at >= ?", [$t, $month])), 'card');
         $h .= $stat('Unpaid', money((float) $db->val("SELECT COALESCE(SUM(balance),0) FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status = 'issued' AND balance > 0", [$t])), 'clock', 'across all invoices');
     }
+    if ($p->can('manage_accounts') && $p->module('billing')) {
+        $acc = new \Selfcare\Accounts($db, new \Selfcare\Billing($db));
+        $tdy = $acc->totals($t, date('Y-m-d'), date('Y-m-d'));
+        $mth = $acc->totals($t, $month, date('Y-m-d'));
+        $h .= $stat('Cash in today', money($tdy['in']), 'plus', 'out: ' . money($tdy['out']));
+        $h .= $stat('Expenses this month', money($mth['out']), 'minus', 'see Accounts');
+    }
     if ($p->can('view_messages') && $p->module('messages')) {
         $h .= $stat('Unread messages', (string) $q('SELECT COUNT(*) FROM sc_messages WHERE tenant_id = ? AND is_read = 0', [$t]), 'mail');
     }
@@ -590,7 +597,7 @@ $app->router->post('/portal/messages/{id}/{do}', static function (array $a) use 
 });
 
 // ------------------------------------------------------------------ role access
-$permModule = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports'];
+$permModule = ['manage_doctors' => 'doctors', 'manage_patients' => 'patients', 'manage_users' => 'staff', 'manage_settings' => 'website', 'manage_catalog' => 'catalog', 'manage_free_services' => 'free_services', 'view_messages' => 'messages', 'manage_access' => 'access', 'manage_invoices' => 'billing', 'manage_prescriptions' => 'documents', 'manage_medicines' => 'documents', 'manage_blood_bank' => 'documents', 'manage_reports' => 'reports', 'manage_accounts' => 'billing'];
 $app->router->get('/portal/access', static function () use ($app, $dash, $card, $permModule): void {
     $p = Portal::boot($app);
     $p->need('manage_access', 'access');

@@ -32,6 +32,7 @@ return [
         'manage_prescriptions'  => ['Clinical documents and forms', 'Records', 'Fill in prescriptions, notes, certificates and other forms.', true],
         'manage_medicines'      => ['Stock, store and registers', 'Records', 'Stock sheets, controlled drug register, challans and service tickets.', true],
         'manage_blood_bank'     => ['Blood bank records', 'Records', 'Donor, screening and blood issue records.', true],
+        'manage_accounts'       => ['Accounts: cash book, expenses and dues', 'Money', 'Record expenses and other income, read the daily cash book and the dues, print the day report.', false],
         'manage_reports'        => ['Reports', 'Money', 'Open and download reports.', true],
     ],
 
@@ -40,7 +41,7 @@ return [
     'defaults' => [
         'Owner' => ['*'], 'Admin' => ['*'],
         'Medical Director' => ['manage_patients', 'manage_doctors', 'manage_prescriptions', 'manage_reports', 'manage_notice_board'],
-        'Branch Manager' => ['manage_appointments', 'manage_patients', 'manage_doctors', 'manage_reports', 'view_messages'],
+        'Branch Manager' => ['manage_appointments', 'manage_patients', 'manage_doctors', 'manage_reports', 'view_messages', 'manage_accounts'],
         'Compliance Officer' => ['manage_reports'],
         'IT Administrator' => ['manage_users', 'manage_access'],
         'HR Officer' => ['manage_users'],
@@ -71,7 +72,7 @@ return [
         'Paramedic' => ['manage_appointments', 'manage_prescriptions'],
         'Receptionist' => ['manage_appointments', 'manage_patients', 'manage_doctors', 'view_messages', 'manage_invoices'],
         'Billing Clerk' => ['manage_invoices', 'manage_appointments'],
-        'Accountant' => ['manage_invoices', 'manage_reports', 'manage_appointments', 'view_plan'],
+        'Accountant' => ['manage_invoices', 'manage_reports', 'manage_appointments', 'view_plan', 'manage_accounts'],
         'Insurance Officer' => ['manage_invoices', 'manage_appointments'],
         'Medical Records Officer' => ['manage_patients', 'manage_prescriptions'],
         'Store Manager' => ['manage_medicines', 'manage_catalog', 'manage_invoices'],
