@@ -67,3 +67,7 @@ Central layout fix so phone screens stay on one header row everywhere (portal an
 - Listing filters: label above the select, Role and State side by side, Apply under them, aligned.
 - Phone table cards wrap long values (email addresses) instead of overflowing.
 - The "viewing as super admin" bar is one compact line with a small Return button.
+
+## 2026-11-19 phone titles wrap on two lines (builder B)
+
+Long page titles on phones wrap onto a second line instead of being cut off with an ellipsis. The header stays one row and under 88px. Full-site layout crawl at 360, 390, 768 and 1440 in light and dark passed with 0 failures.

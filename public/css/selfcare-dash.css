@@ -294,10 +294,10 @@ html,body{max-width:100%}
 .d-tools>.d-btn,.d-tools button[type=submit]{flex:none;align-self:flex-end}
 
 @media (max-width:980px){
-  .d-top{flex-wrap:nowrap!important;gap:6px;padding:6px 10px;min-height:52px;max-height:72px;align-items:center}
+  .d-top{flex-wrap:nowrap!important;gap:6px;padding:6px 10px;min-height:52px;max-height:88px;align-items:center}
   .d-top .sp,.d-top-sub{display:none!important}
   .d-top-title{flex:1 1 auto;min-width:0}
-  .d-top-title h1{font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:none;line-height:1.2}
+  .d-top-title h1{font-size:.98rem;line-height:1.25;white-space:normal;overflow:visible;text-overflow:unset;display:block;max-height:2.5em}
   .d-top-actions{flex:0 0 auto;flex-wrap:nowrap!important;order:0;padding:0;max-width:none;min-width:0;gap:6px}
   .d-top-more{flex:none}
   .d-me,.d-burger,.sc-theme{flex:none}
