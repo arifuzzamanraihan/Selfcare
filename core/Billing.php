@@ -222,6 +222,7 @@ final class Billing
                 if (!empty($cfg['stock']) && $c['stock_item_id'] !== null) {
                     $sign = $cfg['stock'] === 'out' ? '-' : '+';
                     $this->db->run("UPDATE sc_stock_items SET quantity = quantity $sign ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?", [$c['qty'], $c['stock_item_id'], $tenantId]);
+                    Ops::stockMove($this->db, $tenantId, (int) $c['stock_item_id'], ($sign === '-' ? -1 : 1) * (float) $c['qty'], $sign === '-' ? 'sale' : 'purchase', 'Invoice #' . $id, $userId);
                 }
             }
             if ($paidNow > 0) {
@@ -289,6 +290,7 @@ final class Billing
                 foreach ($this->items($invoiceId) as $it) {
                     if ($it['stock_item_id']) {
                         $this->db->run("UPDATE sc_stock_items SET quantity = quantity $sign ? WHERE id = ? AND tenant_id = ?", [$it['qty'], $it['stock_item_id'], $tenantId]);
+                        Ops::stockMove($this->db, $tenantId, (int) $it['stock_item_id'], ($sign === '-' ? -1 : 1) * (float) $it['qty'], 'void', 'Voided invoice #' . $invoiceId, null);
                     }
                 }
             }

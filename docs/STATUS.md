@@ -4,7 +4,7 @@ Updated 2026-11-18. Common layer (all 20 types, LIVE as of commit ccae14a): webs
 
 | Wave | Type | Planned type-specific features | Website | Portal base | Type features | Reports/invoices/forms | Status |
 |---|---|---|---|---|---|---|---|
-| Wave 1 | Pharmacy | stock, expiry, batches, sales/POS, suppliers | done | done | pending | generic done, type-specific pending | pending |
+| Wave 1 | Pharmacy | stock, expiry, batches, sales/POS, suppliers | done | done | **done**: prescription orders (verify, dispense), suppliers, stock alerts (low, expiring, expired), stock movement ledger with adjust, overview tiles and charts | done | **live** |
 | Wave 1 | Pathology laboratory | samples, test catalogue, results, reports | done | done | pending | generic done, type-specific pending | pending |
 | Wave 1 | Blood bank | donors, inventory by group, issue/crossmatch | done | done | pending | generic done, type-specific pending | pending |
 | Wave 1 | Ambulance service | fleet, trips, dispatch, billing | done | done | pending | generic done, type-specific pending | pending |

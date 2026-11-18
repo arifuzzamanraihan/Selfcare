@@ -73,12 +73,14 @@ $app->router->get('/portal', static function () use ($app, $dash, $card, $btn, $
     if ($p->can('view_messages') && $p->module('messages')) {
         $h .= $stat('Unread messages', (string) $q('SELECT COUNT(*) FROM sc_messages WHERE tenant_id = ? AND is_read = 0', [$t]), 'mail');
     }
+    [$opsTiles, $opsCharts] = \Selfcare\Ops::overview($p, $stat, $card);
+    $h .= $opsTiles;
     $h .= $stat('Plan', (string) $p->sub['plan_name'], 'layers', $app->plans->label($p->sub));
     $h .= '</div>';
     $months = \Selfcare\Charts::months(6);
     $since = date('Y-m-01', strtotime('-5 month'));
     $lab = $p->label('requests', 'Requests');
-    $charts = '';
+    $charts = $opsCharts;
     if ($p->can('manage_appointments')) {
         $got = array_column($db->all("SELECT DATE_FORMAT(created_at, '%Y-%m') m, COUNT(*) n FROM sc_appointment_requests WHERE tenant_id = ? AND created_at >= ? GROUP BY m", [$t, $since]), 'n', 'm');
         $charts .= $card($lab . ' per month', \Selfcare\Charts::columns(array_map(static fn ($m) => [$m[0], (int) ($got[$m[1]] ?? 0)], $months), 'No ' . strtolower($lab) . ' yet. Share your website address to get the first one.'));

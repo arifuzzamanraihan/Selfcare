@@ -438,3 +438,45 @@ CREATE TABLE IF NOT EXISTS sc_currencies (
   sort_order INT NOT NULL DEFAULT 0,
   UNIQUE KEY cur_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Round 5: type-specific operations (samples, blood units, trips, prescriptions ...) and the stock ledger
+CREATE TABLE IF NOT EXISTS sc_records (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  module VARCHAR(30) NOT NULL,
+  code VARCHAR(40) NULL,
+  title VARCHAR(190) NOT NULL,
+  party VARCHAR(190) NULL,
+  phone VARCHAR(40) NULL,
+  cat VARCHAR(80) NULL,
+  place_a VARCHAR(190) NULL,
+  place_b VARCHAR(190) NULL,
+  qty DECIMAL(12,2) NOT NULL DEFAULT 0,
+  amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  date1 DATE NULL,
+  date2 DATE NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'new',
+  notes TEXT NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP NULL DEFAULT NULL,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  KEY sc_rec_mod (tenant_id, module, status),
+  KEY sc_rec_code (tenant_id, module, code),
+  KEY sc_rec_d1 (tenant_id, module, date1),
+  KEY sc_rec_d2 (tenant_id, module, date2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sc_stock_moves (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id VARCHAR(191) NOT NULL,
+  item_id BIGINT UNSIGNED NOT NULL,
+  change_qty DECIMAL(12,2) NOT NULL,
+  balance DECIMAL(12,2) NULL,
+  reason VARCHAR(60) NOT NULL,
+  note VARCHAR(255) NULL,
+  user_id BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NULL DEFAULT NULL,
+  KEY sc_mv_item (tenant_id, item_id, id),
+  KEY sc_mv_time (tenant_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

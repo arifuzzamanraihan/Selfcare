@@ -516,12 +516,15 @@ $app->router->post('/portal/settings', static function () use ($app, $billing, $
 });
 
 // ======================================================================= stock
-$stockMod = static function (Portal $p): array {
+$stockPrev = null;
+$stockMod = static function (Portal $p) use (&$stockPrev, $app): array {
     return ['key' => 'stock', 'title' => 'Stock', 'singular' => 'Stock item', 'url' => 'portal/stock', 'table' => 'sc_stock_items', 'scope' => ['tenant_id' => $p->tenantId],
         'fields' => ['name' => ['label' => 'Name', 'required' => true, 'max' => 190, 'wide' => true], 'sku' => ['label' => 'Code / SKU', 'max' => 60], 'batch_no' => ['label' => 'Batch no', 'max' => 60], 'unit' => ['label' => 'Unit', 'max' => 20, 'placeholder' => 'strip, bag, unit'], 'expiry_date' => ['label' => 'Expiry date', 'type' => 'date', 'null' => true], 'quantity' => ['label' => 'In stock', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], 'reorder_level' => ['label' => 'Reorder at', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], 'cost_price' => ['label' => 'Cost price', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0], 'sell_price' => ['label' => 'Selling price', 'type' => 'number', 'step' => '0.01', 'min' => 0, 'default' => 0]],
         'columns' => ['name' => ['label' => 'Item'], 'sku' => ['label' => 'Code'], 'batch_no' => ['label' => 'Batch'], 'expiry_date' => ['label' => 'Expiry', 'type' => 'date'], 'quantity' => ['label' => 'In stock', 'class' => 'r'], 'reorder_level' => ['label' => 'Reorder at', 'class' => 'r'], 'sell_price' => ['label' => 'Price', 'type' => 'money', 'class' => 'r']],
         'search' => ['t.name', 't.sku', 't.batch_no'], 'sort' => 'name', 'empty' => 'Add the items you keep. Sales take stock out and purchases or goods received put it back in.',
-        'before_save' => function (array $d, ?array $old) { $d['updated_at'] = date('Y-m-d H:i:s'); if (!$old) { $d['created_at'] = $d['updated_at']; } return $d; }];
+        'extra_actions' => $p->writable() ? [['label' => 'Adjust', 'icon' => 'edit', 'url' => static fn ($r) => url('portal/stock/' . $r['id'] . '/adjust')]] : [],
+        'before_save' => function (array $d, ?array $old) use (&$stockPrev) { $stockPrev = $old ? (float) $old['quantity'] : 0.0; $d['updated_at'] = date('Y-m-d H:i:s'); if (!$old) { $d['created_at'] = $d['updated_at']; } return $d; },
+        'after_save' => function (int $id, array $d) use (&$stockPrev, $p, $app): void { $delta = (float) $d['quantity'] - (float) $stockPrev; if (abs($delta) > 0.0001) { $app->db->insert('sc_stock_moves', ['tenant_id' => $p->tenantId, 'item_id' => $id, 'change_qty' => $delta, 'balance' => $d['quantity'], 'reason' => !empty($_POST['id']) ? 'edit' : 'opening', 'note' => 'Changed on the item form', 'user_id' => (int) $p->user['id'], 'created_at' => date('Y-m-d H:i:s')]); } }];
 };
 $stockPage = static function (callable $body) use ($app, $stockMod): callable {
     return static function (array $a) use ($app, $stockMod, $body): void {
@@ -542,6 +545,91 @@ $app->router->post('/portal/stock/save', $stockPage(static function (Portal $p, 
     $p->needWritable();
     $err = $c->save();
     $back('Saved.', url('portal/stock'), $err);
+}));
+$stockReasons = ['received' => 'Delivery received', 'damaged' => 'Damaged or broken', 'expired' => 'Expired, taken off', 'returned' => 'Returned to supplier', 'count' => 'Stock count correction', 'other' => 'Other'];
+$app->router->get('/portal/stock/alerts', $stockPage(static function (Portal $p, Crud $c) use ($app, $dash, $card): void {
+    $t = $p->tenantId;
+    $w = $p->writable();
+    $table = static function (array $rows, string $empty, string $extraHead = '', ?callable $extra = null) use ($w): string {
+        if (!$rows) {
+            return '<p class="d-mute">' . e($empty) . '</p>';
+        }
+        $h = '<div class="d-table-wrap"><table class="d-table"><thead><tr><th>Item</th><th>Batch</th><th class="r">In stock</th><th class="r">Reorder at</th>' . ($extraHead ? '<th>' . e($extraHead) . '</th>' : '') . '<th></th></tr></thead><tbody>';
+        foreach ($rows as $r) {
+            $h .= '<tr><td data-label="Item"><b>' . e((string) $r['name']) . '</b></td><td data-label="Batch">' . e((string) ($r['batch_no'] ?: '—')) . '</td><td data-label="In stock" class="r">' . e((string) (float) $r['quantity']) . '</td><td data-label="Reorder at" class="r">' . e((string) (float) $r['reorder_level']) . '</td>'
+                . ($extra ? '<td data-label="' . e($extraHead) . '">' . $extra($r) . '</td>' : '') . '<td class="d-actions">' . ($w ? '<a class="d-act" href="' . e(url('portal/stock/' . $r['id'] . '/adjust')) . '">' . icon('edit', 16) . '<span>Adjust</span></a>' : '') . '</td></tr>';
+        }
+        return $h . '</tbody></table></div>';
+    };
+    $cols = 'id, name, batch_no, quantity, reorder_level, expiry_date';
+    $low = $app->db->all("SELECT $cols FROM sc_stock_items WHERE tenant_id = ? AND ((reorder_level > 0 AND quantity <= reorder_level) OR quantity <= 0) ORDER BY quantity, name LIMIT 100", [$t]);
+    $soon = $app->db->all("SELECT $cols FROM sc_stock_items WHERE tenant_id = ? AND quantity > 0 AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 60 DAY) ORDER BY expiry_date LIMIT 100", [$t]);
+    $gone = $app->db->all("SELECT $cols FROM sc_stock_items WHERE tenant_id = ? AND quantity > 0 AND expiry_date < CURDATE() ORDER BY expiry_date LIMIT 100", [$t]);
+    $left = static fn (array $r): string => e(dt((string) $r['expiry_date'])) . ' · ' . max(0, (int) ((strtotime((string) $r['expiry_date']) - strtotime(date('Y-m-d'))) / 86400)) . ' days';
+    $h = $card('Running low or out (' . count($low) . ')', $table($low, 'Nothing is running low. Set a "Reorder at" number on an item to get a warning here.'))
+        . $card('Expire in the next 60 days (' . count($soon) . ')', $table($soon, 'Nothing expires in the next 60 days.', 'Expires', $left))
+        . $card('Already expired, still in stock (' . count($gone) . ')', $table($gone, 'No expired items on the shelf.', 'Expired on', static fn (array $r): string => e(dt((string) $r['expiry_date']))));
+    $dash($p, 'stock-alerts', 'Stock alerts', $h, ['sub' => 'What to buy, sell first or take off the shelf.']);
+}));
+$app->router->get('/portal/stock/moves', $stockPage(static function (Portal $p) use ($app, $dash, $card): void {
+    $reasons = ['opening' => 'Opening stock', 'edit' => 'Edited', 'sale' => 'Sold', 'purchase' => 'Bought', 'void' => 'Invoice voided', 'adjust' => 'Adjusted'] + ['received' => 'Delivery received', 'damaged' => 'Damaged or broken', 'expired' => 'Expired, taken off', 'returned' => 'Returned to supplier', 'count' => 'Stock count', 'other' => 'Other'];
+    $list = Listing::render($app->db, [
+        'id' => 'stock-moves', 'select' => 'm.*, i.name AS item_name', 'from' => 'sc_stock_moves m JOIN sc_stock_items i ON i.id = m.item_id', 'where' => ['m.tenant_id = ?'], 'params' => [$p->tenantId],
+        'columns' => [
+            'created_at' => ['label' => 'When', 'sort' => 'm.id', 'type' => 'datetime'],
+            'item_name' => ['label' => 'Item', 'sort' => 'i.name'],
+            'change_qty' => ['label' => 'Change', 'sort' => 'm.change_qty', 'class' => 'r', 'render' => static fn (array $r): string => '<span class="d-badge is-' . ((float) $r['change_qty'] < 0 ? 'bad' : 'ok') . '">' . ((float) $r['change_qty'] > 0 ? '+' : '') . e((string) (float) $r['change_qty']) . '</span>'],
+            'balance' => ['label' => 'Balance', 'sort' => 'm.balance', 'class' => 'r', 'render' => static fn (array $r): string => e((string) (float) $r['balance'])],
+            'reason' => ['label' => 'Reason', 'sort' => 'm.reason', 'render' => static fn (array $r): string => e($reasons[$r['reason']] ?? ucfirst((string) $r['reason']))],
+            'note' => ['label' => 'Note', 'sort' => 'm.note'],
+        ],
+        'search' => ['i.name', 'm.note'], 'search_hint' => 'Search item or note', 'sort' => 'created_at', 'dir' => 'desc', 'per_page' => 15,
+        'filters' => ['reason' => ['label' => 'Reason', 'sql' => 'm.reason = ?', 'options' => $reasons]],
+        'empty' => ['title' => 'No stock movements yet', 'text' => 'Sales, purchases and adjustments will be listed here with the balance after each one.'],
+    ]);
+    $dash($p, 'stock-moves', 'Stock movements', $card('', $list), ['sub' => 'Every change to the quantity of an item, newest first.']);
+}));
+$app->router->get('/portal/stock/{id}/adjust', $stockPage(static function (Portal $p, Crud $c, array $a) use ($app, $dash, $card, $stockReasons): void {
+    $p->needWritable();
+    $row = $c->find((int) $a['id']);
+    if ($row === null) {
+        $app->error(404, 'We could not find that item.');
+    }
+    $f = '<p>' . e((string) $row['name']) . ' now has <b>' . e((string) (float) $row['quantity']) . '</b> ' . e((string) ($row['unit'] ?: 'in stock')) . '.</p><form class="d-form" method="post" action="' . e(url('portal/stock/' . $row['id'] . '/adjust')) . '">' . csrf_field() . '<div class="d-form-grid">'
+        . Crud::field('change', ['label' => 'Add or remove', 'type' => 'number', 'step' => '0.01', 'required' => true, 'help' => 'Use a minus sign to take stock out, for example -5.'], old('change', ''))
+        . Crud::field('reason', ['label' => 'Reason', 'type' => 'select', 'options' => $stockReasons, 'required' => true], old('reason', 'received'))
+        . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], old('note', ''))
+        . '</div><div class="d-form-actions"><button class="d-btn d-btn-primary" type="submit">Save</button><a class="d-btn d-btn-soft" href="' . e(url('portal/stock')) . '">Back</a></div></form>';
+    clear_old();
+    $dash($p, 'stock', 'Adjust stock', $card('', $f), ['sub' => 'The change is written to the stock movements list.']);
+}));
+$app->router->post('/portal/stock/{id}/adjust', $stockPage(static function (Portal $p, Crud $c, array $a) use ($app, $stockReasons): void {
+    $p->needWritable();
+    $row = $c->find((int) $a['id']);
+    $back = url('portal/stock/' . (int) $a['id'] . '/adjust');
+    if ($row === null) {
+        $app->error(404, 'We could not find that item.');
+    }
+    $chg = trim((string) ($_POST['change'] ?? ''));
+    $reason = (string) ($_POST['reason'] ?? '');
+    $err = null;
+    if (!is_numeric($chg) || (float) $chg == 0.0) {
+        $err = 'Write how much to add or remove, for example 20 or -5.';
+    } elseif (!isset($stockReasons[$reason])) {
+        $err = 'Choose a reason.';
+    } elseif ((float) $row['quantity'] + (float) $chg < 0) {
+        $err = 'That would take the stock below zero. There are only ' . (float) $row['quantity'] . ' left.';
+    }
+    if ($err !== null) {
+        keep_old($_POST);
+        flash($err, 'bad');
+        redirect($back);
+    }
+    $app->db->run('UPDATE sc_stock_items SET quantity = quantity + ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?', [(float) $chg, $row['id'], $p->tenantId]);
+    \Selfcare\Ops::stockMove($app->db, $p->tenantId, (int) $row['id'], (float) $chg, $reason, trim((string) ($_POST['note'] ?? '')), (int) $p->user['id']);
+    $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'stock_adjusted', ['id' => (int) $row['id'], 'qty' => (float) $row['quantity']], ['change' => (float) $chg, 'reason' => $reason]);
+    flash('Stock updated.', 'ok');
+    redirect(url('portal/stock'));
 }));
 $app->router->get('/portal/stock/{id}', $stockPage($stockForm));
 $app->router->post('/portal/stock/{id}/delete', $stockPage(static function (Portal $p, Crud $c, array $a): void {

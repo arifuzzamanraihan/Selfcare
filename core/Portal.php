@@ -201,6 +201,13 @@ final class Portal
         if (in_array($this->family, ['pharmacy', 'bloodbank', 'equipment'], true)) {
             $add('Money', 'stock', 'Stock', 'box', 'portal/stock', 'manage_medicines', 'documents');
         }
+        foreach (Ops::forPortal($this) as $ok => $om) {
+            $all[(string) $om['group']][] = ['key' => 'ops-' . $ok, 'label' => (string) $om['title'], 'icon' => (string) $om['icon'], 'url' => Ops::url($ok)];
+        }
+        if ($this->family === 'pharmacy' && $this->can('manage_medicines') && $this->module('documents')) {
+            $all['Pharmacy'][] = ['key' => 'stock-alerts', 'label' => 'Stock alerts', 'icon' => 'bell', 'url' => url('portal/stock/alerts')];
+            $all['Pharmacy'][] = ['key' => 'stock-moves', 'label' => 'Stock movements', 'icon' => 'clock', 'url' => url('portal/stock/moves')];
+        }
         foreach (['manage_prescriptions', 'manage_medicines', 'manage_blood_bank'] as $dp) {
             if ($this->can($dp) && $this->module('documents')) {
                 $all['Records'][] = ['key' => 'documents', 'label' => 'Forms and records', 'icon' => 'file', 'url' => url('portal/documents')];
