@@ -48,7 +48,12 @@ final class Vendors
             }
             if ($plan !== null) {
                 $days = (float) $plan['price'] > 0 && !empty($in['period']) ? ((string) $in['period'] === 'yearly' ? 365 : 30) : null;
-                $app->plans->assign($slug, (int) $plan['id'], $days, 'Given at registration' . ($days ? ($days === 365 ? ' (yearly)' : ' (monthly)') : ''), null);
+                $trial = (float) $plan['price'] > 0 && (int) ($plan['trial_days'] ?? 0) > 0 && empty($in['allow_private']) ? (int) $plan['trial_days'] : 0;
+                if ($trial > 0) {
+                    $app->plans->assign($slug, (int) $plan['id'], $trial, 'Free trial of ' . $trial . ' days' . (!empty($in['period']) ? ', then ' . ((string) $in['period'] === 'yearly' ? 'yearly' : 'monthly') . ' billing' : ''), null);
+                } else {
+                    $app->plans->assign($slug, (int) $plan['id'], $days, 'Given at registration' . ($days ? ($days === 365 ? ' (yearly)' : ' (monthly)') : ''), null);
+                }
             }
             foreach (['sat', 'sun', 'mon', 'tue', 'wed', 'thu'] as $d) {
                 $app->site->set($slug, 'hours_' . $d, '09:00 - 17:00');

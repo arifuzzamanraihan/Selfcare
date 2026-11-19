@@ -67,6 +67,10 @@ final class Mail
         if ($m === null) {
             return false;
         }
+        if (!empty($m['tenant_id']) && !in_array((string) $m['kind'], ['verify', 'email_change', 'invite', 'password_changed', 'email_changed', 'reset', 'registration'], true) && ($cap = $this->app->plans->emailLimitError((string) $m['tenant_id'])) !== null) {
+            $this->app->db->run("UPDATE sc_mail_queue SET status = 'blocked', last_error = ?, next_try_at = NULL WHERE id = ?", [mb_substr($cap, 0, 255), $id]);
+            return false;
+        }
         $ok = $this->app->mailer->send((string) $m['to_email'], (string) $m['subject'], (string) $m['body_text'], [], (string) $m['body_html']);
         $tries = (int) $m['tries'] + 1;
         if ($ok) {

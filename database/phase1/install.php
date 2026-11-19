@@ -90,6 +90,11 @@ if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NUL
     $db->run("UPDATE sc_plans SET features = 'Your own website and portal\nPatients, doctors and billing\nSelf Care badge', description = 'Try Self Care with a very small team. Data export always allowed.' WHERE name = 'Free' AND (features IS NULL OR features = '')");
     $db->insert('front_settings', ['key' => 'plans_catalog_v1', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
 }
+// one time: market based prices, free trial, extra branch price and monthly email allowance
+if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'plans_market_v1' LIMIT 1") !== '1') {
+    echo "catalogue plans updated: " . Selfcare\Plans::refreshCatalogue($db) . "\n";
+    $db->insert('front_settings', ['key' => 'plans_market_v1', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+}
 echo "private plans added: " . Selfcare\Plans::seedUltimate($db) . "\n";
 echo "vendor types added: " . Selfcare\VendorTypes::seed($db) . "\n";
 echo "done\n";

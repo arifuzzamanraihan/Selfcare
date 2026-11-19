@@ -36,40 +36,52 @@ final class Plans
         $all = $mid . ',ipd,procurement,insurance';
         $A = array_keys(self::AUDIENCES);
         return [
-            ['Starter', $A[0], 'One clinic', 'For a single clinic going digital.', 3500, 35000, 1, 5, 3000, 2, $base, 0, 'Email', "Doctor workspace with token queue\nPrescriptions and printed forms\nPatient My care portal"],
-            ['Professional', $A[0], 'Up to 3 branches', 'For a busy clinic with its own laboratory.', 8500, 85000, 3, 20, 25000, 10, $mid, 1, 'Priority email and chat', "Laboratory suite: MR numbers, samples, results with approval\nWhatsApp and email report sharing\nDoctor commission\nFinance: income, expenses and net result\nStock and inventory\nDaily report email and backups"],
-            ['Multi Branch', $A[0], 'Up to 10 branches', 'For clinic and laboratory groups.', 18000, 180000, 10, 80, 200000, 50, $all, 0, 'Named manager', "Everything in Professional\nBranch wise access control and consolidated reports\nPartner laboratory commission\nStaff attendance with PIN and salary\nScheduled daily backups"],
-            ['Starter', $A[1], 'One laboratory', 'For a single laboratory or diagnostic centre.', 4500, 45000, 1, 5, 5000, 2, $base, 0, 'Email', "Test catalogue, orders and bills\nPrinted reports and receipts"],
-            ['Professional', $A[1], 'Up to 3 branches', 'For a growing laboratory with collection points.', 9500, 95000, 3, 20, 40000, 10, $mid, 1, 'Priority email and chat', "Role based access for every desk\nReports with Excel and PDF export\nDoctor and partner referrals"],
-            ['Multi Branch', $A[1], 'Up to 10 branches', 'For laboratory chains.', 22000, 220000, 10, 80, 250000, 50, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches\nProcurement and goods received"],
-            ['Standard', $A[2], 'Up to 30 beds', 'OPD and IPD for a small hospital.', 25000, 250000, 1, 30, 20000, 20, $mid . ',ipd', 0, 'Priority email and chat', "Admissions, beds and discharge\nDoctor workspace and token queue\nBilling and printed forms"],
-            ['Professional', $A[2], 'Up to 3 branches', 'For a hospital with departments and purchasing.', 45000, 450000, 3, 100, 100000, 60, $mid . ',ipd,procurement', 1, 'Named manager', "Departments and wards\nPurchase orders and goods received\nAdvanced reports"],
-            ['Enterprise', $A[2], 'Up to 10 branches', 'For hospital groups with insurance claims.', 80000, 800000, 10, 400, 500000, 200, $all, 0, 'Named manager and SLA', "Insurance and TPA claims\nConsolidated reports across branches\nCustom roles and long audit history"],
-            ['Starter', $A[3], 'One shop', 'For a single pharmacy or equipment shop.', 3000, 30000, 1, 3, 5000, 2, $base, 0, 'Email', "Items, stock and bills\nPrinted receipts"],
-            ['Professional', $A[3], 'Up to 3 shops', 'For a pharmacy with several counters.', 6000, 60000, 3, 10, 30000, 10, $mid, 1, 'Priority email and chat', "Stock with batches and expiry\nReports with Excel and PDF export"],
-            ['Chain', $A[3], 'Up to 10 shops', 'For pharmacy chains and suppliers.', 12000, 120000, 10, 40, 150000, 40, $all, 0, 'Named manager', "Everything in Professional\nProcurement and goods received\nConsolidated reports"],
-            ['Starter', $A[4], 'Small fleet', 'For one or two vehicles.', 2500, 25000, 1, 3, 2000, 2, $base, 0, 'Email', "Vehicles, drivers and trips\nBilling and receipts"],
-            ['Professional', $A[4], 'Growing fleet', 'For a dispatch desk with several vehicles.', 6000, 60000, 2, 10, 10000, 10, $mid, 1, 'Priority email and chat', "Dispatch desk and requests\nReports with Excel and PDF export"],
-            ['Fleet', $A[4], 'Large fleet', 'For ambulance networks.', 12000, 120000, 10, 40, 80000, 40, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches"],
+            ['Starter', $A[0], 'One clinic', 'For a single clinic going digital.', 2500, 25000, 1, 5, 3000, 2, $base, 0, 'Email', "Doctor workspace with token queue\nPrescriptions and printed forms\nPatient My care portal", 500, 0],
+            ['Professional', $A[0], 'Up to 3 branches', 'For a busy clinic with its own laboratory.', 6500, 65000, 3, 20, 25000, 10, $mid, 1, 'Priority email and chat', "Laboratory suite: MR numbers, samples, results with approval\nWhatsApp and email report sharing\nDoctor commission\nFinance: income, expenses and net result\nStock and inventory\nDaily report email and backups", 3000, 2000],
+            ['Multi Branch', $A[0], 'Up to 10 branches', 'For clinic and laboratory groups.', 14000, 140000, 10, 80, 200000, 50, $all, 0, 'Named manager', "Everything in Professional\nBranch wise access control and consolidated reports\nPartner laboratory commission\nStaff attendance with PIN and salary\nScheduled daily backups", 15000, 1500],
+            ['Starter', $A[1], 'One laboratory', 'For a single laboratory or diagnostic centre.', 2500, 25000, 1, 5, 5000, 2, $base, 0, 'Email', "Test catalogue, orders and bills\nPrinted reports and receipts", 500, 0],
+            ['Professional', $A[1], 'Up to 3 branches', 'For a growing laboratory with collection points.', 6000, 60000, 3, 20, 40000, 10, $mid, 1, 'Priority email and chat', "Role based access for every desk\nReports with Excel and PDF export\nDoctor and partner referrals\nSample tracking and approval", 3000, 1800],
+            ['Multi Branch', $A[1], 'Up to 10 branches', 'For laboratory chains.', 16000, 160000, 10, 80, 250000, 50, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches\nProcurement and goods received", 15000, 1500],
+            ['Standard', $A[2], 'Up to 30 beds', 'OPD and IPD for a small hospital.', 18000, 180000, 1, 30, 20000, 20, $mid . ',ipd', 0, 'Priority email and chat', "Admissions, beds and discharge\nDoctor workspace and token queue\nBilling and printed forms", 5000, 0],
+            ['Professional', $A[2], 'Up to 3 branches', 'For a hospital with departments and purchasing.', 38000, 380000, 3, 100, 100000, 60, $mid . ',ipd,procurement', 1, 'Named manager', "Departments and wards\nPurchase orders and goods received\nAdvanced reports", 15000, 8000],
+            ['Enterprise', $A[2], 'Up to 10 branches', 'For hospital groups with insurance claims.', 70000, 700000, 10, 400, 500000, 200, $all, 0, 'Named manager and SLA', "Insurance and TPA claims\nConsolidated reports across branches\nCustom roles and long audit history", 50000, 6000],
+            ['Starter', $A[3], 'One shop', 'For a single pharmacy or equipment shop.', 2000, 20000, 1, 3, 5000, 2, $base, 0, 'Email', "Items, stock and bills\nPrinted receipts", 300, 0],
+            ['Professional', $A[3], 'Up to 3 shops', 'For a pharmacy with several counters.', 4500, 45000, 3, 10, 30000, 10, $mid, 1, 'Priority email and chat', "Stock with batches and expiry\nReports with Excel and PDF export", 1500, 1500],
+            ['Chain', $A[3], 'Up to 10 shops', 'For pharmacy chains and suppliers.', 11000, 110000, 10, 40, 150000, 40, $all, 0, 'Named manager', "Everything in Professional\nProcurement and goods received\nConsolidated reports", 8000, 1200],
+            ['Starter', $A[4], 'Small fleet', 'For one or two vehicles.', 2000, 20000, 1, 3, 2000, 2, $base, 0, 'Email', "Vehicles, drivers and trips\nBilling and receipts", 300, 0],
+            ['Professional', $A[4], 'Growing fleet', 'For a dispatch desk with several vehicles.', 5000, 50000, 2, 10, 10000, 10, $mid, 1, 'Priority email and chat', "Dispatch desk and requests\nReports with Excel and PDF export", 1500, 1500],
+            ['Fleet', $A[4], 'Large fleet', 'For ambulance networks.', 10000, 100000, 10, 40, 80000, 40, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches", 6000, 1200],
         ];
     }
 
     /** Adds the catalogue plans that are missing (matched by name and audience). Returns how many were added. */
     public static function seedCatalogue(Database $db): int
     {
-        $cols = ['name', 'audience', 'size_label', 'description', 'currency', 'price', 'price_year', 'duration_days', 'max_staff', 'max_branches', 'max_patients', 'storage_gb', 'modules', 'types', 'is_featured', 'support_level', 'features', 'is_active', 'is_private', 'sort_order', 'audit_days', 'custom_roles', 'custom_domains'];
+        $cols = ['name', 'audience', 'size_label', 'description', 'currency', 'price', 'price_year', 'duration_days', 'max_staff', 'max_branches', 'max_patients', 'storage_gb', 'modules', 'types', 'is_featured', 'support_level', 'features', 'is_active', 'is_private', 'sort_order', 'audit_days', 'custom_roles', 'custom_domains', 'email_per_month', 'sms_per_month', 'trial_days', 'extra_branch_price'];
         $n = 0;
         $ord = 10;
         foreach (self::catalogue() as $r) {
-            [$name, $aud, $size, $desc, $m, $y, $br, $st, $pa, $gb, $mods, $feat, $sup, $lines] = $r;
+            [$name, $aud, $size, $desc, $m, $y, $br, $st, $pa, $gb, $mods, $feat, $sup, $lines, $em, $xb] = $r;
             $ord += 1;
             if ((int) $db->val('SELECT COUNT(*) FROM sc_plans WHERE name = ? AND audience = ?', [$name, $aud]) > 0) {
                 continue;
             }
             $big = $br >= 10;
-            $db->insert('sc_plans', array_combine($cols, [$name, $aud, $size, $desc, 'PKR', $m, $y, null, $st, $br, $pa, $gb, $mods, self::AUDIENCES[$aud], $feat, $sup, $lines, 1, 0, $ord, $big ? 1095 : 365, $big ? 20 : ($m >= 8000 ? 8 : 3), $big ? 3 : ($m >= 8000 ? 1 : 0)]));
+            $db->insert('sc_plans', array_combine($cols, [$name, $aud, $size, $desc, 'PKR', $m, $y, null, $st, $br, $pa, $gb, $mods, self::AUDIENCES[$aud], $feat, $sup, $lines, 1, 0, $ord, $big ? 1095 : 365, $big ? 20 : ($m >= 8000 ? 8 : 3), $big ? 3 : ($m >= 8000 ? 1 : 0), $em, 0, 14, $xb > 0 ? $xb : null]));
             $n++;
         }
+        return $n;
+    }
+
+    /** Brings the catalogue plans that already exist up to the current numbers (matched by name and audience). Never touches Free or private plans. Returns how many were updated. */
+    public static function refreshCatalogue(Database $db): int
+    {
+        $n = 0;
+        foreach (self::catalogue() as $r) {
+            [$name, $aud, $size, $desc, $m, $y, $br, $st, $pa, $gb, $mods, $feat, $sup, $lines, $em, $xb] = $r;
+            $n += $db->run('UPDATE sc_plans SET price = ?, price_year = ?, max_branches = ?, max_staff = ?, max_patients = ?, storage_gb = ?, email_per_month = ?, sms_per_month = 0, trial_days = 14, extra_branch_price = ?, features = ?, support_level = ?, size_label = ?, description = ? WHERE name = ? AND audience = ? AND is_private = 0', [$m, $y, $br, $st, $pa, $gb, $em, $xb > 0 ? $xb : null, $lines, $sup, $size, $desc, $name, $aud]);
+        }
+        $db->run("UPDATE sc_plans SET email_per_month = 100, sms_per_month = 0 WHERE price = 0 AND is_private = 0 AND email_per_month IS NULL");
         return $n;
     }
 
@@ -111,10 +123,19 @@ final class Plans
         if (($p['storage_gb'] ?? null) !== null && (float) $p['storage_gb'] > 0) {
             $o[] = rtrim(rtrim(number_format((float) $p['storage_gb'], 1), '0'), '.') . ' GB storage';
         }
+        if (($p['email_per_month'] ?? null) !== null && (int) $p['email_per_month'] > 0) {
+            $o[] = number_format((int) $p['email_per_month']) . ' emails a month';
+        }
         foreach (preg_split('/\r?\n/', (string) ($p['features'] ?? '')) ?: [] as $l) {
             if (trim($l) !== '') {
                 $o[] = trim($l);
             }
+        }
+        if ((float) ($p['extra_branch_price'] ?? 0) > 0) {
+            $o[] = 'Extra branch: ' . Currency::fmt((float) $p['extra_branch_price'], (string) ($p['currency'] ?? 'PKR'), true) . ' a month each';
+        }
+        if ((int) ($p['trial_days'] ?? 0) > 0 && (float) $p['price'] > 0) {
+            $o[] = (int) $p['trial_days'] . ' day free trial';
         }
         $mods = array_filter(array_map('trim', explode(',', (string) ($p['modules'] ?? ''))));
         $names = ['reports' => 'Reports and PDF export', 'access' => 'Role access and time access', 'ipd' => 'Admissions, beds and discharge', 'procurement' => 'Purchase orders and goods received', 'insurance' => 'Insurance and TPA claims'];
@@ -214,7 +235,7 @@ final class Plans
     public function current(string $tenantId): array
     {
         $row = $this->db->one(
-            'SELECT s.*, p.name AS plan_name, p.price, p.currency, p.duration_days, p.max_staff, p.max_branches, p.max_patients, p.max_appointments, p.price_label, p.modules, p.types
+            'SELECT s.*, p.name AS plan_name, p.price, p.currency, p.duration_days, p.max_staff, p.max_branches, p.max_patients, p.max_appointments, p.price_label, p.modules, p.types, p.email_per_month, p.extra_branch_price, p.trial_days
              FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id
              WHERE s.tenant_id = ? AND s.status = ? ORDER BY s.id DESC LIMIT 1',
             [$tenantId, 'active']
@@ -251,7 +272,7 @@ final class Plans
         if ($col === null || ($sub[$col] ?? null) === null) {
             return null;
         }
-        $max = (int) $sub[$col];
+        $max = (int) $sub[$col] + ($what === 'branches' ? (int) ($sub['extra_branches'] ?? 0) : 0);
         $n = match ($what) {
             'staff' => (int) $this->db->val("SELECT COUNT(*) FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE u.tenant_id = ? AND u.status = 1 AND d.name NOT IN ('Patient', 'Family Member', 'Referring Doctor', 'B2B Customer')", [Auth::ROLE_MODEL, $tenantId]),
             'branches' => (int) $this->db->val('SELECT COUNT(*) FROM sc_branches WHERE tenant_id = ? AND active = 1', [$tenantId]),
@@ -259,11 +280,35 @@ final class Plans
             default => (int) $this->db->val("SELECT COUNT(*) FROM sc_appointment_requests WHERE tenant_id = ? AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')", [$tenantId]),
         };
         $names = ['staff' => 'staff accounts', 'patients' => 'patient records', 'appointments' => 'requests this month', 'branches' => 'branches'];
-        return $n >= $max ? 'Your plan allows up to ' . $max . ' ' . $names[$what] . '. Ask Self Care to change your plan to add more.' : null;
+        return $n >= $max ? 'Your plan allows up to ' . $max . ' ' . $names[$what] . '. Ask Self Care to change your plan or add branches.' : null;
+    }
+
+    /** Emails the vendor's own work sent this month (reports, shared documents, notices; sign in and security mail never counts). */
+    public function emailsUsed(string $tenantId): int
+    {
+        $m = date('Y-m-01');
+        $q = (int) $this->db->val("SELECT COUNT(*) FROM sc_mail_queue WHERE tenant_id = ? AND status = 'sent' AND sent_at >= ? AND kind NOT IN ('verify','email_change','invite','password_changed','email_changed','reset','registration')", [$tenantId, $m]);
+        try {
+            $q += (int) $this->db->val("SELECT COUNT(*) FROM sc_lab_delivery_log WHERE tenant_id = ? AND channel = 'email' AND status = 'sent' AND updated_at >= ?", [$tenantId, $m]);
+            $q += (int) $this->db->val("SELECT COALESCE(SUM(1 + LENGTH(recipient) - LENGTH(REPLACE(recipient, ',', ''))), 0) FROM sc_lab_report_runs WHERE tenant_id = ? AND status = 'sent' AND updated_at >= ?", [$tenantId, $m]);
+        } catch (\Throwable) {
+        }
+        return $q;
+    }
+
+    /** The plan caps emails a month so mail cost stays predictable. Returns a message when the allowance is used up. */
+    public function emailLimitError(string $tenantId): ?string
+    {
+        $sub = $this->current($tenantId);
+        $max = $sub['email_per_month'] ?? null;
+        if ($max === null || $sub['state'] === 'none') {
+            return null;
+        }
+        return $this->emailsUsed($tenantId) >= (int) $max ? 'The ' . $sub['plan_name'] . ' plan includes ' . number_format((int) $max) . ' emails a month and this month\'s allowance is used. Sign in and security mail still works. Ask Self Care for a bigger plan.' : null;
     }
 
     /** Gives a vendor a plan. $days: null = use the plan length, 0 = never expires. */
-    public function assign(string $tenantId, int $planId, ?int $days, ?string $note, ?int $by): void
+    public function assign(string $tenantId, int $planId, ?int $days, ?string $note, ?int $by, int $extraBranches = 0): void
     {
         $plan = $this->find($planId);
         if ($plan === null) {
@@ -276,7 +321,7 @@ final class Plans
             $this->db->insert('sc_subscriptions', [
                 'tenant_id' => $tenantId, 'plan_id' => $planId, 'starts_at' => date('Y-m-d H:i:s'),
                 'ends_at' => $len > 0 ? date('Y-m-d H:i:s', time() + $len * 86400) : null,
-                'status' => 'active', 'note' => $note !== null ? mb_substr($note, 0, 250) : null, 'assigned_by' => $by,
+                'status' => 'active', 'note' => $note !== null ? mb_substr($note, 0, 250) : null, 'assigned_by' => $by, 'extra_branches' => max(0, $extraBranches),
             ]);
             $this->db->commit();
         } catch (\Throwable $e) {

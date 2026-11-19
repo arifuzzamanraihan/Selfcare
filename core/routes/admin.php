@@ -303,8 +303,9 @@ $app->router->get('/admin/vendors/{id}', static function (array $a) use ($app, $
     // plan + history + invoices
     $h .= '<div class="d-grid d-g2">';
     if (!$deleted) {
+        $sub0 = $app->plans->current($t);
         $h .= $card('Give or change the plan', '<form class="d-form" method="post" action="' . e(url('admin/vendors/' . $t . '/assign')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pl">Plan</label><select id="pl" name="plan_id" required>' . $opts . '</select></div>'
-            . Crud::field('days', ['label' => 'Length in days (0 = never expires, empty = the plan length)', 'type' => 'number', 'min' => 0, 'step' => '1'], '') . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], '') . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save plan</button></div></form>');
+            . Crud::field('days', ['label' => 'Length in days (0 = never expires, empty = the plan length)', 'type' => 'number', 'min' => 0, 'step' => '1'], '') . Crud::field('extra_branches', ['label' => 'Extra branches bought (added to the plan limit)', 'type' => 'number', 'min' => 0, 'step' => '1'], (string) ((int) ($sub0['extra_branches'] ?? 0))) . Crud::field('note', ['label' => 'Note', 'max' => 200, 'wide' => true], '') . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save plan</button></div></form>');
     }
     $hist = $app->db->all('SELECT s.*, p.name FROM sc_subscriptions s JOIN sc_plans p ON p.id = s.plan_id WHERE s.tenant_id = ? ORDER BY s.id DESC LIMIT 12', [$t]);
     $l = '';
@@ -364,8 +365,8 @@ $vendorPost('assign', static function (string $t, array $u) use ($app): void {
     }
     $d = trim((string) ($_POST['days'] ?? ''));
     $before = (string) ($app->plans->current($t)['plan_name'] ?? '');
-    $app->plans->assign($t, (int) $plan['id'], $d === '' ? null : max(0, (int) $d), (string) ($_POST['note'] ?? '') ?: 'Set by Self Care', (int) $u['id']);
-    $app->access->log($t, (int) $u['id'], null, null, 'plan_assigned', $before, $plan['name'] . ((int) $plan['is_private'] === 1 ? ' (private plan)' : ''));
+    $app->plans->assign($t, (int) $plan['id'], $d === '' ? null : max(0, (int) $d), (string) ($_POST['note'] ?? '') ?: 'Set by Self Care', (int) $u['id'], max(0, (int) ($_POST['extra_branches'] ?? 0)));
+    $app->access->log($t, (int) $u['id'], null, null, 'plan_assigned', $before, $plan['name'] . ((int) $plan['is_private'] === 1 ? ' (private plan)' : '') . ((int) ($_POST['extra_branches'] ?? 0) > 0 ? ', extra branches ' . (int) $_POST['extra_branches'] : ''));
 }, 'Plan saved.');
 $vendorPost('extend', static function (string $t, array $u) use ($app): void {
     if (!$app->plans->extend($t, max(1, (int) ($_POST['days'] ?? 30)), (int) $u['id'])) {
@@ -914,7 +915,7 @@ $planMod = static function () use ($app): array {
             'currency' => ['label' => 'Currency of the price', 'type' => 'select', 'options' => \Selfcare\Currency::options(), 'required' => true, 'default' => \Selfcare\Currency::platform()], 'other_prices' => ['label' => 'Prices in other currencies', 'type' => 'textarea', 'rows' => 3, 'max' => 300, 'help' => 'One per line, like: PKR 8000. Shown to vendors who use that currency.'],
             'price' => ['label' => 'Price per month', 'type' => 'number', 'min' => 0, 'step' => '0.01', 'default' => 0], 'price_year' => $n('Price per year', 'Empty = no yearly price.', '0.01'), 'price_label' => ['label' => 'Show this instead of a price (for example Custom)', 'max' => 40, 'null' => true],
             'duration_days' => $n('Length in days', 'Empty = never expires.'), 'max_staff' => $n('Staff accounts', 'Empty = no limit.'), 'max_branches' => $n('Branches'), 'max_patients' => $n('Patient / client records'), 'max_appointments' => $n('Requests per month'),
-            'storage_gb' => $n('Storage (GB)', '', '0.1'), 'sms_per_month' => $n('SMS per month'), 'email_per_month' => $n('Emails per month'), 'custom_domains' => $n('Custom domains'), 'custom_roles' => $n('Custom roles'), 'audit_days' => $n('Audit log kept (days)'),
+            'trial_days' => $n('Free trial (days)', 'Empty or 0 = no trial. New paid sign ups start on this trial.'), 'extra_branch_price' => $n('Price of one extra branch per month', 'Empty = extra branches are not sold. Yearly is ten months.', '0.01'), 'storage_gb' => $n('Storage (GB)', '', '0.1'), 'sms_per_month' => $n('SMS per month'), 'email_per_month' => $n('Emails per month', 'Caps the mail a vendor can send each month. Empty = no limit.'), 'custom_domains' => $n('Custom domains'), 'custom_roles' => $n('Custom roles'), 'audit_days' => $n('Audit log kept (days)'),
             'support_level' => ['label' => 'Support', 'max' => 60, 'null' => true],
             'modules' => ['label' => 'Parts of the portal included (none ticked = all)', 'type' => 'checks', 'options' => Portal::MODULES], 'types' => ['label' => 'Offered to these kinds of vendor (none ticked = all)', 'type' => 'checks', 'options' => array_column(VendorTypes::all($app->db, false), 'name', 'slug')],
             'audience' => ['label' => 'Website group (who it is for)', 'max' => 80, 'null' => true, 'help' => 'Plans with the same group are shown together on the website. Empty = shown in every group.'], 'size_label' => ['label' => 'Size label (for example Up to 3 branches)', 'max' => 60, 'null' => true], 'features' => ['label' => 'Extra feature lines (one per line)', 'type' => 'textarea', 'rows' => 5, 'max' => 1500, 'null' => true, 'wide' => true, 'help' => 'Shown with a tick on the website. Limits and parts of the portal are added automatically.'],

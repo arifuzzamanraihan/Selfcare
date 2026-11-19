@@ -26,7 +26,7 @@ $card = static function (array $p) use ($vc, $main): string {
     }
     $h .= '<p class="sc-pdesc">' . e((string) $p['description']) . '</p><ul>';
     foreach (\Selfcare\Plans::featureLines($p) as $l) { $h .= '<li>' . e($l) . '</li>'; }
-    $h .= '</ul><a class="sc-btn ' . ($p['is_featured'] ? 'sc-btn-primary' : '') . ' sc-pcta" data-href="' . e($href) . '" href="' . e($href) . '">' . ($custom ? 'Talk to us' : ($free ? 'Start free' : 'Choose ' . e((string) $p['name']))) . '</a></div>';
+    $h .= '</ul><a class="sc-btn ' . ($p['is_featured'] ? 'sc-btn-primary' : '') . ' sc-pcta" data-href="' . e($href) . '" href="' . e($href) . '">' . ($custom ? 'Talk to us' : ($free ? 'Start free' : ((int) ($p['trial_days'] ?? 0) > 0 ? 'Start ' . (int) $p['trial_days'] . ' day free trial' : 'Choose ' . e((string) $p['name'])))) . '</a></div>';
     return $h;
 };
 ?>
@@ -44,7 +44,7 @@ $card = static function (array $p) use ($vc, $main): string {
   </div>
   <?php endforeach; ?>
   <?php if (!$audiences): ?><div class="sc-pgrid"><?php foreach ($common as $p) { echo $card($p); } ?></div><?php endif; ?>
-  <p class="sc-pnote">Prices are in Pakistani Rupees (Rs) and exclude taxes. Pay monthly or yearly. Change or cancel your plan at any time. Need something bigger? <a href="<?= e($main('')) ?>#contact">Talk to us</a>.</p>
+  <p class="sc-pnote">Prices are in Pakistani Rupees (Rs) and exclude taxes. Pay yearly and get two months free. Every paid plan starts with a free trial and needs no card. Change or cancel your plan at any time. Need something bigger? <a href="<?= e($main('')) ?>#contact">Talk to us</a>.</p>
 </div></section>
 <script>
 (function(){var s=document.getElementById('pricing');if(!s)return;var per='m';

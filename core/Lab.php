@@ -1366,6 +1366,10 @@ final class Lab
         if ($m === null) {
             return 'The report is not approved.';
         }
+        if (($cap = app()->plans->emailLimitError($this->t)) !== null) {
+            $this->db->run('UPDATE sc_lab_delivery_log SET status = ?, error = ?, updated_at = NOW() WHERE id = ?', ['failed', mb_substr($cap, 0, 250), $logId]);
+            return $cap;
+        }
         $pdf = Documents::pdf($m)->render();
         $body = (string) $r['message'] . "\n\nThe PDF is attached.";
         $ml = $this->mailer();
@@ -1604,6 +1608,9 @@ final class Lab
         $to = array_filter(array_map('trim', explode(',', $this->setting('report_to', 'haiderlab09@gmail.com'))));
         if (!$to) {
             return 'No recipient is set. Add one under Schedules.';
+        }
+        if (($cap = app()->plans->emailLimitError($this->t)) !== null) {
+            return $cap;
         }
         $this->force = array_keys($this->branches(true));
         try {
