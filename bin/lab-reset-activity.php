@@ -49,5 +49,6 @@ foreach ($others as $uid) {
     }
     $db->run('DELETE FROM users WHERE id = ?', [(int) $uid]);
 }
+try { $db->run('DELETE FROM sc_user_branches WHERE user_id NOT IN (SELECT id FROM users)'); } catch (Throwable $e) { }
 $db->run('SET FOREIGN_KEY_CHECKS = 1');
 echo "reset $t: removed ", count($others), " other user(s); kept owner #$owner, branches, roles, settings and the test catalogue\n";
