@@ -1086,6 +1086,47 @@ $app->router->get('/portal/lab/branches/{id}', static function (array $a) use ($
     }
     $page($p, $L, 'branches', $b['name'], $card('Branch', $form(url('portal/lab/branches/save'), '<input type="hidden" name="id" value="' . (int) $b['id'] . '"><div class="d-form-grid">' . $fld('name', ['label' => 'Branch name', 'required' => true, 'max' => 120], (string) $b['name']) . $fld('code', ['label' => 'Short code', 'max' => 12], (string) $b['code']) . $fld('phone', ['label' => 'Phone', 'max' => 60], (string) $b['phone']) . $fld('email', ['label' => 'Email', 'max' => 190], (string) $b['email']) . $fld('report_email', ['label' => 'Daily report email', 'max' => 190], (string) $b['report_email']) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true], (string) $b['address']) . $brMoney($L, $b) . '</div>', 'Save branch')));
 });
+// A branch administrator looks after the details of the branch they work in: address, contact, time zone and currency (only while it has no bills).
+$app->router->get('/portal/lab/my-branch', static function () use ($brMoney, $boot, $page, $card, $form, $fld): void {
+    [$p, $L] = $boot('dashboard');
+    $bid = $L->current() ?: ($L->allowed()[0] ?? 0);
+    $b = $L->branch($bid);
+    if ($b === null || !$L->may($bid)) {
+        redirect(url('portal/lab'));
+    }
+    $page($p, $L, 'dashboard', 'My branch: ' . $b['name'], $card('Branch details', $form(url('portal/lab/my-branch'), '<input type="hidden" name="id" value="' . (int) $b['id'] . '"><div class="d-form-grid">' . $fld('phone', ['label' => 'Phone', 'max' => 60], (string) $b['phone']) . $fld('email', ['label' => 'Email', 'max' => 190], (string) $b['email']) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true], (string) $b['address']) . $brMoney($L, $b) . '</div>', 'Save branch details')));
+});
+$app->router->post('/portal/lab/my-branch', static function () use ($boot, $post, $db): void {
+    [$p, $L] = $boot('dashboard');
+    $post($p);
+    $id = (int) ($_POST['id'] ?? 0);
+    $old = $L->branch($id);
+    if ($old === null || !$L->may($id)) {
+        redirect(url('portal/lab'));
+    }
+    $d = ['phone' => mb_substr(trim((string) ($_POST['phone'] ?? '')), 0, 60) ?: null, 'email' => mb_substr(trim((string) ($_POST['email'] ?? '')), 0, 190) ?: null, 'address' => mb_substr(trim((string) ($_POST['address'] ?? '')), 0, 255) ?: null, 'updated_at' => date('Y-m-d H:i:s')];
+    $tz = trim((string) ($_POST['timezone'] ?? ''));
+    $cu = strtoupper(trim((string) ($_POST['currency'] ?? '')));
+    if (($tz !== '' && !in_array($tz, \DateTimeZone::listIdentifiers(), true)) || ($cu !== '' && !isset(\Selfcare\Currency::all(true)[$cu]))) {
+        flash('Choose a time zone and a currency from the lists.', 'bad');
+        redirect(url('portal/lab/my-branch'));
+    }
+    $d['timezone'] = $tz !== '' ? $tz : null;
+    $newCur = $cu !== '' && $cu !== \Selfcare\Currency::forTenant($p->tenantId) ? $cu : null;
+    if ((string) ($old['currency'] ?? '') !== (string) ($newCur ?? '')) {
+        if ($L->branchHasMoney($id)) {
+            flash('The currency was not changed: this branch already has bills or records. The other details are saved.', 'info');
+        } else {
+            $d['currency'] = $newCur;
+        }
+    }
+    [$b, $a] = Lab::diff($old, $d);
+    $db->update('sc_branches', $d, 'id = ? AND tenant_id = ?', [$id, $p->tenantId]);
+    $L->log('branch', $id, 'edited', $b, $a, null, $id);
+    $L->flushBranches();
+    flash('Branch details saved.', 'ok');
+    redirect(url('portal/lab/my-branch'));
+});
 $app->router->post('/portal/lab/branches/save', static function () use ($boot, $post, $db): void {
     [$p, $L] = $boot('branches');
     $post($p);

@@ -131,6 +131,9 @@ $app->router->get('/portal/lab', static function () use ($boot, $page, $stat, $c
             $acts[] = $btn($l, url('portal/lab/' . $k), $k === 'book' ? 'd-btn-primary' : 'd-btn-soft');
         }
     }
+    if (!$L->central()) {
+        $acts[] = $btn('My branch', url('portal/lab/my-branch'), 'd-btn-soft');
+    }
     $h .= '<p class="d-tools" style="gap:8px;flex-wrap:wrap">' . implode(' ', $acts) . '</p>';
     $rows = [];
     foreach ($db->all("SELECT o.id, o.order_no, o.order_date, o.total, o.currency, o.status, o.branch_id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) pn FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE o.tenant_id = ? AND " . $sc('o.branch_id') . ' ORDER BY o.id DESC LIMIT 8', [$t]) as $r) {
