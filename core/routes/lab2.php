@@ -198,7 +198,15 @@ $app->router->post('/portal/lab/catalogue/{id}/{kind}/{sub}/delete', static func
 });
 
 // ================================================================ referrers and commission rules
-$app->router->get('/portal/lab/referrers', static function () use ($boot, $page, $card, $btn, $db, $tbl, $badge, $tabs): void {
+$sq = static fn (): string => trim((string) ($_GET['q'] ?? ''));
+$searchBar = static fn (string $path, string $hint, array $keep = []): string => '<form class="d-queue-toolbar" method="get" action="' . e(url($path)) . '">' . implode('', array_map(static fn ($k, $v) => '<input type="hidden" name="' . e((string) $k) . '" value="' . e((string) $v) . '">', array_keys($keep), $keep)) . '<label class="d-field" style="margin:0;flex:1"><span class="d-help">' . e($hint) . '</span><input type="search" name="q" value="' . e(trim((string) ($_GET['q'] ?? ''))) . '" autocomplete="off"></label><button class="d-btn d-btn-primary" type="submit">Search</button></form>';
+$rowFilter = static function (array $rows, string $q): array {
+    if ($q === '') {
+        return $rows;
+    }
+    return array_values(array_filter($rows, static fn (array $r): bool => stripos(html_entity_decode(strip_tags(implode(' ', array_map('strval', $r)))), $q) !== false));
+};
+$app->router->get('/portal/lab/referrers', static function () use ($boot, $page, $card, $btn, $db, $tbl, $badge, $tabs, $searchBar, $rowFilter, $sq): void {
     [$p, $L] = $boot('referrers');
     $kind = ($_GET['kind'] ?? 'doctor') === 'partner' ? 'partner' : 'doctor';
     $rows = [];
@@ -206,7 +214,8 @@ $app->router->get('/portal/lab/referrers', static function () use ($boot, $page,
         $T = $L->commissionTotals((int) $r['id']);
         $rows[] = ['<a href="' . e(url('portal/lab/referrers/' . $r['id'])) . '">' . e((string) $r['name']) . '</a>', e((string) ($r['speciality'] ?: $r['org'])), e((string) $r['phone']), e((string) $T['patients']), e((string) $T['tests']), e(money((float) $T['earned'])), e(money((float) $T['outstanding'])), $r['active'] ? 'Active' : $badge('Inactive')];
     }
-    $page($p, $L, 'referrers', 'Referrers and partners', $tabs(['doctor' => ['Doctors', url('portal/lab/referrers')], 'partner' => ['Partner laboratories', url('portal/lab/referrers', ['kind' => 'partner'])]], $kind) . $tbl([['Name'], ['Speciality or organisation'], ['Phone'], ['Patients', 'R'], ['Tests', 'R'], ['Earned', 'R'], ['Outstanding', 'R'], ['Status']], $rows, 'No ' . ($kind === 'doctor' ? 'doctors' : 'partner laboratories') . ' yet.', 'users'), 'Clinic doctors appear here by themselves. Add outside doctors and partner labs.', $btn($kind === 'doctor' ? 'Add outside doctor' : 'Add partner lab', url('portal/lab/referrers/new', ['kind' => $kind])));
+    $rows = $rowFilter($rows, $sq());
+    $page($p, $L, 'referrers', 'Referrers and partners', $tabs(['doctor' => ['Doctors', url('portal/lab/referrers')], 'partner' => ['Partner laboratories', url('portal/lab/referrers', ['kind' => 'partner'])]], $kind) . $searchBar('portal/lab/referrers', 'Search by name, phone or organisation', ['kind' => $kind]) . $tbl([['Name'], ['Speciality or organisation'], ['Phone'], ['Patients', 'R'], ['Tests', 'R'], ['Earned', 'R'], ['Outstanding', 'R'], ['Status']], $rows, 'No ' . ($kind === 'doctor' ? 'doctors' : 'partner laboratories') . ' yet.', 'users'), 'Clinic doctors appear here by themselves. Add outside doctors and partner labs.', $btn($kind === 'doctor' ? 'Add outside doctor' : 'Add partner lab', url('portal/lab/referrers/new', ['kind' => $kind])));
 });
 $app->router->get('/portal/lab/referrers/new', static function () use ($boot, $page, $card, $form, $fld): void {
     [$p, $L] = $boot('referrers');
@@ -512,7 +521,7 @@ $stockMove = static function (Lab $L, array $it, float $delta, string $reason, s
     $bal = $db->val('SELECT quantity FROM sc_stock_items WHERE id = ?', [(int) $it['id']]);
     $db->insert('sc_stock_moves', ['tenant_id' => $L->t, 'item_id' => (int) $it['id'], 'change_qty' => $delta, 'balance' => $bal, 'reason' => $reason, 'note' => mb_substr($note, 0, 255) ?: null, 'user_id' => (int) $L->p->user['id'], 'created_at' => date('Y-m-d H:i:s'), 'branch_id' => (int) ($it['branch_id'] ?: $L->mainId()), 'unit_cost' => $cost, 'supplier' => $supplier]);
 };
-$app->router->get('/portal/lab/inventory', static function () use ($boot, $page, $card, $db, $tbl, $invTabs, $fld, $form, $badge, $btn): void {
+$app->router->get('/portal/lab/inventory', static function () use ($boot, $page, $card, $db, $tbl, $invTabs, $fld, $form, $badge, $btn, $searchBar, $sq): void {
     [$p, $L] = $boot('inventory');
     $tab = (string) ($_GET['tab'] ?? 'items');
     $w = 'tenant_id = ? AND ' . $L->scope('branch_id');
@@ -526,7 +535,13 @@ $app->router->get('/portal/lab/inventory', static function () use ($boot, $page,
     $alertDays = (int) $L->setting('expiry_days', '60');
     $rows = [];
     $value = 0.0;
-    $items = $db->all("SELECT * FROM sc_stock_items WHERE $w ORDER BY name LIMIT 300", [$p->tenantId]);
+    $iq = $sq();
+    $iargs = [$p->tenantId];
+    if ($iq !== '') {
+        $w .= ' AND (name LIKE ? OR sku LIKE ? OR batch_no LIKE ?)';
+        array_push($iargs, "%$iq%", "%$iq%", "%$iq%");
+    }
+    $items = $db->all("SELECT * FROM sc_stock_items WHERE $w ORDER BY name LIMIT 300", $iargs);
     foreach ($items as $it) {
         $low = (float) $it['reorder_level'] > 0 && (float) $it['quantity'] <= (float) $it['reorder_level'];
         $exp = $it['expiry_date'] && strtotime((string) $it['expiry_date']) <= strtotime('+' . $alertDays . ' days');
@@ -541,7 +556,7 @@ $app->router->get('/portal/lab/inventory', static function () use ($boot, $page,
         $bo[(string) $b['id']] = $b['name'];
     }
     $new = $tab === 'items' && $p->canDo('lab_inventory', 'add') && $p->writable() ? $card('Add item', $form(url('portal/lab/inventory/save'), '<div class="d-form-grid">' . $fld('name', ['label' => 'Item', 'required' => true, 'max' => 190]) . $fld('category', ['label' => 'Category (reagent, consumable)', 'max' => 80]) . $fld('unit', ['label' => 'Unit', 'max' => 20], 'pcs') . $fld('reorder_level', ['label' => 'Alert when stock is at or below', 'type' => 'number', 'step' => '0.01'], '0') . $fld('supplier', ['label' => 'Usual supplier', 'max' => 160]) . $fld('branch_id', ['label' => 'Branch', 'type' => 'select', 'options' => $bo, 'required' => true], (string) $L->writeBranch(0)) . '</div>', 'Add item')) : '';
-    $page($p, $L, 'inventory', $tab === 'alerts' ? 'Stock alerts' : 'Lab inventory', $invTabs($tab === 'alerts' ? 'alerts' : 'items') . $new . $tbl([['Item'], ['Batch'], ['Branch'], ['In stock', 'R'], ['Supplier'], ['Expiry'], ['Cost', 'R'], ['Alert']], $rows, $tab === 'alerts' ? 'No alerts. Stock and expiry dates are fine.' : 'No stock items yet.', 'box') . '<p class="d-info">Stock value shown: <b>' . e(money($value)) . '</b></p>', 'Reagents and consumables, per branch. Purchases post to Accounts.');
+    $page($p, $L, 'inventory', $tab === 'alerts' ? 'Stock alerts' : 'Lab inventory', $invTabs($tab === 'alerts' ? 'alerts' : 'items') . $searchBar('portal/lab/inventory', 'Search by item, code or batch', ['tab' => $tab]) . $new . $tbl([['Item'], ['Batch'], ['Branch'], ['In stock', 'R'], ['Supplier'], ['Expiry'], ['Cost', 'R'], ['Alert']], $rows, $tab === 'alerts' ? 'No alerts. Stock and expiry dates are fine.' : 'No stock items yet.', 'box') . '<p class="d-info">Stock value shown: <b>' . e(money($value)) . '</b></p>', 'Reagents and consumables, per branch. Purchases post to Accounts.');
 });
 $app->router->post('/portal/lab/inventory/save', static function () use ($boot, $post, $db): void {
     [$p, $L] = $boot('inventory');
@@ -646,7 +661,7 @@ $profileEnsure = static function (Lab $L, int $uid) use ($db): void {
         $db->insert('sc_staff_profiles', ['user_id' => $uid, 'tenant_id' => $L->t, 'staff_no' => 'EMP-' . str_pad((string) $L->seq('lab_emp'), 4, '0', STR_PAD_LEFT), 'branch_id' => $L->mainId(), 'salary' => 0, 'updated_at' => date('Y-m-d H:i:s')]);
     }
 };
-$app->router->get('/portal/lab/employees', static function () use ($boot, $page, $btn, $db, $tbl, $badge, $staffRows, $profileEnsure, $staffSql): void {
+$app->router->get('/portal/lab/employees', static function () use ($boot, $page, $btn, $db, $tbl, $badge, $staffRows, $profileEnsure, $staffSql, $searchBar, $rowFilter, $sq): void {
     [$p, $L] = $boot('employees');
     foreach ($db->all("SELECT u.id FROM users u LEFT JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = 'App\\\\Models\\\\User' LEFT JOIN departments d ON d.id = m.role_id WHERE $staffSql", [$p->tenantId]) as $u) {
         $profileEnsure($L, (int) $u['id']);
@@ -655,7 +670,8 @@ $app->router->get('/portal/lab/employees', static function () use ($boot, $page,
     foreach ($staffRows($L) as $s) {
         $rows[] = [e((string) $s['staff_no']), '<a href="' . e(url('portal/lab/employees/' . $s['id'])) . '">' . e(trim($s['first_name'] . ' ' . $s['last_name'])) . '</a>', e((string) ($s['designation'] ?: $s['role'])), e($L->branchName((int) $s['branch_id'])), e(money((float) $s['salary'], $s['currency'] ?? null)), $s['pin_hash'] ? 'PIN set' : '<span class="d-mute">No PIN</span>', $s['status'] ? $badge('Active', 'ok') : $badge('Inactive')];
     }
-    $page($p, $L, 'employees', 'Employees', $tbl([['Staff no'], ['Name'], ['Designation'], ['Branch'], ['Salary', 'R'], ['Attendance PIN'], ['Status']], $rows, 'No staff yet.', 'user'), 'The staff accounts of this clinic with their HR details. New people are added under Staff accounts.', $btn('Add staff account', url('portal/staff/new')));
+    $rows = $rowFilter($rows, $sq());
+    $page($p, $L, 'employees', 'Employees', $searchBar('portal/lab/employees', 'Search by staff number, name, designation or branch') . $tbl([['Staff no'], ['Name'], ['Designation'], ['Branch'], ['Salary', 'R'], ['Attendance PIN'], ['Status']], $rows, 'No staff yet.', 'user'), 'The staff accounts of this clinic with their HR details. New people are added under Staff accounts.', $btn('Add staff account', url('portal/staff/new')));
 });
 $app->router->get('/portal/lab/employees/{id}', static function (array $a) use ($app, $boot, $page, $card, $db, $tbl, $form, $fld, $staffRows, $profileEnsure, $pf): void {
     [$p, $L] = $boot('employees');
