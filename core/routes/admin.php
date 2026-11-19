@@ -215,7 +215,7 @@ $app->router->post('/admin/vendors/new', static function () use ($app, $adminUse
         $fail('The plan cannot end before it starts.');
     }
     try {
-        Vendors::create($app, ['type' => $type, 'name' => $d['name'], 'slug' => $slug, 'city' => $d['city'] ?: null, 'phone' => $d['phone'] ?: null, 'first_name' => $d['admin_first'], 'last_name' => $d['admin_last'], 'email' => $email, 'password' => bin2hex(random_bytes(12)), 'plan_id' => (int) $plan['id'], 'status' => $d['status']]);
+        Vendors::create($app, ['allow_private' => true, 'type' => $type, 'name' => $d['name'], 'slug' => $slug, 'city' => $d['city'] ?: null, 'phone' => $d['phone'] ?: null, 'first_name' => $d['admin_first'], 'last_name' => $d['admin_last'], 'email' => $email, 'password' => bin2hex(random_bytes(12)), 'plan_id' => (int) $plan['id'], 'status' => $d['status']]);
     } catch (\Throwable $e) {
         $fail('Could not create the vendor. Please check the details and try again.');
     }
@@ -363,8 +363,9 @@ $vendorPost('assign', static function (string $t, array $u) use ($app): void {
         throw new \InvalidArgumentException('Choose a plan that is offered to this kind of vendor.');
     }
     $d = trim((string) ($_POST['days'] ?? ''));
+    $before = (string) ($app->plans->current($t)['plan_name'] ?? '');
     $app->plans->assign($t, (int) $plan['id'], $d === '' ? null : max(0, (int) $d), (string) ($_POST['note'] ?? '') ?: 'Set by Self Care', (int) $u['id']);
-    $app->access->log($t, (int) $u['id'], null, null, 'plan_assigned', null, $plan['name']);
+    $app->access->log($t, (int) $u['id'], null, null, 'plan_assigned', $before, $plan['name'] . ((int) $plan['is_private'] === 1 ? ' (private plan)' : ''));
 }, 'Plan saved.');
 $vendorPost('extend', static function (string $t, array $u) use ($app): void {
     if (!$app->plans->extend($t, max(1, (int) ($_POST['days'] ?? 30)), (int) $u['id'])) {
@@ -632,7 +633,7 @@ $approveRequest = static function (int $id, array $u) use ($app): ?string {
         return 'A vendor with that name already exists. Edit the request name first.';
     }
     try {
-        Vendors::create($app, ['type' => $r['type_slug'], 'name' => $r['name'], 'slug' => $r['slug'], 'city' => $r['city'], 'phone' => $r['phone'], 'first_name' => $r['first_name'], 'last_name' => (string) $r['last_name'], 'email' => $r['email'], 'password_hash' => $r['password_hash'], 'plan_id' => (int) $r['plan_id']]);
+        Vendors::create($app, ['period' => (string) ($r['billing_period'] ?? ''), 'type' => $r['type_slug'], 'name' => $r['name'], 'slug' => $r['slug'], 'city' => $r['city'], 'phone' => $r['phone'], 'first_name' => $r['first_name'], 'last_name' => (string) $r['last_name'], 'email' => $r['email'], 'password_hash' => $r['password_hash'], 'plan_id' => (int) $r['plan_id']]);
     } catch (\Throwable $e) {
         return 'Could not create the vendor: ' . $e->getMessage();
     }
@@ -906,7 +907,8 @@ $planMod = static function () use ($app): array {
             'storage_gb' => $n('Storage (GB)', '', '0.1'), 'sms_per_month' => $n('SMS per month'), 'email_per_month' => $n('Emails per month'), 'custom_domains' => $n('Custom domains'), 'custom_roles' => $n('Custom roles'), 'audit_days' => $n('Audit log kept (days)'),
             'support_level' => ['label' => 'Support', 'max' => 60, 'null' => true],
             'modules' => ['label' => 'Parts of the portal included (none ticked = all)', 'type' => 'checks', 'options' => Portal::MODULES], 'types' => ['label' => 'Offered to these kinds of vendor (none ticked = all)', 'type' => 'checks', 'options' => array_column(VendorTypes::all($app->db, false), 'name', 'slug')],
-            'sort_order' => ['label' => 'Order', 'type' => 'number', 'default' => 0], 'is_featured' => ['label' => 'Mark as popular', 'type' => 'toggle'], 'is_active' => ['label' => 'Offered on the website and at registration', 'type' => 'toggle', 'default' => 1],
+            'audience' => ['label' => 'Website group (who it is for)', 'max' => 80, 'null' => true, 'help' => 'Plans with the same group are shown together on the website. Empty = shown in every group.'], 'size_label' => ['label' => 'Size label (for example Up to 3 branches)', 'max' => 60, 'null' => true], 'features' => ['label' => 'Extra feature lines (one per line)', 'type' => 'textarea', 'rows' => 5, 'max' => 1500, 'null' => true, 'wide' => true, 'help' => 'Shown with a tick on the website. Limits and parts of the portal are added automatically.'],
+            'sort_order' => ['label' => 'Order', 'type' => 'number', 'default' => 0], 'is_featured' => ['label' => 'Mark as popular', 'type' => 'toggle'], 'is_private' => ['label' => 'Private: never shown on the website or at registration (only Self Care can give it)', 'type' => 'toggle', 'default' => 0], 'is_active' => ['label' => 'Offered on the website and at registration', 'type' => 'toggle', 'default' => 1],
         ],
         'columns' => ['name' => ['label' => 'Plan'], 'price' => ['label' => 'Per month', 'type' => 'money', 'class' => 'r'], 'duration_days' => ['label' => 'Days', 'render' => fn ($r) => $r['duration_days'] === null ? 'Never ends' : e((string) $r['duration_days'])], 'max_staff' => ['label' => 'Staff', 'render' => fn ($r) => $r['max_staff'] === null ? 'No limit' : e((string) $r['max_staff'])], 'max_patients' => ['label' => 'Patients', 'render' => fn ($r) => $r['max_patients'] === null ? 'No limit' : e(number_format((float) $r['max_patients']))], 'sort_order' => ['label' => 'Order'], 'is_active' => ['label' => 'On', 'type' => 'bool']],
         'search' => ['t.name'], 'sort' => 'sort_order',

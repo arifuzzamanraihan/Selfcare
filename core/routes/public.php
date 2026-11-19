@@ -24,7 +24,7 @@ $app->router->get('/', static function () use ($app, $mainPage): void {
         'typeCounts' => array_column($counts, 'n', 'type_slug'),
         'vendors' => Vendors::listed($db, null, '', 6),
         'free' => Vendors::freeServices($db, null, '', 6),
-        'plans' => $app->plans->all(true),
+        'plans' => $app->plans->publicPlans(), 'audiences' => array_keys(\Selfcare\Plans::AUDIENCES),
         'stats' => ['vendors' => (int) $db->val("SELECT COUNT(*) FROM sc_vendors WHERE status = 'active'"), 'types' => count($types), 'doctors' => (int) $db->val('SELECT COUNT(*) FROM doctors'), 'free' => (int) $db->val('SELECT COUNT(*) FROM free_services WHERE is_active = 1')],
         'seo' => true,
     ]));
@@ -50,7 +50,7 @@ $app->router->get('/types/{slug}', static function (array $p) use ($app, $mainPa
     $app->view->page('type', $mainPage((string) $type['name'] . ' websites and portal', [
         'type' => $type, 'tpl' => $tpl, 'vendors' => Vendors::listed($app->db, (string) $type['slug'], '', 12),
         'others' => array_values(array_filter(VendorTypes::all($app->db), static fn ($t) => $t['slug'] !== $type['slug'])),
-        'plans' => array_values(array_filter($app->plans->all(true), fn ($pl) => $app->plans->fitsType($pl, (string) $type['slug']))),
+        'plans' => array_values(array_filter($app->plans->publicPlans(), fn ($pl) => $app->plans->fitsType($pl, (string) $type['slug']))),
     ]));
 });
 

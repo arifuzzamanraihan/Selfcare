@@ -235,14 +235,14 @@ $app->router->get('/register', static function () use ($app, $authPage): void {
     if ($app->hostVendor !== null) {
         redirect($app->tenant->mainUrl('register'));
     }
-    $authPage('register', 'Register your organisation', ['types' => VendorTypes::all($app->db), 'pick' => (string) ($_GET['type'] ?? ''), 'suffix' => $app->tenant->suffix(), 'plans' => $app->plans->all(true)]);
+    $authPage('register', 'Register your organisation', ['types' => VendorTypes::all($app->db), 'pick' => (string) ($_GET['type'] ?? ''), 'suffix' => $app->tenant->suffix(), 'plans' => $app->plans->publicPlans()]);
 });
 
 $app->router->post('/register', static function () use ($app, $authPage, $sendRegisterMail): void {
     $types = VendorTypes::all($app->db);
     $again = static function (string $err) use ($authPage, $types, $app): void {
         http_response_code(422);
-        $authPage('register', 'Register your organisation', ['types' => $types, 'pick' => (string) ($_POST['type'] ?? ''), 'suffix' => $app->tenant->suffix(), 'plans' => $app->plans->all(true), 'error' => $err]);
+        $authPage('register', 'Register your organisation', ['types' => $types, 'pick' => (string) ($_POST['type'] ?? ''), 'suffix' => $app->tenant->suffix(), 'plans' => $app->plans->publicPlans(), 'error' => $err]);
         clear_old();
     };
     keep_old($_POST);
@@ -290,7 +290,12 @@ $app->router->post('/register', static function () use ($app, $authPage, $sendRe
     }
     $app->throttle->hit('register', $app->ip());
     $planId = (int) ($_POST['plan_id'] ?? 0);
-    $app->db->insert('sc_registration_requests', ['type_slug' => $type, 'name' => $name, 'slug' => $slug, 'city' => trim((string) ($_POST['city'] ?? '')) ?: null, 'phone' => trim((string) ($_POST['phone'] ?? '')) ?: null, 'first_name' => mb_substr($first, 0, 120), 'last_name' => mb_substr($last, 0, 120), 'email' => $email,
+    $planRow = $planId > 0 ? $app->plans->find($planId) : null;
+    if ($planRow === null || (int) $planRow['is_private'] === 1 || (int) $planRow['is_active'] !== 1 || !$app->plans->fitsType($planRow, $type)) {
+        $planId = 0; // a private, switched off or wrong kind of plan is never taken from a public form
+    }
+    $period = ($_POST['period'] ?? '') === 'yearly' ? 'yearly' : 'monthly';
+    $app->db->insert('sc_registration_requests', ['billing_period' => $period, 'type_slug' => $type, 'name' => $name, 'slug' => $slug, 'city' => trim((string) ($_POST['city'] ?? '')) ?: null, 'phone' => trim((string) ($_POST['phone'] ?? '')) ?: null, 'first_name' => mb_substr($first, 0, 120), 'last_name' => mb_substr($last, 0, 120), 'email' => $email,
         'password_hash' => password_hash($pw, PASSWORD_BCRYPT), 'plan_id' => $planId > 0 && $app->plans->find($planId) !== null ? $planId : null, 'status' => 'unverified', 'ip' => $app->ip(), 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
     clear_old();
     $rid = (int) $app->db->val('SELECT id FROM sc_registration_requests WHERE email = ? ORDER BY id DESC LIMIT 1', [$email]);

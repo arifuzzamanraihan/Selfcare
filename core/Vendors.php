@@ -43,11 +43,12 @@ final class Vendors
                 $planId = (int) $app->site->get(null, 'default_plan_id', '0');
             }
             $plan = $planId ? $app->plans->find($planId) : null;
-            if ($plan === null || !$app->plans->fitsType($plan, (string) $type['slug'])) {
-                $plan = $db->one('SELECT * FROM sc_plans WHERE price = 0 AND is_active = 1 ORDER BY id LIMIT 1') ?? $db->one('SELECT * FROM sc_plans ORDER BY id LIMIT 1');
+            if ($plan === null || !$app->plans->fitsType($plan, (string) $type['slug']) || ((int) ($plan['is_private'] ?? 0) === 1 && empty($in['allow_private']))) {
+                $plan = $db->one('SELECT * FROM sc_plans WHERE price = 0 AND is_active = 1 AND is_private = 0 ORDER BY id LIMIT 1') ?? $db->one('SELECT * FROM sc_plans WHERE is_private = 0 ORDER BY id LIMIT 1');
             }
             if ($plan !== null) {
-                $app->plans->assign($slug, (int) $plan['id'], null, 'Given at registration', null);
+                $days = (float) $plan['price'] > 0 && !empty($in['period']) ? ((string) $in['period'] === 'yearly' ? 365 : 30) : null;
+                $app->plans->assign($slug, (int) $plan['id'], $days, 'Given at registration' . ($days ? ($days === 365 ? ' (yearly)' : ' (monthly)') : ''), null);
             }
             foreach (['sat', 'sun', 'mon', 'tue', 'wed', 'thu'] as $d) {
                 $app->site->set($slug, 'hours_' . $d, '09:00 - 17:00');

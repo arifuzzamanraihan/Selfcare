@@ -67,5 +67,13 @@ if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NUL
     }
     $db->insert('front_settings', ['key' => 'plans_pkr_v1', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
 }
+// one time: the public catalogue (three sizes per kind of provider, in Rs) replaces the old generic paid plans, which stay for vendors that use them but are switched off for new sign ups
+if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'plans_catalog_v1' LIMIT 1") !== '1') {
+    echo "catalogue plans added: " . Selfcare\Plans::seedCatalogue($db) . "\n";
+    $db->run("UPDATE sc_plans SET is_active = 0 WHERE (audience IS NULL OR audience = '') AND is_private = 0 AND name <> 'Free'");
+    $db->run("UPDATE sc_plans SET features = 'Your own website and portal\nPatients, doctors and billing\nSelf Care badge', description = 'Try Self Care with a very small team. Data export always allowed.' WHERE name = 'Free' AND (features IS NULL OR features = '')");
+    $db->insert('front_settings', ['key' => 'plans_catalog_v1', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+}
+echo "private plans added: " . Selfcare\Plans::seedUltimate($db) . "\n";
 echo "vendor types added: " . Selfcare\VendorTypes::seed($db) . "\n";
 echo "done\n";

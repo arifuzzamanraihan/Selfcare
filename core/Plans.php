@@ -15,23 +15,128 @@ final class Plans
     {
     }
 
-    /** Default plans from the feature spec. All values are editable by the super admin. Added only when there are no plans. */
+    /** Who each group of public plans is for: audience label => vendor type slugs. */
+    public const AUDIENCES = [
+        'Clinics and specialty centers' => 'clinic,specialty-clinic,dental-clinic,eye-clinic,maternity-center,mental-health,alternative-medicine,rehabilitation,telemedicine,home-care',
+        'Laboratories and diagnostic centers' => 'laboratory,diagnostic-center,imaging-center,blood-bank,dialysis-center',
+        'Hospitals and nursing homes' => 'hospital,nursing-home',
+        'Pharmacies and suppliers' => 'pharmacy,equipment-supplier',
+        'Ambulance services' => 'ambulance',
+    ];
+
+    /**
+     * The public catalogue: three sizes for each kind of provider, in Pakistani Rupees, with a yearly price of ten months.
+     * name, audience, size label, description, monthly, yearly, branches, staff, patients, storage GB, modules, featured, support, extra feature lines
+     * @return list<array<string,mixed>>
+     */
+    public static function catalogue(): array
+    {
+        $base = 'doctors,patients,staff,website,free_services,messages,billing,documents,catalog';
+        $mid = $base . ',reports,access';
+        $all = $mid . ',ipd,procurement,insurance';
+        $A = array_keys(self::AUDIENCES);
+        return [
+            ['Starter', $A[0], 'One clinic', 'For a single clinic going digital.', 3500, 35000, 1, 5, 3000, 2, $base, 0, 'Email', "Doctor workspace with token queue\nPrescriptions and printed forms\nPatient My care portal"],
+            ['Professional', $A[0], 'Up to 3 branches', 'For a busy clinic with its own laboratory.', 8500, 85000, 3, 20, 25000, 10, $mid, 1, 'Priority email and chat', "Laboratory suite: MR numbers, samples, results with approval\nWhatsApp and email report sharing\nDoctor commission\nFinance: income, expenses and net result\nStock and inventory\nDaily report email and backups"],
+            ['Multi Branch', $A[0], 'Up to 10 branches', 'For clinic and laboratory groups.', 18000, 180000, 10, 80, 200000, 50, $all, 0, 'Named manager', "Everything in Professional\nBranch wise access control and consolidated reports\nPartner laboratory commission\nStaff attendance with PIN and salary\nScheduled daily backups"],
+            ['Starter', $A[1], 'One laboratory', 'For a single laboratory or diagnostic centre.', 4500, 45000, 1, 5, 5000, 2, $base, 0, 'Email', "Test catalogue, orders and bills\nPrinted reports and receipts"],
+            ['Professional', $A[1], 'Up to 3 branches', 'For a growing laboratory with collection points.', 9500, 95000, 3, 20, 40000, 10, $mid, 1, 'Priority email and chat', "Role based access for every desk\nReports with Excel and PDF export\nDoctor and partner referrals"],
+            ['Multi Branch', $A[1], 'Up to 10 branches', 'For laboratory chains.', 22000, 220000, 10, 80, 250000, 50, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches\nProcurement and goods received"],
+            ['Standard', $A[2], 'Up to 30 beds', 'OPD and IPD for a small hospital.', 25000, 250000, 1, 30, 20000, 20, $mid . ',ipd', 0, 'Priority email and chat', "Admissions, beds and discharge\nDoctor workspace and token queue\nBilling and printed forms"],
+            ['Professional', $A[2], 'Up to 3 branches', 'For a hospital with departments and purchasing.', 45000, 450000, 3, 100, 100000, 60, $mid . ',ipd,procurement', 1, 'Named manager', "Departments and wards\nPurchase orders and goods received\nAdvanced reports"],
+            ['Enterprise', $A[2], 'Up to 10 branches', 'For hospital groups with insurance claims.', 80000, 800000, 10, 400, 500000, 200, $all, 0, 'Named manager and SLA', "Insurance and TPA claims\nConsolidated reports across branches\nCustom roles and long audit history"],
+            ['Starter', $A[3], 'One shop', 'For a single pharmacy or equipment shop.', 3000, 30000, 1, 3, 5000, 2, $base, 0, 'Email', "Items, stock and bills\nPrinted receipts"],
+            ['Professional', $A[3], 'Up to 3 shops', 'For a pharmacy with several counters.', 6000, 60000, 3, 10, 30000, 10, $mid, 1, 'Priority email and chat', "Stock with batches and expiry\nReports with Excel and PDF export"],
+            ['Chain', $A[3], 'Up to 10 shops', 'For pharmacy chains and suppliers.', 12000, 120000, 10, 40, 150000, 40, $all, 0, 'Named manager', "Everything in Professional\nProcurement and goods received\nConsolidated reports"],
+            ['Starter', $A[4], 'Small fleet', 'For one or two vehicles.', 2500, 25000, 1, 3, 2000, 2, $base, 0, 'Email', "Vehicles, drivers and trips\nBilling and receipts"],
+            ['Professional', $A[4], 'Growing fleet', 'For a dispatch desk with several vehicles.', 6000, 60000, 2, 10, 10000, 10, $mid, 1, 'Priority email and chat', "Dispatch desk and requests\nReports with Excel and PDF export"],
+            ['Fleet', $A[4], 'Large fleet', 'For ambulance networks.', 12000, 120000, 10, 40, 80000, 40, $all, 0, 'Named manager', "Everything in Professional\nConsolidated reports across branches"],
+        ];
+    }
+
+    /** Adds the catalogue plans that are missing (matched by name and audience). Returns how many were added. */
+    public static function seedCatalogue(Database $db): int
+    {
+        $cols = ['name', 'audience', 'size_label', 'description', 'currency', 'price', 'price_year', 'duration_days', 'max_staff', 'max_branches', 'max_patients', 'storage_gb', 'modules', 'types', 'is_featured', 'support_level', 'features', 'is_active', 'is_private', 'sort_order', 'audit_days', 'custom_roles', 'custom_domains'];
+        $n = 0;
+        $ord = 10;
+        foreach (self::catalogue() as $r) {
+            [$name, $aud, $size, $desc, $m, $y, $br, $st, $pa, $gb, $mods, $feat, $sup, $lines] = $r;
+            $ord += 1;
+            if ((int) $db->val('SELECT COUNT(*) FROM sc_plans WHERE name = ? AND audience = ?', [$name, $aud]) > 0) {
+                continue;
+            }
+            $big = $br >= 10;
+            $db->insert('sc_plans', array_combine($cols, [$name, $aud, $size, $desc, 'PKR', $m, $y, null, $st, $br, $pa, $gb, $mods, self::AUDIENCES[$aud], $feat, $sup, $lines, 1, 0, $ord, $big ? 1095 : 365, $big ? 20 : ($m >= 8000 ? 8 : 3), $big ? 3 : ($m >= 8000 ? 1 : 0)]));
+            $n++;
+        }
+        return $n;
+    }
+
+    /** The private Ultimate plan: no limit on anything, every module, every kind of vendor, never expires. Never shown on the website or at registration. */
+    public static function seedUltimate(Database $db): int
+    {
+        if ((int) $db->val("SELECT COUNT(*) FROM sc_plans WHERE name = 'Ultimate' AND is_private = 1") > 0) {
+            return 0;
+        }
+        $db->insert('sc_plans', ['name' => 'Ultimate', 'description' => 'Private plan with no limits. Only Self Care can give it.', 'currency' => 'PKR', 'price' => 0, 'price_year' => null, 'price_label' => 'Custom', 'duration_days' => null, 'modules' => '', 'types' => '', 'support_level' => 'Named manager and SLA', 'is_active' => 1, 'is_private' => 1, 'is_featured' => 0, 'sort_order' => 999, 'audience' => null, 'features' => "No limit on branches, staff, patients, storage or messages\nEvery module and every feature\nPrivate: given by Self Care only"]);
+        return 1;
+    }
+
+    /** Default plans. Added only when there are no plans. */
     public static function seedDefaults(Database $db): void
     {
         if ($db->val('SELECT COUNT(*) FROM sc_plans') > 0) {
             return;
         }
-        $cols = ['name', 'description', 'currency', 'price', 'price_year', 'price_label', 'duration_days', 'max_staff', 'max_branches', 'max_patients', 'max_appointments', 'storage_gb', 'sms_per_month', 'email_per_month', 'custom_domains', 'custom_roles', 'audit_days', 'support_level', 'modules', 'is_active', 'is_featured', 'sort_order'];
-        $rows = [
-            ['Free', 'Free forever, with a Self Care badge. Data export always allowed.', 'PKR', 0, 0, NULL, NULL, 3, 1, 100, 100, 0.5, 0, 100, 0, 0, 30, 'Community', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 1],
-            ['Starter', 'For small providers going online.', 'PKR', 8000, 80000, NULL, NULL, 10, 1, 3000, 1000, 5, 100, 1000, 0, 3, 90, 'Email', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 2],
-            ['Professional', 'For growing hospitals and multi-service providers.', 'PKR', 27500, 275000, NULL, NULL, 40, 3, 25000, 10000, 50, 1000, 10000, 1, 15, 365, 'Priority email and chat', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement', 1, 1, 3],
-            ['Business', 'For busy multi-branch providers.', 'PKR', 69500, 695000, NULL, NULL, 150, 10, 150000, 50000, 250, 5000, 50000, 3, 50, 1095, 'Named manager', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement,insurance', 1, 0, 4],
-            ['Enterprise', 'Custom limits, contract and support.', 'PKR', 0, NULL, 'Custom', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SLA', '', 1, 0, 5],
-        ];
-        foreach ($rows as $r) {
-            $db->insert('sc_plans', array_combine($cols, $r));
+        $db->insert('sc_plans', ['name' => 'Free', 'description' => 'Try Self Care with a very small team. Data export always allowed.', 'currency' => 'PKR', 'price' => 0, 'price_year' => 0, 'duration_days' => null, 'max_staff' => 3, 'max_branches' => 1, 'max_patients' => 100, 'max_appointments' => 100, 'storage_gb' => 0.5, 'audit_days' => 30, 'support_level' => 'Community', 'modules' => 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 'types' => '', 'features' => "Your own website and portal\nPatients, doctors and billing\nSelf Care badge", 'is_active' => 1, 'sort_order' => 1]);
+        self::seedCatalogue($db);
+        self::seedUltimate($db);
+    }
+
+    /** Public plans: offered on the website and at registration. Private plans are never in this list. @return list<array<string,mixed>> */
+    public function publicPlans(): array
+    {
+        return $this->db->all('SELECT * FROM sc_plans WHERE is_active = 1 AND is_private = 0 ORDER BY sort_order, price, id');
+    }
+
+    /** Lines for a plan card, built from the plan record itself: size, limits, portal parts, extras, support. @return list<string> */
+    public static function featureLines(array $p): array
+    {
+        $lim = static fn ($v, string $one, string $many): ?string => $v === null ? 'Unlimited ' . $many : number_format((float) $v) . ' ' . ((float) $v == 1 ? $one : $many);
+        $o = [];
+        foreach ([[$p['max_branches'] ?? null, 'branch', 'branches'], [$p['max_staff'] ?? null, 'staff user', 'staff users'], [$p['max_patients'] ?? null, 'patient record', 'patient records']] as [$v, $a, $b]) {
+            $o[] = $lim($v, $a, $b);
         }
+        if (($p['storage_gb'] ?? null) !== null && (float) $p['storage_gb'] > 0) {
+            $o[] = rtrim(rtrim(number_format((float) $p['storage_gb'], 1), '0'), '.') . ' GB storage';
+        }
+        foreach (preg_split('/\r?\n/', (string) ($p['features'] ?? '')) ?: [] as $l) {
+            if (trim($l) !== '') {
+                $o[] = trim($l);
+            }
+        }
+        $mods = array_filter(array_map('trim', explode(',', (string) ($p['modules'] ?? ''))));
+        $names = ['reports' => 'Reports and PDF export', 'access' => 'Role access and time access', 'ipd' => 'Admissions, beds and discharge', 'procurement' => 'Purchase orders and goods received', 'insurance' => 'Insurance and TPA claims'];
+        foreach ($names as $k => $label) {
+            if (!$mods || in_array($k, $mods, true)) {
+                if (!in_array($label, $o, true) && !preg_grep('/' . preg_quote(strtok($label, ' '), '/') . '/i', $o)) {
+                    $o[] = $label;
+                }
+            }
+        }
+        if (trim((string) ($p['support_level'] ?? '')) !== '') {
+            $o[] = 'Support: ' . $p['support_level'];
+        }
+        return array_values(array_filter($o));
+    }
+
+    /** Yearly saving in percent against twelve months, or 0. */
+    public static function yearSaving(array $p): int
+    {
+        $m = (float) $p['price'];
+        $y = (float) ($p['price_year'] ?? 0);
+        return ($m > 0 && $y > 0 && $y < $m * 12) ? (int) round((1 - $y / ($m * 12)) * 100) : 0;
     }
 
     /** @return list<array<string,mixed>> */
@@ -142,17 +247,18 @@ final class Plans
     public function limitError(string $tenantId, string $what): ?string
     {
         $sub = $this->current($tenantId);
-        $col = ['staff' => 'max_staff', 'patients' => 'max_patients', 'appointments' => 'max_appointments'][$what] ?? null;
+        $col = ['staff' => 'max_staff', 'patients' => 'max_patients', 'appointments' => 'max_appointments', 'branches' => 'max_branches'][$what] ?? null;
         if ($col === null || ($sub[$col] ?? null) === null) {
             return null;
         }
         $max = (int) $sub[$col];
         $n = match ($what) {
             'staff' => (int) $this->db->val("SELECT COUNT(*) FROM users u JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? JOIN departments d ON d.id = m.role_id WHERE u.tenant_id = ? AND u.status = 1 AND d.name NOT IN ('Patient', 'Family Member', 'Referring Doctor', 'B2B Customer')", [Auth::ROLE_MODEL, $tenantId]),
+            'branches' => (int) $this->db->val('SELECT COUNT(*) FROM sc_branches WHERE tenant_id = ? AND active = 1', [$tenantId]),
             'patients' => (int) $this->db->val('SELECT COUNT(*) FROM patients WHERE tenant_id = ?', [$tenantId]),
             default => (int) $this->db->val("SELECT COUNT(*) FROM sc_appointment_requests WHERE tenant_id = ? AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')", [$tenantId]),
         };
-        $names = ['staff' => 'staff accounts', 'patients' => 'patient records', 'appointments' => 'requests this month'];
+        $names = ['staff' => 'staff accounts', 'patients' => 'patient records', 'appointments' => 'requests this month', 'branches' => 'branches'];
         return $n >= $max ? 'Your plan allows up to ' . $max . ' ' . $names[$what] . '. Ask Self Care to change your plan to add more.' : null;
     }
 

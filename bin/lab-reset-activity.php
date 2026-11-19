@@ -1,7 +1,7 @@
 <?php
 // Selfcare original code. Clears the day to day records of ONE clinic laboratory vendor and keeps its set up
 // (branches, roles, settings, test catalogue, signatory, the owner login). Used after sample data was entered for screenshots.
-//   php bin/lab-reset-activity.php haider-lab --yes
+//   php bin/lab-reset-activity.php haider-lab --yes [--keep-branch-admins]
 // Make a database backup first. Touches only rows of the named vendor.
 declare(strict_types=1);
 
@@ -36,7 +36,12 @@ foreach ($clear as $tbl) {
         echo "skipped $tbl: ", $e->getMessage(), "\n";
     }
 }
-$others = array_column($db->all('SELECT id FROM users WHERE tenant_id = ? AND id <> ?', [$t, $owner]), 'id');
+$keep = in_array('--keep-branch-admins', $argv, true); // keep real Branch Admin accounts (sample accounts end in .sample and are always removed)
+$sql = 'SELECT u.id FROM users u WHERE u.tenant_id = ? AND u.id <> ?';
+if ($keep) {
+    $sql .= " AND NOT (u.email NOT LIKE '%.sample' AND EXISTS (SELECT 1 FROM model_has_roles m JOIN departments d ON d.id = m.role_id WHERE m.model_id = u.id AND m.model_type = " . $db->quote(Selfcare\Auth::ROLE_MODEL) . " AND d.name = 'Branch Admin'))";
+}
+$others = array_column($db->all($sql, [$t, $owner]), 'id');
 foreach ($others as $uid) {
     $db->run('DELETE FROM model_has_roles WHERE model_id = ? AND model_type = ?', [(int) $uid, Selfcare\Auth::ROLE_MODEL]);
     foreach (['sc_user_branches', 'sc_password_resets', 'sc_login_tokens', 'sc_email_tokens'] as $tbl) {

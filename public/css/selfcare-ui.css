@@ -134,3 +134,14 @@ html{scroll-padding-bottom:96px}
   .sc-brand{flex:1 1 auto;min-width:0}
   .sc-burger{margin-left:auto}
 }
+/* pricing: tabs, monthly or yearly switch, plan cards */
+.sc-ptools{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:center;margin:22px 0 8px}
+.sc-aud{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.sc-aud-b,.sc-bill-b{font:inherit;font-size:.9rem;font-weight:600;border:1px solid var(--line,#d6dde5);background:var(--card,#fff);color:inherit;border-radius:999px;padding:9px 16px;min-height:44px;cursor:pointer}
+.sc-aud-b.on,.sc-bill-b.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.sc-bill{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line,#d6dde5);border-radius:999px;background:var(--card,#fff)}.sc-bill-b{border:0;padding:8px 18px}
+.sc-save{font-size:.72rem;background:#fde68a;color:#78350f;border-radius:999px;padding:2px 8px;margin-left:4px}
+.sc-pgroup-h{text-align:center;margin:18px 0 4px;font-size:1.1rem}.sc-pgroup[hidden]{display:none}
+.sc-pgrid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:16px;align-items:stretch}
+.sc-pcard{position:relative}.sc-pcard ul{flex:1}.sc-size{font-size:.85rem;font-weight:600;color:var(--brand)}.sc-sub{font-size:.85rem;color:var(--mute);min-height:1.3em}.sc-pdesc{margin:4px 0 0;font-size:.92rem}
+.sc-pcta{margin-top:auto;text-align:center}.sc-pnote{text-align:center;color:var(--mute);font-size:.88rem;margin-top:22px}
+@media (max-width:600px){.sc-pgrid{grid-template-columns:1fr}.sc-aud{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;width:100%;padding-bottom:4px}.sc-aud-b{white-space:nowrap}}

@@ -1085,6 +1085,10 @@ $app->router->post('/portal/lab/branches/save', static function () use ($boot, $
         $code = 'BR' . ((int) $db->val('SELECT COUNT(*) FROM sc_branches WHERE tenant_id = ?', [$p->tenantId]));
     }
     $code = substr($code, 0, 12);
+    if ($id === 0 && ($limit = \Selfcare\app()->plans->limitError($p->tenantId, 'branches')) !== null) {
+        flash($limit, 'bad');
+        redirect(url('portal/lab/branches'));
+    }
     if ((int) $db->val('SELECT COUNT(*) FROM sc_branches WHERE tenant_id = ? AND code = ? AND id <> ?', [$p->tenantId, $code, $id])) {
         flash('That short code is used by another branch.', 'bad');
         redirect(url('portal/lab/branches' . ($id ? '/' . $id : '')));
