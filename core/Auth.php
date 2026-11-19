@@ -78,7 +78,7 @@ final class Auth
             return $this->cache = null;
         }
         $u = $this->db->one(
-            'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.hospital_name, u.tenant_id, u.status, u.is_super_admin_default, d.name AS role
+            'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.hospital_name, u.tenant_id, u.status, u.is_super_admin_default, u.email_verified_at, u.pending_email, d.name AS role
              FROM users u
              LEFT JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ?
              LEFT JOIN departments d ON d.id = m.role_id

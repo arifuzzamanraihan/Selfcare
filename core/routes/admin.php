@@ -28,7 +28,7 @@ $adminNav = static function () use ($app): array {
     $i = static fn (string $k, string $l, string $ic, string $p, int $badge = 0): array => ['key' => $k, 'label' => $l, 'icon' => $ic, 'url' => url($p), 'badge' => $badge];
     $pending = (int) $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE status = 'pending'");
     return [
-        ['group' => 'Platform', 'items' => [$i('overview', 'Overview', 'home', 'admin'), $i('vendors', 'Vendors', 'building', 'admin/vendors'), $i('requests', 'Registration requests', 'clock', 'admin/requests', $pending), $i('types', 'Vendor types', 'layers', 'admin/types'), $i('plans', 'Plans', 'card', 'admin/plans'), $i('roletpl', 'Role templates', 'shield', 'admin/role-templates')]],
+        ['group' => 'Platform', 'items' => [$i('overview', 'Overview', 'home', 'admin'), $i('vendors', 'Vendors', 'building', 'admin/vendors'), $i('requests', 'Registration requests', 'clock', 'admin/requests', $pending), $i('types', 'Vendor types', 'layers', 'admin/types'), $i('plans', 'Plans', 'card', 'admin/plans'), $i('roletpl', 'Role templates', 'shield', 'admin/role-templates'), $i('mail', 'Email log', 'mail', 'admin/mail')]],
         ['group' => 'Money', 'items' => [$i('billing', 'Subscription invoices', 'file', 'admin/billing'), $i('currencies', 'Currencies', 'card', 'admin/currencies'), $i('reports', 'Reports', 'chart', 'admin/reports')]],
         ['group' => 'Website', 'items' => [$i('content', 'Site content and footer', 'globe', 'admin/content'), $i('c-features', 'Features', 'star', 'admin/c/features'), $i('c-steps', 'How it works', 'arrow', 'admin/c/steps'), $i('c-faq', 'Questions', 'help', 'admin/c/faq'), $i('c-testimonials', 'Testimonials', 'heart', 'admin/c/testimonials'), $i('messages', 'Messages', 'mail', 'admin/messages'), $i('free', 'Free services', 'heart', 'admin/free-services')]],
         ['group' => 'Account', 'items' => [$i('account', 'My account', 'user', 'admin/account')]],
@@ -158,11 +158,9 @@ $vendorFields = static function (bool $new) use ($typeOptions, $planOptions): ar
     return $f;
 };
 $setLink = static function (string $slug, int $uid, string $first, string $email, bool $mail = true) use ($app): string {
-    $token = bin2hex(random_bytes(32));
-    $app->db->run('UPDATE sc_password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$uid]);
-    $app->db->insert('sc_password_resets', ['user_id' => $uid, 'token_hash' => hash('sha256', $token), 'expires_at' => date('Y-m-d H:i:s', time() + 7 * 86400)]);
-    $link = $app->tenant->siteUrl($slug, 'reset') . '?token=' . $token;
-    $sent = $mail && $app->mailer->send($email, 'Set your Self Care password', "Hello $first,\n\nUse this link to choose your Self Care password. It works once and expires in 7 days:\n\n$link\n\nYour website: " . $app->tenant->siteUrl($slug) . "\n\nSelf Care");
+    $u = $app->db->one('SELECT * FROM users WHERE id = ?', [$uid]) ?? [];
+    $link = $app->mail->sendInvite($u + ['first_name' => $first, 'email' => $email, 'tenant_id' => $slug], 'Self Care', $mail);
+    $sent = $mail && (string) $app->db->val("SELECT status FROM sc_mail_queue WHERE user_id = ? AND kind = 'invite' ORDER BY id DESC LIMIT 1", [$uid]) === 'sent';
     if (!$sent) {
         $_SESSION['sc_setlink'] = ['slug' => $slug, 'link' => $link, 'email' => $email];
     }
@@ -198,7 +196,7 @@ $app->router->post('/admin/vendors/new', static function () use ($app, $adminUse
     if (($e = Vendors::slugError($app, $slug)) !== null) {
         $fail($e);
     }
-    if ($app->db->val('SELECT COUNT(*) FROM users WHERE email = ?', [$email]) > 0 || $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE email = ? AND status = 'pending'", [$email]) > 0) {
+    if ($app->db->val('SELECT COUNT(*) FROM users WHERE email = ?', [$email]) > 0 || $app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE email = ? AND status IN ('pending','unverified')", [$email]) > 0) {
         $fail('That email already has an account or a waiting registration.');
     }
     if ($app->db->val('SELECT COUNT(*) FROM tenants WHERE hospital_name = ?', [$d['name']]) > 0) {
@@ -617,8 +615,8 @@ $app->router->post('/admin/vendors/{id}/domains/remove/{did}', static function (
 });
 
 // ------------------------------------------------------------------ registration requests
-$reqStates = ['pending' => 'Waiting', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'];
-$reqBadge = static fn (string $s): string => '<span class="d-badge is-' . ['pending' => 'warn', 'approved' => 'ok', 'rejected' => 'bad', 'cancelled' => 'mute'][$s] . '">' . e(['pending' => 'Waiting', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'][$s] ?? $s) . '</span>';
+$reqStates = ['pending' => 'Waiting', 'unverified' => 'Email not confirmed', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'];
+$reqBadge = static fn (string $s): string => '<span class="d-badge is-' . ['pending' => 'warn', 'unverified' => 'mute', 'approved' => 'ok', 'rejected' => 'bad', 'cancelled' => 'mute'][$s] ?? 'mute' . '">' . e(['pending' => 'Waiting', 'unverified' => 'Email not confirmed', 'approved' => 'Approved', 'rejected' => 'Rejected', 'cancelled' => 'Cancelled'][$s] ?? $s) . '</span>';
 $approveRequest = static function (int $id, array $u) use ($app): ?string {
     $r = $app->db->one('SELECT * FROM sc_registration_requests WHERE id = ?', [$id]);
     if ($r === null || $r['status'] !== 'pending') {
@@ -643,7 +641,10 @@ $approveRequest = static function (int $id, array $u) use ($app): ?string {
     }
     $app->db->run("UPDATE sc_registration_requests SET status = 'approved', tenant_id = ?, decided_by = ?, decided_at = NOW(), updated_at = NOW(), reason = NULL WHERE id = ?", [$r['slug'], (int) $u['id'], $id]);
     $app->access->log((string) $r['slug'], (int) $u['id'], null, null, 'registration_approved', 'pending', 'approved', 'Request #' . $id);
-    $app->mailer->send((string) $r['email'], 'Your Self Care registration is approved', "Hello " . $r['first_name'] . ",\n\nGood news: " . $r['name'] . " is approved. Your website and your portal are ready.\n\nWebsite: " . $app->tenant->siteUrl((string) $r['slug']) . "\nSign in: " . $app->tenant->siteUrl((string) $r['slug'], 'login') . "\n\nUse the email and password you chose when you registered.\n\nSelf Care");
+    $app->db->run('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE tenant_id = ? AND email = ?', [$r['slug'], $r['email']]);
+    $app->mail->send('welcome', (string) $r['email'], 'Your Self Care registration is approved', 'You are approved, ' . $r['first_name'],
+        $r['name'] . " is approved. Your website and your portal are ready.\n\nSign in with the email and password you chose when you registered. Your website is " . $app->tenant->siteUrl((string) $r['slug']) . '.',
+        ['Sign in', $app->tenant->siteUrl((string) $r['slug'], 'login')], (string) $r['name'], (string) $r['slug']);
     return null;
 };
 
@@ -662,7 +663,7 @@ $app->router->get('/admin/requests', static function () use ($app, $adminUser, $
         'sort' => 'created_at', 'dir' => 'desc',
         'actions' => [['label' => 'Details', 'icon' => 'eye', 'url' => fn ($r) => url('admin/requests/' . $r['id'])],
             ['label' => 'Approve', 'icon' => 'check', 'method' => 'post', 'url' => fn ($r) => url('admin/requests/' . $r['id'] . '/approve'), 'if' => fn ($r) => $r['status'] === 'pending', 'confirm' => 'Approve this registration? The website and portal are created and the vendor is emailed.'],
-            ['label' => 'Cancel', 'icon' => 'x', 'method' => 'post', 'danger' => true, 'url' => fn ($r) => url('admin/requests/' . $r['id'] . '/cancel'), 'if' => fn ($r) => $r['status'] === 'pending', 'confirm' => 'Cancel this request?'],
+            ['label' => 'Cancel', 'icon' => 'x', 'method' => 'post', 'danger' => true, 'url' => fn ($r) => url('admin/requests/' . $r['id'] . '/cancel'), 'if' => fn ($r) => in_array($r['status'], ['pending', 'unverified'], true), 'confirm' => 'Cancel this request?'],
             ['label' => 'Delete', 'icon' => 'trash', 'method' => 'post', 'danger' => true, 'url' => fn ($r) => url('admin/requests/' . $r['id'] . '/delete'), 'if' => fn ($r) => in_array($r['status'], ['rejected', 'cancelled'], true), 'confirm' => 'Delete this request for good?']],
         'empty' => ['title' => 'No requests here', 'text' => 'New registrations from the public sign up page wait here until you approve them.'],
     ]);
@@ -753,13 +754,15 @@ $app->router->post('/admin/requests/{id}/reject', static function (array $a) use
     }
     $app->db->run("UPDATE sc_registration_requests SET status = 'rejected', reason = ?, decided_by = ?, decided_at = NOW(), updated_at = NOW() WHERE id = ?", [mb_substr($reason, 0, 240), (int) $u['id'], $id]);
     $app->access->log('_platform', (int) $u['id'], null, null, 'registration_rejected', 'pending', 'rejected', 'Request #' . $id . ': ' . $reason);
-    $app->mailer->send((string) $r['email'], 'About your Self Care registration', "Hello " . $r['first_name'] . ",\n\nThank you for asking to join Self Care. We could not approve the registration for " . $r['name'] . " this time.\n\nReason: " . $reason . "\n\nYou are welcome to register again after fixing this, or reply to this email.\n\nSelf Care");
+    $app->mail->send('registration_declined', (string) $r['email'], 'About your Self Care registration', 'About your registration',
+        'Thank you for asking to join Self Care. We could not approve the registration for ' . $r['name'] . " this time.\n\nReason: " . $reason . "\n\nYou are welcome to register again after fixing this.",
+        null, null, null);
     $go('Rejected. The vendor was emailed the reason.', url('admin/requests'));
 });
 $app->router->post('/admin/requests/{id}/cancel', static function (array $a) use ($app, $adminUser, $go): void {
     $u = $adminUser();
     $id = (int) $a['id'];
-    $n = $app->db->run("UPDATE sc_registration_requests SET status = 'cancelled', decided_by = ?, decided_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'pending'", [(int) $u['id'], $id]);
+    $n = $app->db->run("UPDATE sc_registration_requests SET status = 'cancelled', decided_by = ?, decided_at = NOW(), updated_at = NOW() WHERE id = ? AND status IN ('pending','unverified')", [(int) $u['id'], $id]);
     if ($n > 0) {
         $app->access->log('_platform', (int) $u['id'], null, null, 'registration_cancelled', 'pending', 'cancelled', 'Request #' . $id);
     }
@@ -1201,4 +1204,28 @@ $mount('/admin/currencies', $currencyMod, 'currencies', static function () use (
         $o .= '<option value="' . e($c) . '"' . ($c === \Selfcare\Currency::platform() ? ' selected' : '') . '>' . e($r['name'] . ' (' . trim((string) $r['symbol']) . ')') . '</option>';
     }
     return $card('Platform currency', '<p class="d-help">Used for the plans on the website and for subscription invoices. Each vendor picks its own currency for its own bills under Bills and legal details. Example: ' . e(\Selfcare\Currency::fmt(1250000.5)) . ' and in words: ' . e(\Selfcare\Currency::words(1250.5)) . '.</p><form class="d-form" method="post" action="' . e(url('admin/currencies/default')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pc">Default currency</label><select id="pc" name="currency">' . $o . '</select></div></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save default</button></div></form>');
+});
+
+// ------------------------------------------------------------------ email delivery log and retry
+$app->router->get('/admin/mail', static function () use ($app, $adminUser, $page, $card): void {
+    $u = $adminUser();
+    $st = ['queued' => 'Waiting', 'sent' => 'Sent', 'failed' => 'Failed, will retry', 'dead' => 'Gave up'];
+    $html = Listing::render($app->db, [
+        'id' => 'mail', 'select' => 'q.*', 'from' => 'sc_mail_queue q', 'search' => ['q.to_email', 'q.subject', 'q.kind', 'q.tenant_id'], 'search_hint' => 'Search by address, subject or kind',
+        'filters' => ['status' => ['label' => 'State', 'sql' => 'q.status = ?', 'options' => $st]],
+        'columns' => ['created_at' => ['label' => 'When', 'sort' => 'q.created_at', 'type' => 'datetime'],
+            'to_email' => ['label' => 'To', 'sort' => 'q.to_email', 'render' => fn ($r) => e($r['to_email']) . ($r['tenant_id'] ? '<br><small class="d-mute">' . e($r['tenant_id']) . '</small>' : '')],
+            'subject' => ['label' => 'Subject', 'render' => fn ($r) => e($r['subject']) . '<br><small class="d-mute">' . e($r['kind']) . '</small>'],
+            'status' => ['label' => 'State', 'sort' => 'q.status', 'render' => fn ($r) => '<span class="d-badge is-' . ['sent' => 'ok', 'queued' => 'warn', 'failed' => 'warn', 'dead' => 'bad'][$r['status']] . '">' . e($st[$r['status']] ?? $r['status']) . '</span>' . ($r['last_error'] ? '<br><small class="d-mute">' . e($r['last_error']) . '</small>' : '')],
+            'tries' => ['label' => 'Tries', 'sort' => 'q.tries']],
+        'sort' => 'created_at', 'dir' => 'desc',
+        'actions' => [['label' => 'Send again', 'icon' => 'mail', 'method' => 'post', 'url' => fn ($r) => url('admin/mail/' . $r['id'] . '/retry'), 'if' => fn ($r) => in_array($r['status'], ['failed', 'dead', 'queued'], true), 'confirm' => 'Send this email again?']],
+        'empty' => ['title' => 'No emails yet', 'text' => 'Every email Self Care sends is listed here with its result.'],
+    ]);
+    $page($u, 'mail', 'Email log', $card('', $html), ['sub' => 'Every email the platform sends. Failed emails are retried automatically up to five times.']);
+});
+$app->router->post('/admin/mail/{id}/retry', static function (array $a) use ($app, $adminUser, $go): void {
+    $adminUser();
+    $ok = $app->mail->retry((int) $a['id']);
+    $go($ok ? 'Sent.' : '', url('admin/mail'), $ok ? null : 'It could not be sent now. The reason is in the log.');
 });

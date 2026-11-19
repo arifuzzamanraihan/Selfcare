@@ -79,7 +79,7 @@ final class Vendors
         if ($app->db->val('SELECT COUNT(*) FROM tenants WHERE tenant_username = ? OR id = ?', [$slug, $slug]) > 0) {
             return 'That web address is already taken.';
         }
-        if ($app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE slug = ? AND status = 'pending' AND id <> ?", [$slug, (int) $exceptRequest]) > 0) {
+        if ($app->db->val("SELECT COUNT(*) FROM sc_registration_requests WHERE slug = ? AND status IN ('pending','unverified') AND id <> ?", [$slug, (int) $exceptRequest]) > 0) {
             return 'That web address is already asked for by a waiting registration.';
         }
         return null;
@@ -98,6 +98,7 @@ final class Vendors
                 $db->run('DELETE FROM model_has_roles WHERE model_id = ? AND model_type = ?', [(int) $uid, Auth::ROLE_MODEL]);
                 $db->run('DELETE FROM sc_password_resets WHERE user_id = ?', [(int) $uid]);
                 $db->run('DELETE FROM sc_login_tokens WHERE user_id = ?', [(int) $uid]);
+                $db->run('DELETE FROM sc_email_tokens WHERE user_id = ?', [(int) $uid]);
             }
             foreach ($db->all("SELECT TABLE_NAME t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'tenant_id' AND TABLE_NAME NOT IN ('tenants', 'permission_change_log')") as $r) {
                 $db->run('DELETE FROM `' . str_replace('`', '', (string) $r['t']) . '` WHERE tenant_id = ?', [$slug]);

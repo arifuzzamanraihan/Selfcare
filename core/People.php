@@ -98,7 +98,7 @@ final class People
             $roles = $this->staffRoles();
             $f += ['role' => ['label' => 'Role', 'type' => 'select', 'options' => array_combine($roles, array_map(fn ($r) => $this->app->access->roleLabel($r, $this->p->family), $roles)), 'required' => true, 'help' => 'The role decides what this person can see. You can change what each role may do under Role access.']];
         }
-        $f['password'] = ['label' => $id ? 'New password (leave empty to keep)' : 'Password', 'type' => 'password', 'max' => 100, 'required' => !$id, 'autocomplete' => 'new-password', 'help' => 'At least 8 characters.'];
+        $f['password'] = ['label' => $id ? 'New password (leave empty to keep)' : 'Password (optional)', 'type' => 'password', 'max' => 100, 'required' => false, 'autocomplete' => 'new-password', 'help' => $id ? 'At least 8 characters. Better: use the Email password link button on their profile.' : 'Leave empty and we email them a link to choose their own password. Nobody else needs to know it.'];
         $f['status'] = ['label' => 'Account is active', 'type' => 'toggle', 'default' => 1];
         return $f;
     }
@@ -275,7 +275,37 @@ final class People
             $this->db()->rollBack();
             throw $e;
         }
+        $this->accountMail($row, $uid, $email, $pw);
         return null;
+    }
+
+    /** Emails that go with an account change: invite or confirmation for a new person, confirmation for a new address, notice for a new password. */
+    private function accountMail(?array $row, int $uid, string $email, string $pw): void
+    {
+        if (str_ends_with($email, '@no-login.invalid')) {
+            return;
+        }
+        $full = $this->db()->one('SELECT * FROM users WHERE id = ?', [$uid]);
+        if ($full === null) {
+            return;
+        }
+        $actor = trim((string) ($this->p->user['first_name'] ?? '')) . ' of ' . $this->p->vendor['name'];
+        if ($row === null) {
+            if ($pw === '') {
+                $this->app->mail->sendInvite($full, $actor);
+            } else {
+                $this->app->mail->sendVerify($full);
+            }
+            return;
+        }
+        if (strtolower((string) $row['email']) !== strtolower($email)) {
+            $this->db()->run('UPDATE users SET email_verified_at = NULL, pending_email = NULL WHERE id = ?', [$uid]);
+            $this->app->mail->sendVerify($full);
+            $this->app->mail->sendEmailChangedNotice(['email' => (string) $row['email']] + $full, $email);
+        }
+        if ($pw !== '') {
+            $this->app->mail->sendPasswordChanged($full, 'changed by your administrator');
+        }
     }
 
     private function activeAdmins(): int
@@ -505,11 +535,9 @@ final class People
             return $e;
         }
         $uid = (int) $row['id'];
-        $token = bin2hex(random_bytes(32));
-        $this->db()->run('UPDATE sc_password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$uid]);
-        $this->db()->insert('sc_password_resets', ['user_id' => $uid, 'token_hash' => hash('sha256', $token), 'expires_at' => date('Y-m-d H:i:s', time() + 7 * 86400)]);
-        $link = $this->app->tenant->siteUrl((string) $this->p->vendor['slug'], 'reset') . '?token=' . $token;
-        $sent = $mail && $this->app->mailer->send((string) $row['email'], 'Choose your password', "Hello " . $row['first_name'] . ",\n\nUse this link to choose a new password for " . $this->p->vendor['name'] . ". It works once and expires in 7 days:\n\n$link\n\nSelf Care");
+        $full = $this->db()->one('SELECT * FROM users WHERE id = ?', [$uid]) ?? $row;
+        $link = $this->app->mail->sendInvite($full, trim((string) ($this->p->user['first_name'] ?? '')) . ' of ' . $this->p->vendor['name'], $mail);
+        $sent = $mail && (string) $this->db()->val("SELECT status FROM sc_mail_queue WHERE user_id = ? AND kind = 'invite' ORDER BY id DESC LIMIT 1", [$uid]) === 'sent';
         if (!$sent) {
             $_SESSION['sc_setlink'] = ['uid' => $uid, 'link' => $link];
         }

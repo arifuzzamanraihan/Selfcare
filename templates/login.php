@@ -6,7 +6,7 @@ $app = \Selfcare\app(); $next = (string) ($_GET['next'] ?? '');
   <h1 style="font-size:1.7rem"><?= $vendor ? 'Sign in to ' . e($vendor['name']) : 'Sign in' ?></h1>
   <p class="d-mute"><?= $vendor ? 'Staff and patients of this organisation.' : 'Use the email and password of your Self Care account.' ?></p>
   <?php if (!empty($error)): ?><div class="sc-alert bad" role="alert"><?= e($error) ?></div><?php endif; ?>
-  <form class="sc-form" method="post" action="<?= e(\Selfcare\url('login')) ?>"><?= csrf_field() ?>
+  <form class="sc-form" method="post" action="<?= e(\Selfcare\url('login')) ?>"><?= csrf_field() ?><?php if ($next !== ''): ?><input type="hidden" name="next" value="<?= e($next) ?>"><?php endif; ?>
     <label>Email<input type="email" name="email" required autocomplete="username" value="<?= e(\Selfcare\old('email')) ?>" autofocus></label>
     <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
     <button class="sc-btn sc-btn-primary" type="submit">Sign in</button>

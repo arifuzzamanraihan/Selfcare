@@ -277,7 +277,8 @@ $reqDo = static function (string $path, string $to, string $ok, bool $needReason
         $app->access->log($p->tenantId, (int) $p->user['id'], null, null, 'request_' . $path, $r['status'], $to, 'Request #' . $id . ($reason !== '' ? ': ' . $reason : ''));
         if ($r['email'] && in_array($path, ['approve', 'reject', 'cancel'], true)) {
             $word = ['approve' => 'approved', 'reject' => 'not accepted', 'cancel' => 'cancelled'][$path];
-            $app->mailer->send((string) $r['email'], 'Your request to ' . $p->vendor['name'] . ' is ' . $word, 'Hello ' . $r['name'] . ",\n\nYour request for " . dt((string) $r['preferred_date']) . ' was ' . $word . ' by ' . $p->vendor['name'] . '.' . ($reason !== '' ? "\n\nReason: " . $reason : '') . "\n\n" . $p->vendor['name']);
+            $app->mail->send('request_update', (string) $r['email'], 'Your request to ' . $p->vendor['name'] . ' is ' . $word, 'Your request was ' . $word,
+                'Hello ' . $r['name'] . ",\n\nYour request for " . dt((string) $r['preferred_date']) . ' was ' . $word . ' by ' . $p->vendor['name'] . '.' . ($reason !== '' ? "\n\nReason: " . $reason : ''), null, (string) $p->vendor['name'], $p->tenantId);
         }
         flash($ok, 'ok');
         redirect($_SERVER['HTTP_REFERER'] ?? url('portal/requests'));
@@ -824,11 +825,13 @@ $app->router->get('/portal/account', static function () use ($app, $dash, $card)
         . Crud::field('first_name', ['label' => 'First name', 'required' => true, 'max' => 160], old('first_name', (string) $u['first_name']))
         . Crud::field('last_name', ['label' => 'Last name', 'max' => 191], old('last_name', (string) $u['last_name']))
         . Crud::field('phone', ['label' => 'Phone', 'type' => 'tel', 'max' => 40], old('phone', (string) ($u['phone'] ?? '')))
-        . '<div class="d-field"><label>Email</label><input value="' . e((string) $u['email']) . '" disabled><small class="d-help">Ask your admin to change your sign in email.</small></div>'
+        . Crud::field('email', ['label' => 'Sign in email', 'type' => 'email', 'max' => 191, 'help' => 'A change is only used after you confirm the new address by email.'], old('email', (string) $u['email']))
+        . ((string) ($pend = $app->db->val('SELECT pending_email FROM users WHERE id = ?', [(int) $u['id']])) !== '' ? '<p class="d-help" style="grid-column:1/-1">Waiting for you to confirm <b>' . e($pend) . '</b>. Open the link we emailed. <button class="d-btn d-btn-soft" type="submit" form="resend-verify">Send it again</button></p>' : '')
+        . (empty($u['email_verified_at']) && (string) $pend === '' ? '<p class="d-help" style="grid-column:1/-1">Your email is not confirmed yet. <button class="d-btn d-btn-soft" type="submit" form="resend-verify">Send the confirmation email</button></p>' : '')
         . '</div><h3 style="margin-top:24px">Change password</h3><div class="d-form-grid">'
         . Crud::field('current', ['label' => 'Current password', 'type' => 'password', 'autocomplete' => 'current-password'], '')
         . Crud::field('password', ['label' => 'New password', 'type' => 'password', 'autocomplete' => 'new-password', 'help' => 'At least 8 characters. Leave empty to keep your password.'], '')
-        . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form>';
+        . '</div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save</button></div></form><form id="resend-verify" method="post" action="' . e(url('account/verify/resend')) . '">' . csrf_field() . '</form>';
     clear_old();
     $dash($p, 'account', 'My account', $card('', $h));
 });
@@ -855,6 +858,30 @@ $app->router->post('/portal/account', static function () use ($app, $posted): vo
             $set['password'] = password_hash($pw, PASSWORD_BCRYPT);
         }
         $app->db->update('users', $set, 'id = ?', [(int) $p->user['id']]);
+        $fresh = $app->db->one('SELECT * FROM users WHERE id = ?', [(int) $p->user['id']]) ?? $p->user;
+        if ($pw !== '') {
+            $app->mail->sendPasswordChanged($fresh, 'changed');
+            $app->access->log($p->tenantId, (int) $p->user['id'], (int) $p->user['id'], null, 'password_changed', null, null, $app->ip());
+        }
+        $newEmail = strtolower(trim((string) ($_POST['email'] ?? '')));
+        if ($newEmail !== '' && $newEmail !== strtolower((string) $fresh['email'])) {
+            if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+                $err = 'Please enter a valid email.';
+            } elseif ((int) $app->db->val('SELECT COUNT(*) FROM users WHERE email = ? AND id <> ?', [$newEmail, (int) $p->user['id']]) > 0) {
+                $err = 'That email already belongs to another account.';
+            } elseif (!password_verify((string) ($_POST['current'] ?? ''), (string) $fresh['password'])) {
+                $err = 'To change your sign in email, type your current password.';
+            } elseif ($app->throttle->tooMany('email_change', (string) $p->user['id'], 3, 3600)) {
+                $err = 'Too many changes. Please try again later.';
+            } else {
+                $app->throttle->hit('email_change', (string) $p->user['id']);
+                $app->db->run('UPDATE users SET pending_email = ? WHERE id = ?', [$newEmail, (int) $p->user['id']]);
+                $app->mail->sendVerify($fresh, $newEmail, 'change');
+                $app->mail->sendEmailChangedNotice($fresh, $newEmail);
+                $app->access->log($p->tenantId, (int) $p->user['id'], (int) $p->user['id'], null, 'email_change_requested', (string) $fresh['email'], $newEmail, $app->ip());
+                $posted('Saved. We sent a confirmation link to ' . $newEmail . '. Your sign in email changes after you open it.', url('portal/account'), null);
+            }
+        }
     }
     $posted('Saved.', url('portal/account'), $err);
 });

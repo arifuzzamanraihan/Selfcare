@@ -43,6 +43,7 @@ $logo = !empty($orgLogo) ? upload_url($orgLogo) : asset('img/logo-mark.svg');
     </header>
     <main class="d-main" id="main">
       <?php if ($flash): ?><div class="d-flash <?= e($flash['t']) ?>" role="status"><?= e($flash['m']) ?></div><?php endif; ?>
+      <?php if (empty($user['email_verified_at']) && !str_ends_with((string) ($user['email'] ?? ''), '@no-login.invalid') && empty($_SESSION['sc_impersonator']) && (string) ($user['role'] ?? '') !== 'Super Admin'): ?><div class="d-banner" role="status" data-unverified>Please confirm your email address <b><?= e((string) $user['email']) ?></b>. <form method="post" action="<?= e(\Selfcare\url('account/verify/resend')) ?>" style="display:inline"><?= csrf_field() ?><button class="d-btn d-btn-soft" type="submit">Send the confirmation email</button></form></div><?php endif; ?>
       <?php if (!empty($banner)): ?><div class="d-banner" role="alert"><?= $banner ?></div><?php endif; ?>
       <?= $content ?>
     </main>
