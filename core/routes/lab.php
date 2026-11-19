@@ -133,8 +133,8 @@ $app->router->get('/portal/lab', static function () use ($boot, $page, $stat, $c
     }
     $h .= '<p class="d-tools" style="gap:8px;flex-wrap:wrap">' . implode(' ', $acts) . '</p>';
     $rows = [];
-    foreach ($db->all("SELECT o.id, o.order_no, o.order_date, o.total, o.status, o.branch_id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) pn FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE o.tenant_id = ? AND " . $sc('o.branch_id') . ' ORDER BY o.id DESC LIMIT 8', [$t]) as $r) {
-        $rows[] = ['<a href="' . e(url('portal/lab/order/' . $r['id'])) . '">' . e($r['order_no']) . '</a>', e($r['pn']), e($L->branchName((int) $r['branch_id'])), e(money((float) $r['total'])), $badge($label((string) $r['status']), $tone[$r['status']] ?? 'mute')];
+    foreach ($db->all("SELECT o.id, o.order_no, o.order_date, o.total, o.currency, o.status, o.branch_id, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) pn FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE o.tenant_id = ? AND " . $sc('o.branch_id') . ' ORDER BY o.id DESC LIMIT 8', [$t]) as $r) {
+        $rows[] = ['<a href="' . e(url('portal/lab/order/' . $r['id'])) . '">' . e($r['order_no']) . '</a>', e($r['pn']), e($L->branchName((int) $r['branch_id'])), e(money((float) $r['total'], (string) ($r['currency'] ?: $L->branchCurrency((int) $r['branch_id'])))), $badge($label((string) $r['status']), $tone[$r['status']] ?? 'mute')];
     }
     $h .= $card('Latest orders', $tbl([['Order'], ['Patient'], ['Branch'], ['Total', 'R'], ['Status']], $rows, 'No orders yet. Book the first test.'));
     $page($p, $L, 'dashboard', 'Laboratory', $h, $L->current() === 0 ? 'All branches you may open, combined' : $L->branchName($L->current()));
@@ -207,7 +207,7 @@ $app->router->get('/portal/lab/patients/{id}', static function (array $a) use ($
     $orders = [];
     foreach ($db->all('SELECT * FROM sc_lab_orders WHERE tenant_id = ? AND patient_id = ? ORDER BY id DESC', [$t, (int) $pt['id']]) as $o) {
         $m = $L->money($o);
-        $orders[] = ['<a href="' . e(url('portal/lab/order/' . $o['id'])) . '">' . e($o['order_no']) . '</a>', e(dt((string) $o['order_date'])), e(money($m['total'])), e(money($m['balance'])), $badge($label((string) $o['status']), $tone[$o['status']] ?? 'mute')];
+        $orders[] = ['<a href="' . e(url('portal/lab/order/' . $o['id'])) . '">' . e($o['order_no']) . '</a>', e(dt((string) $o['order_date'])), e(money($m['total'], $m['cur'])), e(money($m['balance'], $m['cur'])), $badge($label((string) $o['status']), $tone[$o['status']] ?? 'mute')];
     }
     $reports = [];
     foreach ($db->all("SELECT i.*, o.order_no FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.tenant_id = ? AND o.patient_id = ? AND i.report_status IN ('approved','delivered') ORDER BY i.id DESC", [$t, (int) $pt['id']]) as $i) {
@@ -410,7 +410,7 @@ $app->router->get('/portal/lab/orders', static function () use ($boot, $page, $b
     $rows = [];
     foreach ($db->all("SELECT o.*, pt.patient_unique_id mr, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) pn FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE $w ORDER BY o.id DESC LIMIT 100", $a) as $o) {
         $m = $L->money($o);
-        $rows[] = ['<a href="' . e(url('portal/lab/order/' . $o['id'])) . '">' . e($o['order_no']) . '</a>', e(dt((string) $o['order_date'], 'd M H:i')), e($o['pn'] . ' · ' . $o['mr']), e($L->branchName((int) $o['branch_id'])), e(money($m['total'])), e(money($m['balance'])), $badge($label((string) $o['status']), $tone[$o['status']] ?? 'mute')];
+        $rows[] = ['<a href="' . e(url('portal/lab/order/' . $o['id'])) . '">' . e($o['order_no']) . '</a>', e(dt((string) $o['order_date'], 'd M H:i')), e($o['pn'] . ' · ' . $o['mr']), e($L->branchName((int) $o['branch_id'])), e(money($m['total'], $m['cur'])), e(money($m['balance'], $m['cur'])), $badge($label((string) $o['status']), $tone[$o['status']] ?? 'mute')];
     }
     $f = '<form class="d-queue-toolbar" method="get" action="' . e(url('portal/lab/orders')) . '"><label class="d-field" style="margin:0;flex:1"><span class="d-help">Order, invoice, MR number, name or phone</span><input type="search" name="q" value="' . e($q) . '"></label><label class="d-field" style="margin:0"><span class="d-help">Status</span><select name="status"><option value="">All</option><option value="booked"' . ($st === 'booked' ? ' selected' : '') . '>Booked</option><option value="cancelled"' . ($st === 'cancelled' ? ' selected' : '') . '>Cancelled</option></select></label><button class="d-btn d-btn-primary" type="submit">Filter</button></form>';
     $page($p, $L, 'orders', 'Lab orders', $f . $tbl([['Order'], ['Booked'], ['Patient'], ['Branch'], ['Total', 'R'], ['Due', 'R'], ['Status']], $rows, 'No orders match.'), '', $btn('Book tests', url('portal/lab/book')));
@@ -430,6 +430,7 @@ $app->router->get('/portal/lab/order/{id}', static function (array $a) use ($boo
     $o = $loadOrder($p, $L, (int) $a['id']);
     $pt = $L->patient((int) $o['patient_id']);
     $m = $L->money($o);
+    \Selfcare\Currency::$context = $m['cur'];
     $id = (int) $o['id'];
     $base = 'portal/lab/order/' . $id;
     $items = [];

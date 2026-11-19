@@ -50,7 +50,7 @@ $app->router->get('/portal/lab/catalogue', static function () use ($boot, $page,
     $rows = [];
     foreach ($db->all("SELECT t.*, d.name dept, (SELECT COUNT(*) FROM sc_lab_test_params x WHERE x.test_id = t.id AND x.active = 1) np FROM sc_lab_tests t LEFT JOIN sc_lab_departments d ON d.id = t.dept_id WHERE $w ORDER BY t.active DESC, d.sort_order, t.name LIMIT 300", $a) as $t) {
         $flag = ($t['approved'] ? '' : $badge('Price pending approval', 'warn') . ' ') . ($t['sample_data'] ? $badge('Sample data', 'info') : '');
-        $rows[] = ['<a href="' . e(url('portal/lab/catalogue/' . $t['id'])) . '">' . e((string) $t['code']) . '</a>', e((string) $t['name']) . ($t['is_panel'] ? ' <small>(panel)</small>' : ''), e((string) $t['dept']), e((string) $t['specimen']), e(money((float) $t['price'])), e($t['tat_hours'] ? $t['tat_hours'] . ' h' : ''), e((string) $t['np']), $t['active'] ? $flag : $badge('Inactive', 'mute')];
+        $rows[] = ['<a href="' . e(url('portal/lab/catalogue/' . $t['id'])) . '">' . e((string) $t['code']) . '</a>', e((string) $t['name']) . ($t['is_panel'] ? ' <small>(panel)</small>' : ''), e((string) $t['dept']), e((string) $t['specimen']), e(money((float) $t['price'], \Selfcare\Currency::forTenant($L->t))), e($t['tat_hours'] ? $t['tat_hours'] . ' h' : ''), e((string) $t['np']), $t['active'] ? $flag : $badge('Inactive', 'mute')];
     }
     $opts = '<option value="0">All departments</option>';
     foreach ($db->all('SELECT id, name FROM sc_lab_departments WHERE tenant_id = ? AND active = 1 ORDER BY sort_order, name', [$p->tenantId]) as $d) {
@@ -251,7 +251,7 @@ $app->router->get('/portal/lab/referrers/{id}', static function (array $a) use (
         $depts[(int) $d['id']] = $d['name'];
     }
     foreach ($db->all('SELECT c.*, t.name tn FROM sc_comm_rules c LEFT JOIN sc_lab_tests t ON t.id = c.test_id WHERE c.tenant_id = ? AND c.referrer_id = ? AND c.active = 1 ORDER BY c.scope, c.id', [$p->tenantId, $id]) as $c) {
-        $rules[] = [e(['default' => 'Everything', 'dept' => 'Department: ' . ($depts[(int) $c['dept_id']] ?? ''), 'test' => 'Test: ' . ($c['tn'] ?? '')][$c['scope']] ?? ''), e($c['basis'] === 'patient' ? 'Per patient' : 'Per test'), e($c['vtype'] === 'pct' ? rtrim(rtrim((string) $c['value'], '0'), '.') . ' percent' : money((float) $c['value']) . ' fixed'), $pf(url('portal/lab/referrers/' . $id . '/rule/' . $c['id'] . '/off'), 'Remove', 'd-btn-soft', 'Remove this commission rule?')];
+        $rules[] = [e(['default' => 'Everything', 'dept' => 'Department: ' . ($depts[(int) $c['dept_id']] ?? ''), 'test' => 'Test: ' . ($c['tn'] ?? '')][$c['scope']] ?? ''), e($c['basis'] === 'patient' ? 'Per patient' : 'Per test'), e($c['vtype'] === 'pct' ? rtrim(rtrim((string) $c['value'], '0'), '.') . ' percent' : money((float) $c['value'], \Selfcare\Currency::forTenant($L->t)) . ' fixed'), $pf(url('portal/lab/referrers/' . $id . '/rule/' . $c['id'] . '/off'), 'Remove', 'd-btn-soft', 'Remove this commission rule?')];
     }
     $testOpts = [];
     foreach ($db->all('SELECT id, name FROM sc_lab_tests WHERE tenant_id = ? AND active = 1 ORDER BY name', [$p->tenantId]) as $t) {
@@ -386,7 +386,16 @@ $app->router->get('/portal/lab/finance', static function () use ($boot, $page, $
     $split = '<div class="d-stats"><div class="d-stat"><span>Doctor commission paid</span><b>' . e(money($F['doctor_comm'])) . '</b></div><div class="d-stat"><span>Partner commission paid</span><b>' . e(money($F['partner_comm'])) . '</b></div><div class="d-stat"><span>Salary paid</span><b>' . e(money($F['salary'])) . '</b></div><div class="d-stat"><span>Stock purchases</span><b>' . e(money($F['stock'])) . '</b></div><div class="d-stat"><span>Home collection charges</span><b>' . e(money($F['home'])) . '</b></div></div>';
     $pay = '<div class="d-stats"><div class="d-stat"><span>Commission still to pay</span><b>' . e(money($F['payable_commission'])) . '</b></div><div class="d-stat"><span>Salary still to pay</span><b>' . e(money($F['payable_salary'])) . '</b></div><div class="d-stat"><span>Bills to pay later</span><b>' . e(money($F['payable_bills'])) . '</b></div><div class="d-stat"><span>Patients owe</span><b>' . e(money($F['receivable'])) . '</b></div></div>';
     $exp = '<p class="d-tools" style="gap:8px;flex-wrap:wrap">' . $btn('Excel', url('portal/lab/reports/export', ['type' => 'finance', 'from' => $f, 'to' => $t])) . ' ' . $btn('PDF', url('portal/lab/reports/pdf', ['type' => 'finance', 'from' => $f, 'to' => $t]), 'd-btn-soft') . '</p>';
-    $page($p, $L, 'finance', 'Finance', $finTabs('dash') . $bar . $stats . $card('How net income is worked out', $tbl([['Line'], ['Amount', 'R'], ['Note']], $rows, 'No figures.', 'chart')) . $card('Paid out to', $split) . $card('Still to pay and to collect', $pay . '<p class="d-help">Unpaid commission and salary are shown here. They count as an expense only when paid, so nothing is counted twice.</p>') . $exp, $f === $t ? dt($f) : dt($f) . ' to ' . dt($t));
+    $curNote = '<p class="d-help">' . e($L->current() > 0 ? 'Amounts are in the currency of ' . $L->branchName($L->current()) . ': ' . $L->reportCurrency() . '.' : 'Amounts are in ' . $L->reportCurrency() . ($L->mixedCurrencies() ? ', converted at the rates set under Bills and legal details. The table below keeps each currency apart.' : '.')) . '</p>';
+    $perCur = '';
+    if ($L->mixedCurrencies()) {
+        $cr = [];
+        foreach ($L->currencyTotals($f, $t) as $cc => $v) {
+            $cr[] = [e($cc), e(money($v['income'], $cc)), e(money($v['refunds'], $cc)), e(money($v['expenses'], $cc)), '<b>' . e(money($v['net'], $cc)) . '</b>'];
+        }
+        $perCur = $card('Totals by currency (never mixed)', $tbl([['Currency'], ['Income', 'R'], ['Refunds', 'R'], ['Expenses', 'R'], ['Net', 'R']], $cr, 'No figures.', 'chart'));
+    }
+    $page($p, $L, 'finance', 'Finance', $finTabs('dash') . $bar . $curNote . $stats . $perCur . $card('How net income is worked out', $tbl([['Line'], ['Amount', 'R'], ['Note']], $rows, 'No figures.', 'chart')) . $card('Paid out to', $split) . $card('Still to pay and to collect', $pay . '<p class="d-help">Unpaid commission and salary are shown here. They count as an expense only when paid, so nothing is counted twice.</p>') . $exp, $f === $t ? dt($f) : dt($f) . ' to ' . dt($t));
 });
 $app->router->get('/portal/lab/finance/transactions', static function () use ($boot, $page, $tbl, $periodBar, $finTabs, $btn): void {
     [$p, $L] = $boot('finance');
@@ -428,7 +437,7 @@ $app->router->get('/portal/lab/expenses', static function () use ($boot, $page, 
         if (!$x['deleted_at'] && $x['status'] === 'due' && $p->canDo('lab_finance', 'edit') && $p->writable()) {
             $act .= $pf(url('portal/lab/expenses/' . $x['id'] . '/pay'), 'Mark paid', 'd-btn-primary');
         }
-        $rows[] = [e((string) $x['code']), e(dt((string) $x['entry_date'], 'd M')), e((string) $x['category']), e((string) $x['party']), e($L->branchName((int) $x['branch_id'])), e(money((float) $x['amount'])), $x['deleted_at'] ? $badge('Voided: ' . $x['void_reason'], 'bad') : ($x['status'] === 'due' ? $badge('Pay later', 'warn') : $badge('Paid', 'ok')), $act];
+        $rows[] = [e((string) $x['code']), e(dt((string) $x['entry_date'], 'd M')), e((string) $x['category']), e((string) $x['party']), e($L->branchName((int) $x['branch_id'])), e(money((float) $x['amount'], $x['currency'] ?? null)), $x['deleted_at'] ? $badge('Voided: ' . $x['void_reason'], 'bad') : ($x['status'] === 'due' ? $badge('Pay later', 'warn') : $badge('Paid', 'ok')), $act];
     }
     $page($p, $L, 'finance', 'Expenses', $finTabs('exp') . $nf . $tbl([['No'], ['Date'], ['Category'], ['Paid to'], ['Branch'], ['Amount', 'R'], ['Status'], [' ']], $rows, 'No expenses yet.', 'card'), 'The same cash book as Accounts. Salary, commission and stock purchases post here by themselves.');
 });
@@ -524,8 +533,8 @@ $app->router->get('/portal/lab/inventory', static function () use ($boot, $page,
         if ($tab === 'alerts' && !$low && !$exp) {
             continue;
         }
-        $value += (float) $it['quantity'] * (float) $it['cost_price'];
-        $rows[] = ['<a href="' . e(url('portal/lab/inventory/' . $it['id'])) . '">' . e((string) $it['name']) . '</a>', e((string) $it['batch_no']), e($L->branchName((int) $it['branch_id'])), e(rtrim(rtrim((string) $it['quantity'], '0'), '.') . ' ' . $it['unit']), e((string) $it['supplier']), e($it['expiry_date'] ? dt((string) $it['expiry_date']) : ''), e(money((float) $it['cost_price'])), ($low ? $badge('Low stock', 'bad') . ' ' : '') . ($exp ? $badge(strtotime((string) $it['expiry_date']) < time() ? 'Expired' : 'Near expiry', 'warn') : '')];
+        $value += \Selfcare\Currency::convert((float) $it['quantity'] * (float) $it['cost_price'], (string) ($it['currency'] ?: $L->branchCurrency((int) $it['branch_id'])), $L->reportCurrency());
+        $rows[] = ['<a href="' . e(url('portal/lab/inventory/' . $it['id'])) . '">' . e((string) $it['name']) . '</a>', e((string) $it['batch_no']), e($L->branchName((int) $it['branch_id'])), e(rtrim(rtrim((string) $it['quantity'], '0'), '.') . ' ' . $it['unit']), e((string) $it['supplier']), e($it['expiry_date'] ? dt((string) $it['expiry_date']) : ''), e(money((float) $it['cost_price'], $it['currency'] ?? null)), ($low ? $badge('Low stock', 'bad') . ' ' : '') . ($exp ? $badge(strtotime((string) $it['expiry_date']) < time() ? 'Expired' : 'Near expiry', 'warn') : '')];
     }
     $bo = [];
     foreach (array_intersect_key($L->branches(true), array_flip($L->allowed())) as $b) {
@@ -568,7 +577,7 @@ $app->router->get('/portal/lab/inventory/{id}', static function (array $a) use (
     foreach ($db->all('SELECT * FROM sc_stock_moves WHERE item_id = ? ORDER BY id DESC LIMIT 50', [$id]) as $m) {
         $rows[] = [e(dt((string) $m['created_at'], 'd M H:i')), e(ucfirst(str_replace('_', ' ', (string) $m['reason']))), e(($m['change_qty'] > 0 ? '+' : '') . rtrim(rtrim((string) $m['change_qty'], '0'), '.')), e(rtrim(rtrim((string) $m['balance'], '0'), '.')), e((string) $m['note'])];
     }
-    $page($p, $L, 'inventory', $it['name'], $card('In stock', '<p><b>' . e(rtrim(rtrim((string) $it['quantity'], '0'), '.') . ' ' . $it['unit']) . '</b> in ' . e($L->branchName((int) $it['branch_id'])) . ' · value ' . e(money((float) $it['quantity'] * (float) $it['cost_price'])) . '</p>') . ($recv ? $card('Stock in', $recv) : '') . ($out ? $card('Stock out, return or wastage', $out) : '') . ($tr ? $card('Transfer to another branch', $tr) : '') . $card('History', $tbl([['When'], ['Why'], ['Change', 'R'], ['Balance', 'R'], ['Note']], $rows, 'No movements.')));
+    $page($p, $L, 'inventory', $it['name'], $card('In stock', '<p><b>' . e(rtrim(rtrim((string) $it['quantity'], '0'), '.') . ' ' . $it['unit']) . '</b> in ' . e($L->branchName((int) $it['branch_id'])) . ' · value ' . e(money((float) $it['quantity'] * (float) $it['cost_price'], $it['currency'] ?? null)) . '</p>') . ($recv ? $card('Stock in', $recv) : '') . ($out ? $card('Stock out, return or wastage', $out) : '') . ($tr ? $card('Transfer to another branch', $tr) : '') . $card('History', $tbl([['When'], ['Why'], ['Change', 'R'], ['Balance', 'R'], ['Note']], $rows, 'No movements.')));
 });
 $app->router->post('/portal/lab/inventory/{id}/{act}', static function (array $a) use ($boot, $post, $db, $stockMove): void {
     [$p, $L] = $boot('inventory');
@@ -644,7 +653,7 @@ $app->router->get('/portal/lab/employees', static function () use ($boot, $page,
     }
     $rows = [];
     foreach ($staffRows($L) as $s) {
-        $rows[] = [e((string) $s['staff_no']), '<a href="' . e(url('portal/lab/employees/' . $s['id'])) . '">' . e(trim($s['first_name'] . ' ' . $s['last_name'])) . '</a>', e((string) ($s['designation'] ?: $s['role'])), e($L->branchName((int) $s['branch_id'])), e(money((float) $s['salary'])), $s['pin_hash'] ? 'PIN set' : '<span class="d-mute">No PIN</span>', $s['status'] ? $badge('Active', 'ok') : $badge('Inactive')];
+        $rows[] = [e((string) $s['staff_no']), '<a href="' . e(url('portal/lab/employees/' . $s['id'])) . '">' . e(trim($s['first_name'] . ' ' . $s['last_name'])) . '</a>', e((string) ($s['designation'] ?: $s['role'])), e($L->branchName((int) $s['branch_id'])), e(money((float) $s['salary'], $s['currency'] ?? null)), $s['pin_hash'] ? 'PIN set' : '<span class="d-mute">No PIN</span>', $s['status'] ? $badge('Active', 'ok') : $badge('Inactive')];
     }
     $page($p, $L, 'employees', 'Employees', $tbl([['Staff no'], ['Name'], ['Designation'], ['Branch'], ['Salary', 'R'], ['Attendance PIN'], ['Status']], $rows, 'No staff yet.', 'user'), 'The staff accounts of this clinic with their HR details. New people are added under Staff accounts.', $btn('Add staff account', url('portal/staff/new')));
 });
@@ -845,11 +854,12 @@ $app->router->get('/portal/lab/salary', static function () use ($boot, $page, $c
     $rows = [];
     $tot = ['net' => 0.0, 'paid' => 0.0];
     foreach ($db->all("SELECT s.*, u.first_name, u.last_name, sp.staff_no FROM sc_salary s JOIN users u ON u.id = s.user_id LEFT JOIN sc_staff_profiles sp ON sp.user_id = s.user_id WHERE s.tenant_id = ? AND s.period = ? AND " . $L->scope('s.branch_id') . ' ORDER BY u.first_name', [$p->tenantId, $per]) as $s) {
-        $tot['net'] += (float) $s['net'];
-        $tot['paid'] += (float) $s['paid'];
+        $sc = (string) ($s['currency'] ?: $L->branchCurrency((int) $s['branch_id']));
+        $tot['net'] += \Selfcare\Currency::convert((float) $s['net'], $sc, $L->reportCurrency());
+        $tot['paid'] += \Selfcare\Currency::convert((float) $s['paid'], $sc, $L->reportCurrency());
         $due = round((float) $s['net'] - (float) $s['paid'], 2);
         $act = '<a class="d-btn d-btn-soft" href="' . e(url('portal/lab/salary/' . $s['id'])) . '">Open</a>';
-        $rows[] = [e((string) $s['staff_no']), e(trim($s['first_name'] . ' ' . $s['last_name'])), e($L->branchName((int) $s['branch_id'])), e(money((float) $s['base'])), e(money((float) $s['net'])), e(money((float) $s['paid'])), e(money($due)), $badge(ucfirst((string) $s['status']), $s['status'] === 'paid' ? 'ok' : ($s['status'] === 'partial' ? 'warn' : 'bad')), $act];
+        $rows[] = [e((string) $s['staff_no']), e(trim($s['first_name'] . ' ' . $s['last_name'])), e($L->branchName((int) $s['branch_id'])), e(money((float) $s['base'], $s['currency'] ?? null)), e(money((float) $s['net'], $s['currency'] ?? null)), e(money((float) $s['paid'], $s['currency'] ?? null)), e(money($due)), $badge(ucfirst((string) $s['status']), $s['status'] === 'paid' ? 'ok' : ($s['status'] === 'partial' ? 'warn' : 'bad')), $act];
     }
     $f = '<form class="d-queue-toolbar" method="get" action="' . e(url('portal/lab/salary')) . '"><label class="d-field" style="margin:0"><span class="d-help">Month</span><input type="month" name="period" value="' . e($per) . '" onchange="this.form.submit()"></label></form>';
     $gen = $p->canDo('lab_salary', 'add') && $p->writable() ? '<p>' . $pf(url('portal/lab/salary/generate'), 'Prepare ' . $per . ' salary sheet', 'd-btn-primary', 'Create the salary lines for ' . $per . ' for every active employee with a salary? Existing lines stay as they are.', hid2('period', $per)) . '</p>' : '';
@@ -896,18 +906,18 @@ $app->router->get('/portal/lab/salary/{id}', static function (array $a) use ($bo
     $id = (int) $s['id'];
     $adj = [];
     foreach ($db->all('SELECT * FROM sc_salary_adj WHERE salary_id = ? ORDER BY id', [$id]) as $x) {
-        $adj[] = [e(dt((string) $x['created_at'], 'd M')), e(ucfirst((string) $x['kind'])), e(money((float) $x['amount'])), e((string) $x['reason'])];
+        $adj[] = [e(dt((string) $x['created_at'], 'd M')), e(ucfirst((string) $x['kind'])), e(money((float) $x['amount'], $x['currency'] ?? null)), e((string) $x['reason'])];
     }
     $pays = [];
     foreach ($db->all("SELECT * FROM sc_ledger WHERE tenant_id = ? AND source = 'salary' AND source_id = ? AND deleted_at IS NULL ORDER BY id", [$p->tenantId, $id]) as $x) {
-        $pays[] = [e(dt((string) $x['entry_date'], 'd M Y')), e((string) $x['code']), e((string) $x['description']), e((string) $x['method']), e(money((float) $x['amount']))];
+        $pays[] = [e(dt((string) $x['entry_date'], 'd M Y')), e((string) $x['code']), e((string) $x['description']), e((string) $x['method']), e(money((float) $x['amount'], $x['currency'] ?? null))];
     }
     $due = round((float) $s['net'] - (float) $s['paid'], 2);
     $w = $p->writable();
     $af = $w && $p->canDo('lab_salary', 'edit') ? $form(url('portal/lab/salary/' . $id . '/adjust'), '<div class="d-form-grid">' . $fld('kind', ['label' => 'Type', 'type' => 'select', 'options' => ['bonus' => 'Bonus or allowance', 'deduction' => 'Deduction', 'advance' => 'Advance paid now'], 'required' => true], 'deduction') . $fld('amount', ['label' => 'Amount', 'type' => 'number', 'step' => '0.01', 'required' => true]) . $fld('reason', ['label' => 'Reason', 'required' => true, 'max' => 190]) . $fld('method', ['label' => 'If advance: paid by', 'type' => 'select', 'options' => array_combine(Lab::METHODS, Lab::METHODS)], 'Cash') . '</div>', 'Add') : '';
     $pf1 = $w && $due > 0 && $p->canDo('lab_salary', 'add') ? $form(url('portal/lab/salary/' . $id . '/pay'), '<div class="d-form-grid">' . $fld('amount', ['label' => 'Pay now (due ' . money($due) . ')', 'type' => 'number', 'step' => '0.01', 'required' => true], (string) $due) . $fld('method', ['label' => 'Paid by', 'type' => 'select', 'options' => array_combine(Lab::METHODS, Lab::METHODS), 'required' => true], 'Cash') . '</div>', 'Pay salary', '', 'Pay this salary? It goes into the cash book.') : '';
     $name = trim($s['first_name'] . ' ' . $s['last_name']);
-    $page($p, $L, 'salary', $name . ' · ' . $s['period'], '<div class="d-stats"><div class="d-stat"><span>Basic</span><b>' . e(money((float) $s['base'])) . '</b></div><div class="d-stat"><span>Net</span><b>' . e(money((float) $s['net'])) . '</b></div><div class="d-stat"><span>Paid</span><b>' . e(money((float) $s['paid'])) . '</b></div><div class="d-stat"><span>Due</span><b>' . e(money($due)) . '</b></div></div>' . $card('Bonus, deductions and advances', $tbl([['Date'], ['Type'], ['Amount', 'R'], ['Reason']], $adj, 'None.') . $af) . $card('Payments', $tbl([['Date'], ['No'], ['Note'], ['Method'], ['Amount', 'R']], $pays, 'Nothing paid yet.') . $pf1) . '<p>' . $btn('Salary slip PDF', url('portal/lab/salary/' . $id . '/slip')) . '</p>', ucfirst((string) $s['status']));
+    $page($p, $L, 'salary', $name . ' · ' . $s['period'], '<div class="d-stats"><div class="d-stat"><span>Basic</span><b>' . e(money((float) $s['base'], $s['currency'] ?? null)) . '</b></div><div class="d-stat"><span>Net</span><b>' . e(money((float) $s['net'], $s['currency'] ?? null)) . '</b></div><div class="d-stat"><span>Paid</span><b>' . e(money((float) $s['paid'], $s['currency'] ?? null)) . '</b></div><div class="d-stat"><span>Due</span><b>' . e(money($due)) . '</b></div></div>' . $card('Bonus, deductions and advances', $tbl([['Date'], ['Type'], ['Amount', 'R'], ['Reason']], $adj, 'None.') . $af) . $card('Payments', $tbl([['Date'], ['No'], ['Note'], ['Method'], ['Amount', 'R']], $pays, 'Nothing paid yet.') . $pf1) . '<p>' . $btn('Salary slip PDF', url('portal/lab/salary/' . $id . '/slip')) . '</p>', ucfirst((string) $s['status']));
 });
 $app->router->post('/portal/lab/salary/{id}/{act}', static function (array $a) use ($boot, $post, $salaryOf, $db, $salaryNet): void {
     [$p, $L] = $boot('salary');
@@ -1046,7 +1056,15 @@ $app->router->get('/portal/lab/history', static function () use ($boot, $page, $
 
 // ================================================================ branches, user access, settings, backups
 $adminTabs = static fn (string $on): string => $tabs(['branches' => ['Branches', url('portal/lab/branches')], 'access' => ['User access', url('portal/lab/access')], 'settings' => ['Settings', url('portal/lab/settings')], 'backups' => ['Backups', url('portal/lab/backups')]], $on);
-$app->router->get('/portal/lab/branches', static function () use ($boot, $page, $card, $db, $tbl, $badge, $form, $fld, $pf, $adminTabs): void {
+$brMoney = static function (\Selfcare\Lab $L, ?array $b = null) use ($fld): string {
+    $vc = \Selfcare\Currency::forTenant($L->t);
+    $locked = $b !== null && $L->branchHasMoney((int) $b['id']);
+    $co = \Selfcare\Currency::options((string) ($b['currency'] ?? ''));
+    $zo = array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers());
+    $f = $fld('currency', ['label' => 'Branch currency', 'type' => 'select', 'options' => $co, 'blank_label' => 'Same as the clinic (' . $vc . ')', 'help' => $locked ? 'Fixed, because this branch already has bills or records in ' . ($b['currency'] ?: $vc) . '. Open a new branch to use another currency.' : 'Bills, receipts, PDFs, emails and reports of this branch use it.', 'disabled' => $locked], (string) ($b['currency'] ?? ''));
+    return $f . $fld('timezone', ['label' => 'Branch time zone', 'type' => 'select', 'options' => $zo, 'blank_label' => 'Same as the clinic', 'help' => 'Dates and times for this branch. Empty uses the clinic zone.'], (string) ($b['timezone'] ?? ''));
+};
+$app->router->get('/portal/lab/branches', static function () use ($brMoney, $boot, $page, $card, $db, $tbl, $badge, $form, $fld, $pf, $adminTabs): void {
     [$p, $L] = $boot('branches');
     $rows = [];
     foreach ($L->branches() as $b) {
@@ -1057,16 +1075,16 @@ $app->router->get('/portal/lab/branches', static function () use ($boot, $page, 
         }
         $rows[] = [e((string) $b['code']), e((string) $b['name']) . ($b['is_main'] ? ' <small>(main)</small>' : ''), e((string) $b['phone']), e((string) $b['report_email']), e((string) $n), $b['active'] ? $badge('Open', 'ok') : $badge('Closed'), $edit];
     }
-    $add = $p->writable() ? $card('Add a branch', $form(url('portal/lab/branches/save'), '<div class="d-form-grid">' . $fld('name', ['label' => 'Branch name', 'required' => true, 'max' => 120]) . $fld('code', ['label' => 'Short code (for numbers like ORD-BR5-000001)', 'max' => 12]) . $fld('phone', ['label' => 'Phone', 'max' => 60]) . $fld('email', ['label' => 'Email', 'max' => 190]) . $fld('report_email', ['label' => 'Daily report email for this branch', 'max' => 190]) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true]) . '</div>', 'Add branch')) : '';
+    $add = $p->writable() ? $card('Add a branch', $form(url('portal/lab/branches/save'), '<div class="d-form-grid">' . $fld('name', ['label' => 'Branch name', 'required' => true, 'max' => 120]) . $fld('code', ['label' => 'Short code (for numbers like ORD-BR5-000001)', 'max' => 12]) . $fld('phone', ['label' => 'Phone', 'max' => 60]) . $fld('email', ['label' => 'Email', 'max' => 190]) . $fld('report_email', ['label' => 'Daily report email for this branch', 'max' => 190]) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true]) . $brMoney($L) . '</div>', 'Add branch')) : '';
     $page($p, $L, 'branches', 'Branches', $adminTabs('branches') . $tbl([['Code'], ['Branch'], ['Phone'], ['Report email'], ['Orders', 'R'], ['Status'], [' ']], $rows, 'No branches.', 'globe') . $add, 'Add, rename, close or reopen branches at any time. There is no limit.');
 });
-$app->router->get('/portal/lab/branches/{id}', static function (array $a) use ($app, $boot, $page, $card, $form, $fld, $adminTabs): void {
+$app->router->get('/portal/lab/branches/{id}', static function (array $a) use ($brMoney, $app, $boot, $page, $card, $form, $fld, $adminTabs): void {
     [$p, $L] = $boot('branches');
     $b = $L->branch((int) $a['id']);
     if ($b === null) {
         $app->error(404, 'Branch not found.');
     }
-    $page($p, $L, 'branches', $b['name'], $card('Branch', $form(url('portal/lab/branches/save'), '<input type="hidden" name="id" value="' . (int) $b['id'] . '"><div class="d-form-grid">' . $fld('name', ['label' => 'Branch name', 'required' => true, 'max' => 120], (string) $b['name']) . $fld('code', ['label' => 'Short code', 'max' => 12], (string) $b['code']) . $fld('phone', ['label' => 'Phone', 'max' => 60], (string) $b['phone']) . $fld('email', ['label' => 'Email', 'max' => 190], (string) $b['email']) . $fld('report_email', ['label' => 'Daily report email', 'max' => 190], (string) $b['report_email']) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true], (string) $b['address']) . '</div>', 'Save branch')));
+    $page($p, $L, 'branches', $b['name'], $card('Branch', $form(url('portal/lab/branches/save'), '<input type="hidden" name="id" value="' . (int) $b['id'] . '"><div class="d-form-grid">' . $fld('name', ['label' => 'Branch name', 'required' => true, 'max' => 120], (string) $b['name']) . $fld('code', ['label' => 'Short code', 'max' => 12], (string) $b['code']) . $fld('phone', ['label' => 'Phone', 'max' => 60], (string) $b['phone']) . $fld('email', ['label' => 'Email', 'max' => 190], (string) $b['email']) . $fld('report_email', ['label' => 'Daily report email', 'max' => 190], (string) $b['report_email']) . $fld('address', ['label' => 'Address', 'max' => 255, 'wide' => true], (string) $b['address']) . $brMoney($L, $b) . '</div>', 'Save branch')));
 });
 $app->router->post('/portal/lab/branches/save', static function () use ($boot, $post, $db): void {
     [$p, $L] = $boot('branches');
@@ -1094,10 +1112,26 @@ $app->router->post('/portal/lab/branches/save', static function () use ($boot, $
         redirect(url('portal/lab/branches' . ($id ? '/' . $id : '')));
     }
     $d = ['name' => $name, 'code' => $code, 'phone' => mb_substr(trim((string) ($_POST['phone'] ?? '')), 0, 60) ?: null, 'email' => mb_substr(trim((string) ($_POST['email'] ?? '')), 0, 190) ?: null, 'report_email' => mb_substr(trim((string) ($_POST['report_email'] ?? '')), 0, 190) ?: null, 'address' => mb_substr(trim((string) ($_POST['address'] ?? '')), 0, 255) ?: null, 'updated_at' => date('Y-m-d H:i:s')];
+    $reqCur = strtoupper(trim((string) ($_POST['currency'] ?? '')));
+    $reqTz = trim((string) ($_POST['timezone'] ?? ''));
+    if ($reqCur !== '' && !isset(\Selfcare\Currency::all(true)[$reqCur])) {
+        flash('Choose one of the listed currencies.', 'bad');
+        redirect(url('portal/lab/branches' . ($id ? '/' . $id : '')));
+    }
+    if ($reqTz !== '' && !in_array($reqTz, \DateTimeZone::listIdentifiers(), true)) {
+        flash('Choose a time zone from the list.', 'bad');
+        redirect(url('portal/lab/branches' . ($id ? '/' . $id : '')));
+    }
+    $d['timezone'] = $reqTz !== '' ? $reqTz : null;
+    $d['currency'] = $reqCur !== '' && $reqCur !== \Selfcare\Currency::forTenant($p->tenantId) ? $reqCur : null;
     if ($id) {
         $old = $L->branch($id);
         if ($old === null) {
             redirect(url('portal/lab/branches'));
+        }
+        if ((string) ($old['currency'] ?? '') !== (string) ($d['currency'] ?? '') && $L->branchHasMoney($id)) {
+            unset($d['currency']);
+            flash('The currency was not changed: this branch already has bills or records in ' . ($old['currency'] ?: \Selfcare\Currency::forTenant($p->tenantId)) . '. The other changes are saved.', 'info');
         }
         [$b, $a] = Lab::diff($old, $d);
         $db->update('sc_branches', $d, 'id = ? AND tenant_id = ?', [$id, $p->tenantId]);

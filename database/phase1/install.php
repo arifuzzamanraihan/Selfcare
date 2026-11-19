@@ -48,6 +48,10 @@ foreach ($mig as $m) {
 Selfcare\Plans::seedDefaults($db);
 echo "currencies added: " . Selfcare\Currency::seed($db) . "\n";
 Selfcare\Currency::reset();
+// clinic lab money rows that were written before branches had a currency are in the vendor's currency
+foreach (['sc_lab_orders', 'sc_lab_order_items', 'sc_commissions', 'sc_lab_home', 'sc_staff_profiles', 'sc_salary', 'sc_salary_adj'] as $mt) {
+    $db->run("UPDATE `$mt` x SET x.currency = COALESCE((SELECT s.`value` FROM settings s WHERE s.tenant_id = x.tenant_id AND s.`key` = 'currency' LIMIT 1), 'PKR') WHERE x.currency IS NULL");
+}
 // one time: vendors keep the currency they were showing, then the platform default becomes Pakistan (PKR)
 if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'currency_defaults_v2' LIMIT 1") !== '1') {
     echo "vendors pinned to their currency: " . Selfcare\Currency::pinExisting($db) . "\n";

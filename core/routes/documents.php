@@ -506,13 +506,28 @@ $app->router->get('/portal/settings', static function () use ($app, $dash, $card
     $p = Portal::boot($app);
     $p->need('manage_settings');
     $t = $p->tenantId;
+    $fxHtml = '';
+    if (\Selfcare\Lab::supports((string) $p->type['slug'])) {
+        \Selfcare\Currency::loadVendorFx($t);
+        $vc = $cur($p);
+        $used = array_map('strval', array_column($app->db->all("SELECT DISTINCT currency FROM sc_branches WHERE tenant_id = ? AND currency IS NOT NULL AND currency <> '' AND currency <> ?", [$t, $vc]), 'currency'));
+        if ($used) {
+            $fxHtml = '<h3 style="margin-top:22px">Exchange rates for combined reports</h3><p class="d-help">Branches can use their own currency. When the All branches view adds them up, each amount is converted into ' . e($vc) . ' with the rate below. Each branch keeps its own currency on its bills and reports, and a table with every currency apart is always shown.</p><div class="d-form-grid">';
+            foreach ($used as $code) {
+                $cv = \Selfcare\Currency::convert(1.0, $code, $vc);
+                $set = \Selfcare\Currency::$vendorFx[$code] ?? null;
+                $fxHtml .= Crud::field('fx_' . $code, ['label' => '1 ' . $code . ' in ' . $vc, 'type' => 'number', 'step' => '0.0001', 'min' => 0, 'help' => $set === null ? 'Not set: using the platform rate (about ' . rtrim(rtrim(number_format($cv, 4, '.', ''), '0'), '.') . ').' : 'Your rate.'], $set === null ? '' : (string) $set);
+            }
+            $fxHtml .= '</div>';
+        }
+    }
     $h = '<form class="d-form" method="post" action="' . e(url('portal/settings')) . '">' . csrf_field() . '<div class="d-form-grid">'
         . Crud::field('currency', ['label' => 'Currency on bills', 'type' => 'select', 'options' => \Selfcare\Currency::options($cur($p)), 'required' => true, 'help' => 'Every amount in your portal, website, invoices, PDFs and reports uses this currency. Old invoices keep the currency they were made in.'], $cur($p))
         . Crud::field('country', ['label' => 'Country', 'max' => 60], $billing->setting($t, 'country', (string) $app->site->get(null, 'default_country', 'Pakistan')))
         . Crud::field('timezone', ['label' => 'Time zone', 'type' => 'select', 'options' => array_combine(\DateTimeZone::listIdentifiers(), \DateTimeZone::listIdentifiers()), 'help' => 'Dates and times in your portal, website and PDFs use this zone.'], $billing->setting($t, 'timezone', (string) $app->site->get(null, 'default_timezone', 'Asia/Karachi')))
         . Crud::field('doctor_commission_pct', ['label' => 'Doctor commission % (for the doctor report)', 'type' => 'number', 'step' => '0.01', 'min' => 0], $billing->setting($t, 'doctor_commission_pct', '0'))
         . Crud::field('bed_capacity', ['label' => 'Number of beds (for bed occupancy)', 'type' => 'number', 'min' => 0], $billing->setting($t, 'bed_capacity', '0'))
-        . '</div><p class="d-help" style="margin-top:12px">The registration or licence number printed on every document is set under Profile and hours.</p><h3 style="margin-top:22px">Number prefixes</h3><p class="d-help">Each document type counts up from 1 on its own. The prefix is the letters in front, for example OPD-00042.</p><div class="d-form-grid">';
+        . '</div>' . $fxHtml . '<p class="d-help" style="margin-top:12px">The registration or licence number printed on every document is set under Profile and hours.</p><h3 style="margin-top:22px">Number prefixes</h3><p class="d-help">Each document type counts up from 1 on its own. The prefix is the letters in front, for example OPD-00042.</p><div class="d-form-grid">';
     foreach ($invCatalog($p) + $billing->catalog((string) $p->type['slug'], $p->family)['forms'] as $k => $c) {
         $h .= Crud::field('prefix_' . $k, ['label' => (string) $c['label'], 'max' => 12], $billing->prefix($t, $k));
     }
@@ -525,7 +540,28 @@ $app->router->post('/portal/settings', static function () use ($app, $billing, $
     $p->needWritable();
     $t = $p->tenantId;
     if (isset(\Selfcare\Currency::all(true)[(string) ($_POST['currency'] ?? '')])) {
+        $oldCur = \Selfcare\Currency::forTenant($t);
+        if ($oldCur !== (string) $_POST['currency'] && \Selfcare\Lab::supports((string) $p->type['slug'])) {
+            // branches that follow the clinic and already hold bills keep the currency those bills are in
+            $L = \Selfcare\Lab::forTenant($app, $t);
+            if ($L !== null) {
+                foreach ($L->branches() as $bid => $br) {
+                    if (empty($br['currency']) && $L->branchHasMoney((int) $bid)) {
+                        $app->db->run('UPDATE sc_branches SET currency = ? WHERE id = ? AND tenant_id = ?', [$oldCur, (int) $bid, $t]);
+                    }
+                }
+            }
+        }
         $billing->setSetting($t, 'currency', (string) $_POST['currency']);
+    }
+    if (\Selfcare\Lab::supports((string) $p->type['slug'])) {
+        $fx = [];
+        foreach ($_POST as $k => $v) {
+            if (preg_match('/^fx_([A-Z]{3})$/', (string) $k, $m) && (float) $v > 0 && isset(\Selfcare\Currency::all()[$m[1]])) {
+                $fx[$m[1]] = round((float) $v, 6);
+            }
+        }
+        $billing->setSetting($t, 'fx_rates', $fx ? json_encode($fx) : '');
     }
     if (in_array((string) ($_POST['timezone'] ?? ''), \DateTimeZone::listIdentifiers(), true)) {
         $billing->setSetting($t, 'timezone', (string) $_POST['timezone']);

@@ -115,7 +115,7 @@ final class Crud
             case 'select':
                 $extra = !empty($f['fill']) ? ' data-fill-' . e((string) $f['fill']) : '';
                 $search = count($f['options'] ?? []) > 12 ? ' data-searchable' : '';
-                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . $extra . $search . '>';
+                $in = '<select id="' . $id . '" name="' . e($name) . '"' . $req . (!empty($f['disabled']) ? ' disabled' : '') . $extra . $search . '>';
                 if (empty($f['required']) || ($f['blank'] ?? false)) {
                     $in .= '<option value="">' . e((string) ($f['blank_label'] ?? 'Choose…')) . '</option>';
                 }

@@ -30,23 +30,24 @@ final class Accounts
     }
 
     /** One SQL that lists every cash movement of a vendor: d, pat, dir (in|out), amount, method, src, cat, ref, party, label, link. @return array{0:string,1:list<string>} */
-    private function union(string $tenant): array
+    /** @param array{0:string,1:string}|null $scope SQL limiting payments and ledger rows to some branches */
+    private function union(string $tenant, ?string $cur = null, ?array $scope = null): array
     {
         $credit = $this->quoted();
-        $cur = Currency::forTenant($tenant);
-        $pay = "FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id AND i.tenant_id = p.tenant_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void'";
+        $cur = $cur ?: Currency::forTenant($tenant);
+        $pay = "FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id AND i.tenant_id = p.tenant_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void'" . ($scope ? ' AND ' . $scope[0] : '');
         $cols = static fn (string $dir, string $src, string $label): string => "SELECT DATE(p.paid_at) d, p.paid_at pat, '$dir' dir, " . Currency::sql('p.amount', 'i.currency', $cur) . " amount, p.method method, '$src' src, '$src' cat, i.invoice_no ref, i.party_name party, $label label, i.id link ";
         $sql = $cols('in', 'Invoice payment', "CONCAT('Payment for ', i.invoice_no)") . $pay . " AND i.doc_type NOT IN ($credit, 'supplier_invoice') AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%')"
             . ' UNION ALL ' . $cols('out', 'Refund', "CONCAT('Refund on ', i.invoice_no)") . $pay . " AND i.doc_type IN ($credit) AND p.note = 'Refund paid'"
             . ' UNION ALL ' . $cols('out', 'Supplier payment', "CONCAT('Paid supplier invoice ', i.invoice_no)") . $pay . " AND i.doc_type = 'supplier_invoice'"
-            . " UNION ALL SELECT DATE(l.paid_at) d, l.paid_at pat, IF(l.kind = 'income', 'in', 'out') dir, " . Currency::sql('l.amount', 'l.currency', $cur) . " amount, l.method method, IF(l.kind = 'income', 'Other income', 'Expense') src, l.category cat, COALESCE(l.code, '') ref, COALESCE(l.party, '') party, CONCAT(l.category, IF(COALESCE(l.description, '') <> '', CONCAT(': ', l.description), '')) label, l.id link FROM sc_ledger l WHERE l.tenant_id = ? AND l.deleted_at IS NULL AND l.status = 'paid' AND l.paid_at IS NOT NULL";
+            . " UNION ALL SELECT DATE(l.paid_at) d, l.paid_at pat, IF(l.kind = 'income', 'in', 'out') dir, " . Currency::sql('l.amount', 'l.currency', $cur) . " amount, l.method method, IF(l.kind = 'income', 'Other income', 'Expense') src, l.category cat, COALESCE(l.code, '') ref, COALESCE(l.party, '') party, CONCAT(l.category, IF(COALESCE(l.description, '') <> '', CONCAT(': ', l.description), '')) label, l.id link FROM sc_ledger l WHERE l.tenant_id = ? AND l.deleted_at IS NULL AND l.status = 'paid' AND l.paid_at IS NOT NULL" . ($scope ? ' AND ' . $scope[1] : '');
         return [$sql, [$tenant, $tenant, $tenant, $tenant]];
     }
 
     /** Every cash movement between two dates, oldest first. @return list<array<string,mixed>> */
-    public function movements(string $tenant, string $from, string $to): array
+    public function movements(string $tenant, string $from, string $to, ?string $cur = null, ?array $scope = null): array
     {
-        [$u, $p] = $this->union($tenant);
+        [$u, $p] = $this->union($tenant, $cur, $scope);
         return $this->db->all("SELECT * FROM ($u) m WHERE m.d BETWEEN ? AND ? ORDER BY m.pat, m.dir DESC", array_merge($p, [$from, $to]));
     }
 

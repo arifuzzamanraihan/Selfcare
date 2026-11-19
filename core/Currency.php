@@ -13,7 +13,11 @@ final class Currency
     private static ?array $rows = null;
     private static ?string $visitor = null;
     /** Tables that store a currency code next to an amount. */
-    public const MONEY_TABLES = ['sc_ledger', 'sc_records', 'sc_stock_items', 'sc_invoices'];
+    public const MONEY_TABLES = ['sc_ledger', 'sc_records', 'sc_stock_items', 'sc_invoices', 'sc_lab_orders', 'sc_lab_order_items', 'sc_commissions', 'sc_lab_home', 'sc_staff_profiles', 'sc_salary', 'sc_salary_adj'];
+    /** Rates a vendor set for its own consolidated reports: currency code => units of the vendor currency for 1 unit of that code. */
+    public static array $vendorFx = [];
+    /** Vendor currency those rates are written in. */
+    public static string $vendorFxBase = '';
 
     /**
      * Built in rows. Used to seed the table and as a fallback when the table is not there yet.
@@ -80,7 +84,7 @@ final class Currency
         if ($from === $to || $from === '') {
             return $amount;
         }
-        return round($amount / self::rate($from) * self::rate($to), max(0, min(4, (int) (self::all()[$to]['decimals'] ?? 2))));
+        return round($amount / self::effRate($from) * self::effRate($to), max(0, min(4, (int) (self::all()[$to]['decimals'] ?? 2))));
     }
 
     /**
@@ -90,8 +94,16 @@ final class Currency
     public static function sql(string $amountCol, string $currencyCol, string $target): string
     {
         $t = str_replace("'", '', $target);
-        $rt = number_format(self::rate($t), 8, '.', '');
-        return "IF($currencyCol IS NULL OR $currencyCol = '$t', $amountCol, $amountCol / COALESCE(NULLIF((SELECT c.rate FROM sc_currencies c WHERE c.code = $currencyCol COLLATE utf8mb4_unicode_ci), 0), 1) * $rt)";
+        $rt = number_format(self::effRate($t), 8, '.', '');
+        $own = '(SELECT c.rate FROM sc_currencies c WHERE c.code = ' . $currencyCol . ' COLLATE utf8mb4_unicode_ci)';
+        if (self::$vendorFx && self::$vendorFxBase !== '') {
+            $case = '';
+            foreach (self::$vendorFx as $code => $k) {
+                $case .= " WHEN '" . str_replace("'", '', $code) . "' THEN " . number_format(self::rate(self::$vendorFxBase) / $k, 8, '.', '');
+            }
+            $own = "(CASE $currencyCol COLLATE utf8mb4_unicode_ci" . $case . " ELSE $own END)";
+        }
+        return "IF($currencyCol IS NULL OR $currencyCol = '$t', $amountCol, $amountCol / COALESCE(NULLIF($own, 0), 1) * $rt)";
     }
 
     /** Writes the amount columns of rows (which carry their own currency code, or none) in the currency $target. @param list<array<string,mixed>> $rows @param list<string> $keys @return list<array<string,mixed>> */
@@ -165,7 +177,12 @@ final class Currency
         $tid = (string) ($data['tenant_id'] ?? '');
         if ($tid !== '') {
             try {
-                $data['currency'] = self::forTenant($tid);
+                if ($table === 'sc_salary_adj' && !empty($data['salary_id'])) {
+                    $c = (string) app()->db->val('SELECT currency FROM sc_salary WHERE id = ?', [(int) $data['salary_id']]);
+                    $data['currency'] = $c !== '' ? $c : self::forTenant($tid);
+                } else {
+                    $data['currency'] = self::forBranch($tid, isset($data['branch_id']) ? (int) $data['branch_id'] : 0);
+                }
             } catch (\Throwable) {
             }
         }
@@ -208,6 +225,54 @@ final class Currency
         }
         $c = (string) app()->db->val("SELECT `value` FROM settings WHERE tenant_id = ? AND `key` = 'currency' LIMIT 1", [$tenantId]);
         return isset(self::all()[$c]) ? $c : self::platform();
+    }
+
+    /** Currency of one clinic branch: its own when set, else the vendor's. */
+    public static function forBranch(?string $tenantId, int $branchId): string
+    {
+        if ($tenantId === null || $tenantId === '') {
+            return self::platform();
+        }
+        if ($branchId > 0) {
+            try {
+                $c = (string) app()->db->val('SELECT currency FROM sc_branches WHERE id = ? AND tenant_id = ?', [$branchId, $tenantId]);
+                if ($c !== '' && isset(self::all()[$c])) {
+                    return $c;
+                }
+            } catch (\Throwable) {
+            }
+        }
+        return self::forTenant($tenantId);
+    }
+
+    /** Loads the vendor's own exchange rates (settings key fx_rates, a JSON map) used when branches in different currencies are reported together. */
+    public static function loadVendorFx(string $tenantId): void
+    {
+        self::$vendorFx = [];
+        self::$vendorFxBase = self::forTenant($tenantId);
+        $j = (string) app()->db->val("SELECT `value` FROM settings WHERE tenant_id = ? AND `key` = 'fx_rates' LIMIT 1", [$tenantId]);
+        $m = $j !== '' ? json_decode($j, true) : null;
+        if (is_array($m)) {
+            foreach ($m as $code => $k) {
+                if (isset(self::all()[(string) $code]) && (float) $k > 0) {
+                    self::$vendorFx[(string) $code] = (float) $k;
+                }
+            }
+        }
+    }
+
+    /** Units of the currency for 1 US dollar, honouring the vendor's own rates when they were loaded. */
+    private static function effRate(string $code): float
+    {
+        if (self::$vendorFx && self::$vendorFxBase !== '') {
+            if ($code === self::$vendorFxBase) {
+                return self::rate($code);
+            }
+            if (isset(self::$vendorFx[$code])) {
+                return self::rate(self::$vendorFxBase) / self::$vendorFx[$code];
+            }
+        }
+        return self::rate($code);
     }
 
     public static function find(string $code): array

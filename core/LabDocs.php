@@ -39,6 +39,7 @@ final class LabDocs
 
     public function slip(array $o, string $mark): array
     {
+        Currency::$context = $this->L->money($o)['cur'];
         $pt = $this->L->patient((int) $o['patient_id']);
         $rows = [];
         foreach ($this->L->items((int) $o['id']) as $i) {
@@ -56,6 +57,7 @@ final class LabDocs
 
     public function receipt(array $o, ?array $pay, string $mark): array
     {
+        Currency::$context = $this->L->money($o)['cur'];
         $pt = $this->L->patient((int) $o['patient_id']);
         $m = $this->L->money($o);
         $b = [$this->patientKv($pt), ['kv', 'title' => 'Payment', 'items' => [['Receipt no', (string) ($pay['receipt_no'] ?? '')], ['Order', (string) $o['order_no']], ['Invoice', (string) $o['invoice_no']], ['Method', (string) ($pay['method'] ?? '')], ['Reference', (string) ($pay['reference'] ?? '')], ['Received on', $pay ? dt((string) $pay['paid_at'], 'd M Y, H:i') : '']]],
@@ -106,6 +108,7 @@ final class LabDocs
 
     public function salarySlip(array $s, array $u, array $adj, string $mark = ''): array
     {
+        Currency::$context = (string) ($s['currency'] ?: $this->L->branchCurrency((int) $s['branch_id']));
         $rows = [['Basic salary', money((float) $s['base'])]];
         foreach ($adj as $a) {
             $rows[] = [ucfirst((string) $a['kind']) . ($a['reason'] ? ': ' . $a['reason'] : ''), ($a['kind'] === 'bonus' ? '+' : '-') . money((float) $a['amount'])];

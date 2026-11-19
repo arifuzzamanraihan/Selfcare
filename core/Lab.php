@@ -48,7 +48,71 @@ final class Lab
 
     public static function for(Portal $p): self
     {
-        return self::$inst[$p->tenantId . '|' . $p->user['id']] ??= new self($p);
+        $i = self::$inst[$p->tenantId . '|' . $p->user['id']] ??= new self($p);
+        $i->applyContext();
+        return $i;
+    }
+
+    /** Branch screens use the branch currency and time zone; the all branches view uses the vendor's (with the vendor's own exchange rates for totals). */
+    public function applyContext(): void
+    {
+        Currency::loadVendorFx($this->t);
+        $c = $this->current();
+        $cur = $this->reportCurrency();
+        Currency::$context = $cur;
+        $tz = $c > 0 ? (string) ($this->branch($c)['timezone'] ?? '') : '';
+        if ($tz !== '' && in_array($tz, \DateTimeZone::listIdentifiers(), true) && $tz !== date_default_timezone_get()) {
+            date_default_timezone_set($tz);
+            $this->db->run('SET time_zone = ?', [date('P')]);
+        }
+    }
+
+    /** Currency of one branch (its own, else the vendor's). */
+    public function branchCurrency(int $branch): string
+    {
+        return Currency::forBranch($this->t, $branch ?: $this->mainId());
+    }
+
+    /** Currency the screen and reports are written in: the branch's when one branch is open, else the vendor's. */
+    public function reportCurrency(): string
+    {
+        $ids = $this->force !== null ? $this->force : ($this->current() > 0 ? [$this->current()] : []);
+        if (count($ids) === 1) {
+            return $this->branchCurrency((int) $ids[0]);
+        }
+        return Currency::forTenant($this->t);
+    }
+
+    /** True when the branches in view do not all use one currency. */
+    public function mixedCurrencies(): bool
+    {
+        $set = [];
+        foreach ($this->force !== null ? $this->force : $this->viewIds() as $b) {
+            $set[$this->branchCurrency((int) $b)] = true;
+        }
+        return count($set) > 1;
+    }
+
+    /** True once the branch has money records (bills, payments, ledger, salary, stock). Its currency is then fixed so old amounts never change meaning. */
+    public function branchHasMoney(int $branch): bool
+    {
+        $m = $this->mainId();
+        $w = $branch === $m ? '(branch_id = ? OR branch_id IS NULL)' : 'branch_id = ?';
+        foreach (['sc_lab_orders', 'sc_ledger', 'sc_salary', 'sc_stock_items', 'sc_invoices'] as $t) {
+            $extra = $t === 'sc_invoices' ? " AND issuer = 'vendor'" : '';
+            if ((int) $this->db->val("SELECT COUNT(*) FROM $t WHERE tenant_id = ? AND $w$extra", [$this->t, $branch]) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** An amount written in the vendor's currency, in the currency of a branch (central prices, fixed commissions). */
+    public function toBranch(float $amount, int $branch): float
+    {
+        $v = Currency::forTenant($this->t);
+        $b = $this->branchCurrency($branch);
+        return $v === $b ? $amount : Currency::convert($amount, $v, $b);
     }
 
     /** The laboratory service of a vendor, run as its main admin (used for patient downloads and public links). */
@@ -464,7 +528,7 @@ final class Lab
     public function priceIn(array $test, int $branch): array
     {
         $o = $this->db->one('SELECT price, available FROM sc_lab_branch_tests WHERE tenant_id = ? AND branch_id = ? AND test_id = ?', [$this->t, $branch, (int) $test['id']]);
-        return ['price' => $o && $o['price'] !== null ? (float) $o['price'] : (float) $test['price'], 'available' => $o ? (int) $o['available'] === 1 : true];
+        return ['price' => $o && $o['price'] !== null ? (float) $o['price'] : $this->toBranch((float) $test['price'], $branch), 'available' => $o ? (int) $o['available'] === 1 : true];
     }
 
     /** Active tests for a branch with the branch price. @return list<array<string,mixed>> */
@@ -609,11 +673,11 @@ final class Lab
                 }
                 continue;
             }
-            $amt = $r['vtype'] === 'pct' ? $net * (float) $r['value'] / 100 : (float) $r['value'];
+            $amt = $r['vtype'] === 'pct' ? $net * (float) $r['value'] / 100 : $this->toBranch((float) $r['value'], (int) $order['branch_id']);
             $out['i' . $it['id']] = ['amount' => round($amt * $factor, 2), 'base' => $net, 'rule' => ($r['vtype'] === 'pct' ? rtrim(rtrim((string) $r['value'], '0'), '.') . '% per test' : 'fixed per test') . ' (' . $r['scope'] . ')'];
         }
         if ($patientRule !== null && $anyLeft) {
-            $amt = $patientRule['vtype'] === 'pct' ? $left * (float) $patientRule['value'] / 100 : (float) $patientRule['value'];
+            $amt = $patientRule['vtype'] === 'pct' ? $left * (float) $patientRule['value'] / 100 : $this->toBranch((float) $patientRule['value'], (int) $order['branch_id']);
             $out['o'] = ['amount' => round($amt * $factor, 2), 'base' => $left, 'rule' => $patientRule['vtype'] === 'pct' ? rtrim(rtrim((string) $patientRule['value'], '0'), '.') . '% of the patient bill' : 'fixed per patient'];
         }
         return $out;
@@ -666,11 +730,12 @@ final class Lab
     public function commissionTotals(int $referrerId, ?string $from = null, ?string $to = null): array
     {
         $q = fn (string $s) => $this->db->quote($s);
+        $cur = $this->reportCurrency();
         $cw = ($from && $to) ? ' AND DATE(created_at) BETWEEN ' . $q($from) . ' AND ' . $q($to) : '';
         $lw = ($from && $to) ? ' AND entry_date BETWEEN ' . $q($from) . ' AND ' . $q($to) : '';
         $ow = ($from && $to) ? ' AND DATE(o.order_date) BETWEEN ' . $q($from) . ' AND ' . $q($to) : '';
-        $earned = (float) $this->db->val('SELECT COALESCE(SUM(amount), 0) FROM sc_commissions WHERE tenant_id = ? AND referrer_id = ? AND ' . $this->scope('branch_id') . $cw, [$this->t, $referrerId]);
-        $paid = (float) $this->db->val("SELECT COALESCE(SUM(amount), 0) FROM sc_ledger WHERE tenant_id = ? AND source = 'commission' AND referrer_id = ? AND status = 'paid' AND deleted_at IS NULL AND " . $this->scope('branch_id') . $lw, [$this->t, $referrerId]);
+        $earned = (float) $this->db->val('SELECT COALESCE(SUM(' . Currency::sql('amount', 'currency', $cur) . '), 0) FROM sc_commissions WHERE tenant_id = ? AND referrer_id = ? AND ' . $this->scope('branch_id') . $cw, [$this->t, $referrerId]);
+        $paid = (float) $this->db->val("SELECT COALESCE(SUM(" . Currency::sql('amount', 'currency', $cur) . "), 0) FROM sc_ledger WHERE tenant_id = ? AND source = 'commission' AND referrer_id = ? AND status = 'paid' AND deleted_at IS NULL AND " . $this->scope('branch_id') . $lw, [$this->t, $referrerId]);
         $base = "FROM sc_lab_orders o WHERE o.tenant_id = ? AND o.referrer_id = ? AND o.status <> 'cancelled' AND " . $this->scope('o.branch_id') . $ow;
         $pat = (int) $this->db->val('SELECT COUNT(DISTINCT o.patient_id) ' . $base, [$this->t, $referrerId]);
         $ord = (int) $this->db->val('SELECT COUNT(*) ' . $base, [$this->t, $referrerId]);
@@ -756,7 +821,7 @@ final class Lab
                 'party_name' => $pt['name'], 'party_phone' => $pt['phone'], 'party_address' => $pt['address'], 'patient_id' => (int) $pt['id'], 'invoice_date' => date('Y-m-d'),
                 'discount' => $discount, 'paid_now' => $paid, 'payment_method' => (string) ($in['method'] ?? 'Cash'), 'payment_ref' => (string) ($in['reference'] ?? ''),
                 'x_referred_by' => $ref ? (string) $ref['name'] : '', 'x_sample_id' => $orderNo,
-            ], $lines, (int) $this->p->user['id']);
+            ], $lines, (int) $this->p->user['id'], $this->branchCurrency($branch));
             $this->db->run('UPDATE sc_invoices SET branch_id = ? WHERE id = ?', [$branch, $iid]);
             $payId = (int) $this->db->val('SELECT id FROM sc_invoice_payments WHERE invoice_id = ? ORDER BY id LIMIT 1', [$iid]);
             if ($payId) {
@@ -841,7 +906,7 @@ final class Lab
         $ref = $o['invoice_id'] ? $this->refunded((int) $o['invoice_id']) : 0.0;
         $paid = $o['invoice_id'] ? (float) $this->db->val("SELECT COALESCE(SUM(amount), 0) FROM sc_invoice_payments WHERE invoice_id = ? AND (note IS NULL OR note NOT LIKE 'Credit note%')", [(int) $o['invoice_id']]) : 0.0;
         $total = (float) ($o['total'] ?? 0);
-        return ['total' => $total, 'paid' => $paid, 'refunded' => $ref, 'balance' => $o['status'] === 'cancelled' ? 0.0 : (float) ($inv['balance'] ?? $total), 'refund_due' => max(0.0, round($paid - $ref - $total, 2))];
+        return ['cur' => (string) (($o['currency'] ?? '') ?: $this->branchCurrency((int) ($o['branch_id'] ?? 0))), 'total' => $total, 'paid' => $paid, 'refunded' => $ref, 'balance' => $o['status'] === 'cancelled' ? 0.0 : (float) ($inv['balance'] ?? $total), 'refund_due' => max(0.0, round($paid - $ref - $total, 2))];
     }
 
     /** Receipt number of the latest payment on an order, if any. */
@@ -878,7 +943,7 @@ final class Lab
             return 'Please write the reason for the refund.';
         }
         try {
-            $cid = (new Billing($this->db))->create($this->t, 'vendor', 'credit_note', ['party_name' => (string) $this->patient((int) $o['patient_id'])['name'], 'patient_id' => (int) $o['patient_id'], 'invoice_date' => date('Y-m-d'), 'related_id' => (int) $o['invoice_id'], 'payment_method' => $method, 'note' => 'Refund: ' . $reason, 'reference' => $o['invoice_no']], [['item_name' => 'Refund on ' . $o['order_no'], 'category' => 'Refund', 'qty' => 1, 'price' => $amount]], (int) $this->p->user['id']);
+            $cid = (new Billing($this->db))->create($this->t, 'vendor', 'credit_note', ['party_name' => (string) $this->patient((int) $o['patient_id'])['name'], 'patient_id' => (int) $o['patient_id'], 'invoice_date' => date('Y-m-d'), 'related_id' => (int) $o['invoice_id'], 'payment_method' => $method, 'note' => 'Refund: ' . $reason, 'reference' => $o['invoice_no']], [['item_name' => 'Refund on ' . $o['order_no'], 'category' => 'Refund', 'qty' => 1, 'price' => $amount]], (int) $this->p->user['id'], (string) ($o['currency'] ?: $this->branchCurrency((int) $o['branch_id'])));
         } catch (\InvalidArgumentException $e) {
             return $e->getMessage();
         }
@@ -1125,7 +1190,7 @@ final class Lab
     /** Income, refunds, discounts, expenses, net and payables for a period in the current branch scope. @return array<string,mixed> */
     public function finance(string $from, string $to): array
     {
-        $cur = Currency::forTenant($this->t);
+        $cur = $this->reportCurrency();
         $q = fn (string $s) => $this->db->quote($s);
         $credit = implode(',', array_map($q, (new Billing($this->db))->creditTypes()));
         $amt = Currency::sql('p.amount', 'i.currency', $cur);
@@ -1141,13 +1206,13 @@ final class Lab
         foreach ($this->db->all("SELECT l.category c, COALESCE(SUM($lamt), 0) s $led AND l.kind = 'expense' GROUP BY l.category ORDER BY s DESC", $args) as $r) {
             $exp[(string) $r['c']] = round((float) $r['s'], 2);
         }
-        $home = (float) $this->db->val("SELECT COALESCE(SUM(home_charge), 0) FROM sc_lab_orders WHERE tenant_id = ? AND status <> 'cancelled' AND DATE(order_date) BETWEEN ? AND ? AND " . $this->scope('branch_id'), $args);
-        $disc = (float) $this->db->val("SELECT COALESCE(SUM(discount), 0) FROM sc_lab_orders WHERE tenant_id = ? AND status <> 'cancelled' AND DATE(order_date) BETWEEN ? AND ? AND " . $this->scope('branch_id'), $args);
+        $home = (float) $this->db->val("SELECT COALESCE(SUM(" . Currency::sql('home_charge', 'currency', $cur) . "), 0) FROM sc_lab_orders WHERE tenant_id = ? AND status <> 'cancelled' AND DATE(order_date) BETWEEN ? AND ? AND " . $this->scope('branch_id'), $args);
+        $disc = (float) $this->db->val("SELECT COALESCE(SUM(" . Currency::sql('discount', 'currency', $cur) . "), 0) FROM sc_lab_orders WHERE tenant_id = ? AND status <> 'cancelled' AND DATE(order_date) BETWEEN ? AND ? AND " . $this->scope('branch_id'), $args);
         $due = (float) $this->db->val("SELECT COALESCE(SUM($lamt), 0) FROM sc_ledger l WHERE l.tenant_id = ? AND l.deleted_at IS NULL AND l.kind = 'expense' AND l.status = 'due' AND " . $this->scope('l.branch_id'), [$this->t]);
-        $commOut = (float) $this->db->val('SELECT COALESCE(SUM(amount), 0) FROM sc_commissions WHERE tenant_id = ? AND ' . $this->scope('branch_id'), [$this->t])
-            - (float) $this->db->val("SELECT COALESCE(SUM(amount), 0) FROM sc_ledger WHERE tenant_id = ? AND source = 'commission' AND status = 'paid' AND deleted_at IS NULL AND " . $this->scope('branch_id'), [$this->t]);
-        $salOut = (float) $this->db->val('SELECT COALESCE(SUM(net - paid), 0) FROM sc_salary WHERE tenant_id = ? AND ' . $this->scope('branch_id'), [$this->t]);
-        $recv = (float) $this->db->val("SELECT COALESCE(SUM(balance), 0) FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status NOT IN ('void') AND doc_type = 'test_invoice' AND " . $this->scope('branch_id'), [$this->t]);
+        $commOut = (float) $this->db->val('SELECT COALESCE(SUM(' . Currency::sql('amount', 'currency', $cur) . '), 0) FROM sc_commissions WHERE tenant_id = ? AND ' . $this->scope('branch_id'), [$this->t])
+            - (float) $this->db->val("SELECT COALESCE(SUM(" . Currency::sql('amount', 'currency', $cur) . "), 0) FROM sc_ledger WHERE tenant_id = ? AND source = 'commission' AND status = 'paid' AND deleted_at IS NULL AND " . $this->scope('branch_id'), [$this->t]);
+        $salOut = (float) $this->db->val('SELECT COALESCE(SUM(' . Currency::sql('(net - paid)', 'currency', $cur) . '), 0) FROM sc_salary WHERE tenant_id = ? AND ' . $this->scope('branch_id'), [$this->t]);
+        $recv = (float) $this->db->val("SELECT COALESCE(SUM(" . Currency::sql('balance', 'currency', $cur) . "), 0) FROM sc_invoices WHERE tenant_id = ? AND issuer = 'vendor' AND status NOT IN ('void') AND doc_type = 'test_invoice' AND " . $this->scope('branch_id'), [$this->t]);
         $income = round($tests + $bills + $other, 2);
         $expTotal = round(array_sum($exp), 2);
         return [
@@ -1158,10 +1223,39 @@ final class Lab
         ];
     }
 
+    /** Income, refunds and expenses of the period kept apart per currency, never mixed. @return array<string,array{income:float,refunds:float,expenses:float,net:float}> */
+    public function currencyTotals(string $from, string $to): array
+    {
+        $credit = implode(',', array_map(fn (string $x) => $this->db->quote($x), (new Billing($this->db))->creditTypes()));
+        $out = [];
+        $add = static function (array &$o, string $c, string $k, float $v): void {
+            $o[$c] ??= ['income' => 0.0, 'refunds' => 0.0, 'expenses' => 0.0, 'net' => 0.0];
+            $o[$c][$k] += $v;
+        };
+        $pay = "FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id AND i.tenant_id = p.tenant_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND DATE(p.paid_at) BETWEEN ? AND ? AND " . $this->scope('COALESCE(p.branch_id, i.branch_id)');
+        $args = [$this->t, $from, $to];
+        foreach ($this->db->all("SELECT i.currency c, SUM(p.amount) s $pay AND i.doc_type NOT IN ($credit, 'supplier_invoice') AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%') GROUP BY i.currency", $args) as $r) {
+            $add($out, (string) $r['c'], 'income', (float) $r['s']);
+        }
+        foreach ($this->db->all("SELECT i.currency c, SUM(p.amount) s $pay AND i.doc_type IN ($credit) AND p.note = 'Refund paid' GROUP BY i.currency", $args) as $r) {
+            $add($out, (string) $r['c'], 'refunds', (float) $r['s']);
+        }
+        $led = 'FROM sc_ledger l WHERE l.tenant_id = ? AND l.deleted_at IS NULL AND l.status = \'paid\' AND DATE(l.paid_at) BETWEEN ? AND ? AND ' . $this->scope('l.branch_id');
+        foreach ($this->db->all("SELECT COALESCE(l.currency, ?) c, l.kind k, SUM(l.amount) s $led GROUP BY COALESCE(l.currency, ?), l.kind", array_merge([Currency::forTenant($this->t)], $args, [Currency::forTenant($this->t)])) as $r) {
+            $add($out, (string) $r['c'], $r['k'] === 'income' ? 'income' : 'expenses', (float) $r['s']);
+        }
+        foreach ($out as $c => &$v) {
+            $v['net'] = round($v['income'] - $v['refunds'] - $v['expenses'], 2);
+        }
+        unset($v);
+        ksort($out);
+        return $out;
+    }
+
     /** Every cash movement in the scope, newest first, for drill down. @return list<array<string,mixed>> */
     public function transactions(string $from, string $to, ?string $kind = null): array
     {
-        $rows = (new Accounts($this->db, new Billing($this->db)))->movements($this->t, $from, $to);
+        $rows = (new Accounts($this->db, new Billing($this->db)))->movements($this->t, $from, $to, $this->reportCurrency(), [$this->scope('COALESCE(p.branch_id, i.branch_id)'), $this->scope('l.branch_id')]);
         $out = [];
         foreach ($rows as $m) {
             if ($kind !== null && $kind !== '' && !($m['cat'] === $kind || $m['src'] === $kind)) {
@@ -1299,21 +1393,21 @@ final class Lab
         switch ($type) {
             case 'patients':
                 $cols = [['MR', 70], ['Patient', 150], ['Branch', 80], ['Orders', 45, 'R'], ['Billed', 70, 'R'], ['Received', 70, 'R']];
-                foreach ($this->db->all("SELECT pt.patient_unique_id mr, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, o.branch_id, COUNT(*) c, SUM(o.total) tot, (SELECT COALESCE(SUM(p.amount), 0) FROM sc_invoice_payments p WHERE p.invoice_id IN (SELECT invoice_id FROM sc_lab_orders x WHERE x.patient_id = pt.id AND x.tenant_id = pt.tenant_id AND DATE(x.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ") AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%')) pd FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE o.tenant_id = ? AND o.status <> 'cancelled' AND DATE(o.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('o.branch_id') . ' GROUP BY pt.id, o.branch_id ORDER BY tot DESC', $t) as $r) {
+                foreach ($this->db->all("SELECT pt.patient_unique_id mr, TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) n, o.branch_id, COUNT(*) c, SUM(" . Currency::sql('o.total', 'o.currency', $this->reportCurrency()) . ") tot, (SELECT COALESCE(SUM(" . Currency::sql('p.amount', 'pi.currency', $this->reportCurrency()) . "), 0) FROM sc_invoice_payments p JOIN sc_invoices pi ON pi.id = p.invoice_id WHERE p.invoice_id IN (SELECT invoice_id FROM sc_lab_orders x WHERE x.patient_id = pt.id AND x.tenant_id = pt.tenant_id AND DATE(x.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ") AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%')) pd FROM sc_lab_orders o JOIN patients pt ON pt.id = o.patient_id JOIN users u ON u.id = pt.user_id WHERE o.tenant_id = ? AND o.status <> 'cancelled' AND DATE(o.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('o.branch_id') . ' GROUP BY pt.id, o.branch_id ORDER BY tot DESC', $t) as $r) {
                     $rows[] = [$r['mr'], $r['n'], $this->branchName((int) $r['branch_id']), (string) $r['c'], number_format((float) $r['tot'], 2), number_format((float) $r['pd'], 2)];
                 }
                 $tot[] = ['Patients', (string) count($rows), true];
                 break;
             case 'tests':
                 $cols = [['Department', 110], ['Test', 190], ['Count', 50, 'R'], ['Revenue', 80, 'R']];
-                foreach ($this->db->all("SELECT COALESCE(i.dept_name, 'Other') d, i.test_name, COUNT(*) c, SUM(i.net) r FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.tenant_id = ? AND i.status <> 'cancelled' AND o.status <> 'cancelled' AND DATE(o.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('o.branch_id') . ' GROUP BY d, i.test_name ORDER BY d, c DESC', $t) as $r) {
+                foreach ($this->db->all("SELECT COALESCE(i.dept_name, 'Other') d, i.test_name, COUNT(*) c, SUM(" . Currency::sql('i.net', 'o.currency', $this->reportCurrency()) . ") r FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.tenant_id = ? AND i.status <> 'cancelled' AND o.status <> 'cancelled' AND DATE(o.order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('o.branch_id') . ' GROUP BY d, i.test_name ORDER BY d, c DESC', $t) as $r) {
                     $rows[] = [$r['d'], $r['test_name'], (string) $r['c'], number_format((float) $r['r'], 2)];
                 }
                 $tot[] = ['Tests done', (string) array_sum(array_map(static fn ($r) => (int) $r[2], $rows)), true];
                 break;
             case 'income':
                 $cols = [['Date', 60], ['Receipt or bill', 100], ['Patient', 130], ['Branch', 70], ['Method', 60], ['Amount', 70, 'R']];
-                $cur = Currency::forTenant($this->t);
+                $cur = $this->reportCurrency();
                 $sum = 0.0;
                 foreach ($this->db->all("SELECT p.paid_at, COALESCE(p.receipt_no, i.invoice_no) no, i.party_name, COALESCE(p.branch_id, i.branch_id) b, p.method, " . Currency::sql('p.amount', 'i.currency', $cur) . " amt FROM sc_invoice_payments p JOIN sc_invoices i ON i.id = p.invoice_id WHERE p.tenant_id = ? AND i.issuer = 'vendor' AND i.status <> 'void' AND i.doc_type NOT IN ('credit_note','supplier_invoice') AND (p.note IS NULL OR p.note NOT LIKE 'Credit note%') AND DATE(p.paid_at) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('COALESCE(p.branch_id, i.branch_id)') . ' ORDER BY p.paid_at', $t) as $r) {
                     $sum += (float) $r['amt'];
@@ -1323,7 +1417,7 @@ final class Lab
                 break;
             case 'expenses':
                 $cols = [['Date', 60], ['No', 60], ['Category', 120], ['Paid to', 120], ['Branch', 70], ['Amount', 70, 'R']];
-                $cur = Currency::forTenant($this->t);
+                $cur = $this->reportCurrency();
                 $sum = 0.0;
                 foreach ($this->db->all("SELECT l.*, " . Currency::sql('l.amount', 'l.currency', $cur) . " amt FROM sc_ledger l WHERE l.tenant_id = ? AND l.kind = 'expense' AND l.deleted_at IS NULL AND l.status = 'paid' AND DATE(l.paid_at) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('l.branch_id') . ' ORDER BY l.paid_at', $t) as $r) {
                     $sum += (float) $r['amt'];
@@ -1358,13 +1452,13 @@ final class Lab
                 $tot[] = ['Stock value', number_format($sum, 2), true];
                 break;
             case 'branches':
-                $cols = [['Branch', 120], ['Orders', 50, 'R'], ['Income', 75, 'R'], ['Refunds', 65, 'R'], ['Expenses', 75, 'R'], ['Net', 75, 'R']];
+                $cols = [['Branch', 110], ['Currency', 50], ['Orders', 50, 'R'], ['Income', 75, 'R'], ['Refunds', 65, 'R'], ['Expenses', 75, 'R'], ['Net', 75, 'R']];
                 $keep = $this->force;
                 foreach (array_intersect_key($this->branches(true), array_flip($this->allowed())) as $b) {
                     $this->force = [(int) $b['id']];
                     $F = $this->finance($from, $to);
                     $n = (int) $this->db->val("SELECT COUNT(*) FROM sc_lab_orders WHERE tenant_id = ? AND status <> 'cancelled' AND DATE(order_date) BETWEEN " . $q($from) . ' AND ' . $q($to) . ' AND ' . $this->scope('branch_id'), $t);
-                    $rows[] = [(string) $b['name'], (string) $n, number_format($F['income'], 2), number_format($F['refunds'], 2), number_format($F['expense_total'], 2), number_format($F['net'], 2)];
+                    $rows[] = [(string) $b['name'], $this->branchCurrency((int) $b['id']), (string) $n, number_format($F['income'], 2), number_format($F['refunds'], 2), number_format($F['expense_total'], 2), number_format($F['net'], 2)];
                 }
                 $this->force = $keep;
                 break;
@@ -1521,7 +1615,7 @@ final class Lab
             $this->force = null;
         }
         $subject = ((string) $this->p->vendor['name']) . ' daily report ' . $date;
-        $body = "Daily report for " . dt($date) . ".\nThe Excel workbook has the summary, patients, tests, income, expenses, commission, salary, inventory and branch comparison. The PDF is the management summary.";
+        $body = "Daily report for " . dt($date) . ".\nThe Excel workbook has the summary, patients, tests, income, expenses, commission, salary, inventory and branch comparison. The PDF is the management summary." . ($this->mixedCurrencies() ? "\nBranches use different currencies. The combined figures are in " . Currency::forTenant($this->t) . " at the clinic's own exchange rates, and the branch comparison sheet shows each branch in its own currency." : '');
         $ml = $this->mailer();
         $ok = true;
         $err = '';
