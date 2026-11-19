@@ -191,7 +191,7 @@ return [
     'invoices' => $invoices,
     'forms' => $forms,
     'by_family' => [
-        'clinical' => ['invoices' => ['opd_bill', 'ipd_final_bill', 'interim_bill', 'advance_receipt', 'refund_receipt', 'discharge_bill', 'procedure_bill', 'package_bill', 'insurance_claim', 'credit_note'],
+        'clinical' => ['invoices' => ['opd_bill', 'ipd_final_bill', 'interim_bill', 'advance_receipt', 'refund_receipt', 'discharge_bill', 'procedure_bill', 'package_bill', 'insurance_claim', 'test_invoice', 'credit_note'],
             'forms' => array_merge(['registration_card', 'prescription', 'admission_form', 'consent_general', 'consent_surgery', 'nursing_notes', 'discharge_summary', 'birth_certificate', 'death_certificate', 'referral_letter', 'medical_certificate'], $common)],
         'diagnostics' => ['invoices' => ['test_invoice', 'imaging_invoice', 'sample_receipt', 'credit_note', 'package_bill', 'refund_receipt'], 'forms' => array_merge(['registration_card', 'lab_requisition', 'sample_register', 'result_report', 'radiology_report', 'referral_letter', 'consent_general'], $common)],
         'pharmacy' => ['invoices' => ['sales_invoice', 'sales_return', 'purchase_order', 'grn', 'supplier_invoice'], 'forms' => array_merge(['controlled_drug_entry', 'stock_count'], $common)],

@@ -20,6 +20,9 @@ final class App
     public Access $access;
     public Throttle $throttle;
     public Mailer $mailer;
+    public Mail $mail;
+    /** helper closures shared by the lab route files */
+    public array $lab = [];
     public Domains $domains;
 
     /** null = main website, '' = bad sub domain, otherwise the vendor slug from the Host header. */
@@ -58,6 +61,8 @@ final class App
         $this->access = new Access($this->db);
         $this->throttle = new Throttle($this->db);
         $this->mailer = new Mailer($this->env);
+        require_once __DIR__ . '/Mail.php';
+        $this->mail = new Mail($this);
         $this->domains = new Domains($this->db, $this->env, $this->tenant);
         $this->hostSlug = $this->tenant->slugFromHost();
         if ($this->hostSlug !== null && $this->hostSlug !== '') {
@@ -111,6 +116,12 @@ final class App
     {
         if (($user['role'] ?? '') === 'Super Admin') {
             return $this->tenant->mainUrl('admin');
+        }
+        // laboratory roles land on the laboratory home of their branch
+        if (in_array($user['role'] ?? '', ['Pathologist', 'Sample Collector', 'Attendant', 'Phlebotomist', 'Branch Admin'], true) && !empty($user['tenant_id'])
+            && (string) $this->db->val('SELECT type_slug FROM sc_vendors WHERE tenant_id = ?', [$user['tenant_id']]) === 'clinic'
+            && (int) $this->db->val('SELECT COUNT(*) FROM sc_branches WHERE tenant_id = ?', [$user['tenant_id']]) > 0) {
+            return url('portal/lab');
         }
         return url('portal');
     }

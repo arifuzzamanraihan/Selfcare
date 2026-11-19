@@ -347,6 +347,7 @@ final class Access
                 'manage_rx', 'view_rx' => Rx::forType($typeSlug) !== null,
                 'manage_medicines' => isset($used[$perm]) || in_array($family, ['pharmacy', 'bloodbank', 'equipment'], true),
                 'manage_blood_bank', 'manage_prescriptions', 'manage_ipd' => isset($used[$perm]),
+                'lab_booking', 'lab_samples', 'lab_results', 'lab_approve', 'lab_catalogue', 'lab_referrers', 'lab_commission', 'lab_finance', 'lab_inventory', 'lab_staff', 'lab_attendance', 'lab_salary', 'lab_share', 'lab_records', 'lab_branches', 'lab_reports' => Lab::supports($typeSlug),
                 default => true,
             };
             if ($ok) {
@@ -571,6 +572,9 @@ final class Access
         ];
         if (isset($simple[$a])) {
             return $simple[$a];
+        }
+        if ($a === 'lab' && Lab::supports($typeSlug)) {
+            return Lab::SECTION_PERM[$seg[2] ?? 'dashboard'] ?? 'lab_reports';
         }
         if ($a === 'workspace') {
             return 'manage_rx';

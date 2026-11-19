@@ -49,13 +49,42 @@ final class Portal
     {
     }
 
+    /** A portal context for a stored user without a session (scheduled jobs, signed share links). Null when the user or vendor is gone. */
+    public static function forUser(App $app, int $userId): ?self
+    {
+        $u = $app->db->one('SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.hospital_name, u.tenant_id, u.status, d.name AS role FROM users u LEFT JOIN model_has_roles m ON m.model_id = u.id AND m.model_type = ? LEFT JOIN departments d ON d.id = m.role_id WHERE u.id = ? AND u.tenant_id IS NOT NULL LIMIT 1', [Auth::ROLE_MODEL, $userId]);
+        if ($u === null) {
+            return null;
+        }
+        $u['role'] = (string) ($u['role'] ?? 'Patient');
+        $row = $app->db->one('SELECT tenant_username FROM tenants WHERE id = ?', [(string) $u['tenant_id']]);
+        $vendor = $row === null ? null : $app->tenant->bySlug((string) $row['tenant_username']);
+        if ($vendor === null) {
+            return null;
+        }
+        $p = new self($app);
+        $p->user = $u;
+        $p->tenantId = (string) $u['tenant_id'];
+        $p->vendor = $vendor;
+        $p->role = $u['role'];
+        $p->type = $app->typeRow((string) $vendor['type_slug']);
+        $p->tpl = VendorTypes::template($p->type);
+        $p->family = (string) $p->tpl['family'];
+        $p->sub = $app->plans->current($p->tenantId);
+        $p->perms = $app->access->effective($p->tenantId, $p->role, $p->family);
+        $p->applyUserPerms();
+        Currency::$context = Currency::forTenant($p->tenantId);
+        return $p;
+    }
+
     /** Signs-in check and context. Redirects or stops when the request is not allowed. */
     public static function boot(App $app): self
     {
         $user = $app->auth->user();
         if ($user === null) {
             flash('Please sign in to continue.', 'info');
-            redirect(url('login'));
+            $back = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+            redirect(url('login', ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && str_starts_with($back, base_path() . '/portal') ? ['next' => $back] : []));
         }
         if ($user['role'] === 'Super Admin') {
             redirect($app->tenant->mainUrl('admin'));
@@ -99,15 +128,41 @@ final class Portal
         $p->family = (string) $p->tpl['family'];
         $p->sub = $app->plans->current($p->tenantId);
         $p->perms = $app->access->effective($p->tenantId, $p->role, $p->family);
+        $p->applyUserPerms();
         self::$current = $p;
         $p->gate();
         return $p;
     }
 
-    /** May this role do this action inside this module? (view, add, edit, delete, print, export) */
+    /** Per person grants and denials on top of the role (laboratory suite). perm => ['mode' => grant|deny, 'actions' => list]. @var array<string,array<string,mixed>> */
+    public array $userPerms = [];
+
+    private function applyUserPerms(): void
+    {
+        if (!Lab::supports((string) ($this->type['slug'] ?? '')) || $this->app->access->full($this->role)) {
+            return;
+        }
+        foreach ($this->app->db->all('SELECT perm, mode, actions FROM sc_user_perms WHERE tenant_id = ? AND user_id = ?', [$this->tenantId, (int) $this->user['id']]) as $r) {
+            $this->userPerms[(string) $r['perm']] = ['mode' => (string) $r['mode'], 'actions' => array_values(array_filter(explode(',', (string) $r['actions'])))];
+            if ($r['mode'] === 'deny') {
+                $this->perms = array_values(array_diff($this->perms, [(string) $r['perm']]));
+            } elseif (!in_array((string) $r['perm'], $this->perms, true) && isset($this->app->access->permissions()[(string) $r['perm']])) {
+                $this->perms[] = (string) $r['perm'];
+            }
+        }
+    }
+
+    /** May this role do this action inside this module? (view, add, edit, delete, print, export). A person level grant replaces the role's actions. */
     public function canDo(string $perm, string $action): bool
     {
-        return !$this->isSide() && $this->app->access->canDo($this->tenantId, $this->role, $this->family, $perm, $action);
+        if ($this->isSide()) {
+            return false;
+        }
+        $u = $this->userPerms[$perm] ?? null;
+        if ($u !== null) {
+            return $u['mode'] === 'grant' && ($action === 'view' || in_array('full', $u['actions'], true) || in_array($action, $u['actions'], true));
+        }
+        return $this->app->access->canDo($this->tenantId, $this->role, $this->family, $perm, $action);
     }
 
     /** Portal address of a request, without the base path. */
@@ -233,6 +288,9 @@ final class Portal
                     $all['Menu'][] = ['key' => 'my-rx', 'label' => 'My prescriptions', 'icon' => 'pill', 'url' => url('portal/my/prescriptions')];
                 }
                 $all['Menu'][] = ['key' => 'my-bills', 'label' => 'My bills', 'icon' => 'card', 'url' => url('portal/my/bills')];
+                if (Lab::supports((string) ($this->type['slug'] ?? ''))) {
+                    $all['Menu'][] = ['key' => 'my-lab', 'label' => 'My lab reports', 'icon' => 'layers', 'url' => url('portal/my/lab')];
+                }
                 $all['Menu'][] = ['key' => 'my-records', 'label' => 'My reports and forms', 'icon' => 'file', 'url' => url('portal/my/records')];
                 $all['Menu'][] = ['key' => 'my-visits', 'label' => 'My visits', 'icon' => 'clock', 'url' => url('portal/my/visits')];
             }
@@ -273,6 +331,28 @@ final class Portal
         $add('Money', 'reports', 'Reports', 'chart', 'portal/reports', 'manage_reports', 'reports');
         if (in_array($this->family, ['pharmacy', 'bloodbank', 'equipment'], true)) {
             $add('Money', 'stock', 'Stock', 'box', 'portal/stock', 'manage_medicines', 'documents');
+        }
+        if (Lab::enabled($this)) {
+            $L = [['dashboard', 'Lab dashboard', 'chart', 'lab_reports'], ['book', 'Book tests', 'plus', 'lab_booking'], ['orders', 'Lab orders', 'file', 'lab_booking'], ['patients', 'Lab patients', 'users', 'lab_booking'],
+                ['samples', 'Samples', 'clock', 'lab_samples'], ['home', 'Home collection', 'home', 'lab_samples'], ['results', 'Enter results', 'edit', 'lab_results'], ['approve', 'Approve reports', 'check', 'lab_approve'],
+                ['catalogue', 'Test catalogue', 'layers', 'lab_catalogue'], ['referrers', 'Referrers and partners', 'users', 'lab_referrers'], ['commission', 'Commission', 'card', 'lab_commission'],
+                ['finance', 'Finance', 'chart', 'lab_finance'], ['inventory', 'Lab inventory', 'box', 'lab_inventory'], ['employees', 'Employees', 'user', 'lab_staff'], ['attendance', 'Attendance', 'clock', 'lab_attendance'],
+                ['salary', 'Salary', 'card', 'lab_salary'], ['share', 'Sharing log', 'mail', 'lab_share'], ['reports', 'Lab reports', 'chart', 'lab_reports'], ['history', 'Record history', 'clock', 'lab_records'],
+                ['branches', 'Branches', 'globe', 'lab_branches'], ['access', 'User access', 'shield', 'lab_branches'], ['settings', 'Lab settings', 'settings', 'lab_branches'], ['backups', 'Backups', 'shield', 'lab_branches']];
+            foreach ($L as [$k, $lab, $ic, $perm]) {
+                $seen = $perm;
+                if ($k === 'dashboard') {
+                    foreach (Lab::PERM_LIST as $pm) {
+                        if ($this->can($pm)) {
+                            $seen = $pm;
+                            break;
+                        }
+                    }
+                }
+                if ($this->can($seen)) {
+                    $all['Laboratory'][] = ['key' => 'lab-' . $k, 'label' => $lab, 'icon' => $ic, 'url' => url('portal/lab' . ($k === 'dashboard' ? '' : '/' . $k))];
+                }
+            }
         }
         foreach (Ops::forPortal($this) as $ok => $om) {
             $all[$this->family === 'hospital' && (string) $om['group'] === 'Clinic' ? 'Hospital' : (string) $om['group']][] = ['key' => 'ops-' . $ok, 'label' => (string) $om['title'], 'icon' => (string) $om['icon'], 'url' => Ops::url($ok)];

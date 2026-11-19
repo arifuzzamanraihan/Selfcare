@@ -5,7 +5,7 @@
 // /portal/workspace [?token=ID&doctor=ID]   POST /portal/workspace/call-next   POST /portal/workspace/{id}/{start|skip|requeue|finish}
 declare(strict_types=1);
 
-use Selfcare\{Ops, Portal, Rx};
+use Selfcare\{Documents, Lab, LabDocs, Ops, Portal, Rx};
 use function Selfcare\{csrf_field, dt, e, flash, icon, redirect, url};
 
 $dash = $app->dash;
@@ -129,6 +129,30 @@ $app->router->get('/portal/workspace', static function () use ($app, $wsBoot, $t
             }
             $hdr .= '</ul></details>';
         }
+        // ---- laboratory: earlier orders with their report state, and a form to order tests (lands in the lab booking list)
+        if ($pt && Lab::supports((string) $p->type['slug']) && $p->module('billing')) {
+            $lrows = $db->all("SELECT i.id, i.test_name, i.report_status, i.report_no, o.order_no, o.order_date FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.tenant_id = ? AND o.patient_id = ? AND o.status <> 'cancelled' AND i.status <> 'cancelled' AND o.order_date >= DATE_SUB(NOW(), INTERVAL 120 DAY) ORDER BY o.order_date DESC, i.id LIMIT 30", [$t, (int) $pt['id']]);
+            $lh = '<details class="ws-hist"' . ($lrows ? ' open' : '') . '><summary>Lab tests (' . count($lrows) . ')</summary>';
+            if ($lrows) {
+                $lh .= '<ul>';
+                foreach ($lrows as $lr) {
+                    $ok2 = in_array($lr['report_status'], ['approved', 'delivered'], true);
+                    $lh .= '<li><b>' . e((string) $lr['test_name']) . '</b> · ' . e((string) $lr['order_no']) . ' · ' . e(dt((string) $lr['order_date'])) . ' · ' . ($ok2 ? '<a href="' . e(url('portal/workspace/lab/' . $lr['id'] . '/pdf')) . '" target="_blank" rel="noopener">Report ready, open PDF</a>' : '<span class="d-mute">' . e(ucfirst(str_replace('_', ' ', (string) ($lr['report_status'] === 'none' ? 'in the lab' : $lr['report_status'])))) . '</span>') . '</li>';
+                }
+                $lh .= '</ul>';
+            }
+            if ($w) {
+                $lt = $db->all('SELECT id, code, name FROM sc_lab_tests WHERE tenant_id = ? AND active = 1 ORDER BY name', [$t]);
+                if ($lt) {
+                    $lh .= '<form method="post" action="' . e(url('portal/workspace/' . (int) $sel['id'] . '/lab-order')) . '" class="d-form"><input type="hidden" name="_csrf" value="' . e(\Selfcare\csrf_token()) . '"><input type="hidden" name="doctor" value="' . e((string) ($doc['id'] ?? '')) . '"><p class="d-help">Tick the tests to order. The front desk takes payment and the lab collects the sample.</p><div class="d-checks" style="max-height:180px;overflow:auto">';
+                    foreach ($lt as $x) {
+                        $lh .= '<label class="d-check"><input type="checkbox" name="test_ids[]" value="' . (int) $x['id'] . '"><span>' . e((string) $x['name']) . ' <small class="d-mute">' . e((string) $x['code']) . '</small></span></label>';
+                    }
+                    $lh .= '</div><label class="d-field"><span class="d-help">Note for the lab</span><input name="clinical_note" maxlength="300"></label><button class="d-btn d-btn-soft" type="submit">Send lab order</button></form>';
+                }
+            }
+            $hdr .= $lh . '</details>';
+        }
         $hdr .= '</div>';
         $existing = $db->one("SELECT * FROM sc_prescriptions WHERE tenant_id = ? AND queue_record_id = ? AND deleted_at IS NULL AND status <> 'cancelled' ORDER BY id DESC LIMIT 1", [$t, (int) $sel['id']]);
         if ($existing !== null && $existing['status'] === 'issued') {
@@ -162,6 +186,39 @@ $app->router->post('/portal/workspace/call-next', static function () use ($app, 
     $nx = Rx::queueAdvance($db, $p, (int) ($doc['id'] ?? 0), $cur ? (int) $cur['id'] : null);
     flash($nx ? 'Next patient called.' : 'There is no one waiting.', $nx ? 'ok' : 'info');
     redirect(url('portal/workspace', array_filter(['token' => $nx ? (string) $nx : '', 'doctor' => $doc ? (string) $doc['id'] : ''])));
+});
+$app->router->post('/portal/workspace/{id}/lab-order', static function (array $a) use ($app, $wsBoot, $tokenOf, $db): void {
+    [$p, , , $doc] = $wsBoot();
+    $p->needWritable();
+    $r = $tokenOf($p, (int) $a['id']);
+    $back = url('portal/workspace', array_filter(['token' => $r ? (string) $r['id'] : '', 'doctor' => $doc ? (string) $doc['id'] : '']));
+    if ($r === null || !$r['person_id'] || !Lab::supports((string) $p->type['slug']) || !$p->module('billing')) {
+        flash('Link the patient to a record first, then order lab tests.', 'bad');
+        redirect($back);
+    }
+    $pid = (int) $db->val('SELECT id FROM patients WHERE id = ? AND tenant_id = ?', [(int) $r['person_id'], $p->tenantId]);
+    $ids = array_values(array_filter(array_map('intval', (array) ($_POST['test_ids'] ?? []))));
+    if (!$pid || !$ids) {
+        flash('Tick at least one test.', 'bad');
+        redirect($back);
+    }
+    $L = Lab::for($p);
+    $L->syncDoctors();
+    $ref = $doc ? $db->one("SELECT id FROM sc_referrers WHERE tenant_id = ? AND kind = 'doctor' AND doctor_id = ? AND active = 1", [$p->tenantId, (int) $doc['id']]) : null;
+    $rx = $db->one("SELECT id FROM sc_prescriptions WHERE tenant_id = ? AND queue_record_id = ? AND deleted_at IS NULL AND status <> 'cancelled' ORDER BY id DESC LIMIT 1", [$p->tenantId, (int) $r['id']]);
+    $o = $L->createOrder(['patient_id' => $pid, 'branch_id' => 0, 'test_ids' => $ids, 'referral_type' => $ref ? 'doctor' : 'none', 'referrer_id' => $ref ? (int) $ref['id'] : 0, 'collection' => 'lab', 'paid_now' => 0, 'discount' => 0, 'method' => 'Cash',
+        'token_id' => (int) $r['id'], 'rx_id' => $rx ? (int) $rx['id'] : null, 'ordered_by_doctor' => $doc ? (int) $doc['id'] : 1, 'clinical_note' => trim((string) ($_POST['clinical_note'] ?? ''))]);
+    flash(is_string($o) ? $o : 'Lab order ' . $L->order($o)['order_no'] . ' sent. The front desk takes payment and the lab collects the sample.', is_string($o) ? 'bad' : 'ok');
+    redirect($back);
+});
+$app->router->get('/portal/workspace/lab/{id}/pdf', static function (array $a) use ($app, $wsBoot, $db): void {
+    [$p] = $wsBoot();
+    $i = $db->one("SELECT i.* FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.id = ? AND i.tenant_id = ? AND i.report_status IN ('approved','delivered') AND i.status <> 'cancelled' AND o.status <> 'cancelled'", [(int) $a['id'], $p->tenantId]);
+    $L = $i ? Lab::forTenant($app, $p->tenantId) : null;
+    if ($i === null || $L === null) {
+        $app->error(404, 'We could not find that report.');
+    }
+    Documents::send((new LabDocs($L))->report($L->order((int) $i['order_id']), [$i], ''), preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) $i['report_no']) . '.pdf');
 });
 $app->router->post('/portal/workspace/{id}/{act}', static function (array $a) use ($app, $wsBoot, $tokenOf, $db): void {
     [$p, , , $doc] = $wsBoot();

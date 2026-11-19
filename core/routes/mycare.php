@@ -4,7 +4,7 @@
 // /portal/my/prescriptions[/{id}[/pdf]]  /portal/my/bills[/{id}/pdf]  /portal/my/records[/{id}/pdf]  /portal/my/visits
 declare(strict_types=1);
 
-use Selfcare\{Billing, Documents, Listing, Portal, Rx};
+use Selfcare\{Billing, Documents, Lab, LabDocs, Listing, Portal, Rx};
 use function Selfcare\{dt, e, icon, money, url};
 
 $dash = $app->dash;
@@ -179,4 +179,38 @@ $app->router->post('/portal/my/prescriptions/{id}/send', static function (array 
     }
     \Selfcare\flash($err ?? 'Sent. The pharmacy will prepare your medicines.', $err ? 'bad' : 'ok');
     \Selfcare\redirect($back);
+});
+
+// ---- laboratory reports: only approved or delivered reports of this patient
+$app->router->get('/portal/my/lab', static function () use ($meBoot, $noRecord, $db, $dash, $card, $app): void {
+    [$p, $pt] = $meBoot();
+    if (!Lab::supports((string) $p->type['slug'])) {
+        $app->error(404, 'This organisation has no laboratory.');
+    }
+    if ($pt === null) {
+        $dash($p, 'my-lab', 'My lab reports', $card('', $noRecord()));
+    }
+    $list = Listing::render($db, [
+        'id' => 'mylab', 'select' => "i.id, i.test_name, i.report_no, i.report_status, i.approved_at, o.order_no, o.order_date", 'from' => 'sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id',
+        'where' => ['i.tenant_id = ?', 'o.patient_id = ?', "i.report_status IN ('approved','delivered')", "i.status <> 'cancelled'", "o.status <> 'cancelled'"], 'params' => [$p->tenantId, (int) $pt['id']],
+        'columns' => [
+            'report_no' => ['label' => 'Report', 'sort' => 'i.report_no', 'render' => static fn ($r) => '<b>' . e((string) $r['report_no']) . '</b>'],
+            'test_name' => ['label' => 'Test', 'sort' => 'i.test_name'], 'order_no' => ['label' => 'Order', 'render' => static fn ($r) => e((string) $r['order_no'])],
+            'order_date' => ['label' => 'Date', 'sort' => 'o.order_date', 'type' => 'date'],
+        ],
+        'search' => ['i.test_name', 'i.report_no', 'o.order_no'], 'sort' => 'order_date', 'dir' => 'desc',
+        'actions' => [['label' => 'Download PDF', 'icon' => 'file', 'url' => static fn ($r) => url('portal/my/lab/' . $r['id'] . '/pdf')]],
+        'empty' => ['title' => 'No lab reports yet', 'text' => 'Your laboratory reports appear here after the pathologist approves them.'],
+    ]);
+    $dash($p, 'my-lab', 'My lab reports', $card('', $list), ['sub' => 'Approved reports only. Results that are still being checked are not shown.']);
+});
+$app->router->get('/portal/my/lab/{id}/pdf', static function (array $a) use ($app, $meBoot, $db): void {
+    [$p, $pt] = $meBoot();
+    $i = $pt ? $db->one("SELECT i.* FROM sc_lab_order_items i JOIN sc_lab_orders o ON o.id = i.order_id WHERE i.id = ? AND i.tenant_id = ? AND o.patient_id = ? AND i.report_status IN ('approved','delivered') AND i.status <> 'cancelled' AND o.status <> 'cancelled'", [(int) $a['id'], $p->tenantId, (int) $pt['id']]) : null;
+    $L = $i ? Lab::forTenant($app, $p->tenantId) : null;
+    if ($i === null || $L === null) {
+        $app->error(404, 'We could not find that report.');
+    }
+    $o = $L->order((int) $i['order_id']);
+    Documents::send((new LabDocs($L))->report($o, [$i], ''), preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) $i['report_no']) . '.pdf');
 });

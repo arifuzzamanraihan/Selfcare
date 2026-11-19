@@ -1,5 +1,12 @@
 # Developer changelog (shared files others may touch)
 
+## 2026-11-19 Haider lab suite, email flows, unified login (clinic vendor type)
+- NEW `core/Lab.php`, `core/LabDocs.php`, `core/routes/lab.php`, `lab2.php`: laboratory suite inside the clinic type (branches, MR patients, booking on `test_invoice`, samples, results and approval, sharing, commission, finance, inventory, attendance, salary, home collection, reports, backups, audit). Migration `migrate-20261119-120000-lab.sql`. Clinic type now enables HR Officer, Pathologist, Phlebotomist, Store Manager (`config/roles.php`).
+- Clinic integration: doctor workspace Lab tests box and `POST /portal/workspace/{id}/lab-order`, `GET /portal/workspace/lab/{id}/pdf` (`routes/workspace.php`); patient `My lab reports` at `/portal/my/lab` (`routes/mycare.php`, `Portal::nav`); `test_invoice` offered in the clinical document family.
+- NEW `core/Mail.php` (branded mails, queue, retry, tokens), `bin/mail-queue.php`, `bin/lab-cron.php`; `Mailer` multipart; migration `migrate-20261119-130000-email-flows.sql` (`users.email_verified_at`, `pending_email`, `sc_email_tokens`, `sc_mail_queue`). Auth routes: verify, resend, reset notice, email change; `/admin/mail` delivery log.
+- Unified login: `/login` is the only form; 14 legacy login paths redirect to it; `next` and host hand off carry the user to the right portal. `Portal::boot` sends guests to `login?next=`.
+- Tests: `tests/haider.py`, `tests/emailflows.py`, `tests/login_all.py`. Doc: `docs/REQ-haider-lab-traceability.md`.
+
 ## 2026-11-19 hospital (Builder A, touches Builder C's engine)
 - NEW `core/config/ops/hospital.php` (modules beds, admissions, emergency, theatre) for type `hospital`.
 - `core/config/ops/clinic.php`: the `tokens` module is now also for `hospital` (OPD queue + doctor workspace). Menu group shows "Hospital" for hospitals (`Portal.php`).
