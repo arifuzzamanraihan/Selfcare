@@ -37,6 +37,47 @@ $rq = $tpl['request'];
   <?php break; endswitch; ?>
 </div></section>
 <?php endforeach; ?>
+<?php if (!empty($lab)): $lc = (string) $lab['currency']; ?>
+<section class="sc-section" id="branches"><div class="sc-wrap">
+  <h2>Our branches</h2>
+  <div class="sc-grid g3"><?php foreach ($lab['branches'] as $b): ?>
+    <div class="sc-card"><div class="sc-ico"><?= icon('pin', 22) ?></div><h3><?= e((string) $b['name']) ?></h3>
+      <p><?= e((string) ($b['address'] ?: 'Address will be added soon')) ?></p>
+      <div class="sc-meta"><?php if ($b['phone']): ?><span><a href="tel:<?= e(preg_replace('/[^0-9+]/', '', (string) $b['phone'])) ?>"><?= e((string) $b['phone']) ?></a></span><?php endif; ?><?php if ($b['email']): ?><span><a href="mailto:<?= e((string) $b['email']) ?>"><?= e((string) $b['email']) ?></a></span><?php endif; ?></div></div>
+  <?php endforeach; ?></div>
+</div></section>
+<?php if ($lab['tests']): ?>
+<section class="sc-section alt" id="tests"><div class="sc-wrap">
+  <h2>Tests and prices</h2>
+  <p class="sc-lead">Prices are in <?= e($lc) ?> and may differ by branch. Ask at the counter for a package.</p>
+  <?php foreach ($lab['tests'] as $dept => $rows): ?>
+  <details class="sc-card" style="margin:10px 0"><summary><b><?= e((string) $dept) ?></b> <span class="d-mute">(<?= count($rows) ?>)</span></summary>
+    <table class="vs-hours"><?php foreach ($rows as $t): ?><tr><td><?= e((string) $t['name']) ?><?php if ($t['specimen']): ?> <span class="d-mute">(<?= e((string) $t['specimen']) ?>)</span><?php endif; ?></td><td style="text-align:right"><?= e(money((float) $t['price'], $lc)) ?></td></tr><?php endforeach; ?></table>
+  </details>
+  <?php endforeach; ?>
+</div></section>
+<?php endif; ?>
+<section class="sc-section<?= $lab['tests'] ? '' : ' alt' ?>" id="reports"><div class="sc-wrap sc-center" style="max-width:700px">
+  <h2>Your reports</h2>
+  <p class="sc-lead">Patients sign in to see approved reports, bills and visits. Reports stay private to the patient.</p>
+  <p><a class="sc-btn sc-btn-primary sc-btn-lg" href="<?= e($app->tenant->mainUrl('login')) ?>">Patient sign in</a></p>
+</div></section>
+<?php if ($lab['home']): ?>
+<section class="sc-section alt" id="home-collection"><div class="sc-wrap" style="max-width:700px">
+  <h2>Home sample collection</h2>
+  <p class="sc-lead">We send a trained collector to your door. Tell us where and when.</p>
+  <form class="sc-form sc-card" method="post" action="<?= e($base('home-collection')) ?>"><?= \Selfcare\csrf_field() ?>
+    <input class="sc-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <div class="sc-grid g2"><label>Your name<input name="name" required maxlength="160" autocomplete="name"></label><label>Phone<input type="tel" name="phone" required autocomplete="tel"></label>
+      <label>Preferred date<input type="date" name="preferred_date" required min="<?= date('Y-m-d') ?>"></label>
+      <label>Nearest branch<select name="branch_id"><?php foreach ($lab['branches'] as $b): ?><option value="<?= (int) $b['id'] ?>"><?= e((string) $b['name']) ?></option><?php endforeach; ?></select></label></div>
+    <label>Address for collection<input name="address" required maxlength="255" autocomplete="street-address"></label>
+    <label>Tests or notes (optional)<textarea name="message" rows="3" maxlength="250"></textarea></label>
+    <button class="sc-btn sc-btn-primary" type="submit">Request home collection</button>
+  </form>
+</div></section>
+<?php endif; ?>
+<?php endif; ?>
 <?php if ($free): ?><section class="sc-section alt" id="free"><div class="sc-wrap"><h2>Free services</h2><div class="sc-grid g3"><?php foreach ($free as $f): ?><div class="sc-card"><div class="sc-ico"><?= icon((string) ($f['icon'] ?: 'heart'), 22) ?></div><h3><?= e($f['title']) ?></h3><p><?= e((string) $f['description']) ?></p><div class="sc-meta"><?php if ($f['schedule']): ?><span><?= icon('clock', 14) ?> <?= e($f['schedule']) ?></span><?php endif; ?><?php if ($f['eligibility']): ?><span>For: <?= e($f['eligibility']) ?></span><?php endif; ?></div></div><?php endforeach; ?></div></div></section><?php endif; ?>
 
 <section class="sc-section" id="request"><div class="sc-wrap" style="max-width:700px">

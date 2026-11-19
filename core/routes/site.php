@@ -6,7 +6,32 @@ use Selfcare\VendorTypes;
 use function Selfcare\{flash, keep_old, redirect, url};
 
 /** Everything the vendor website templates need. @param array<string,mixed> $vendor @return array<string,mixed> */
-$siteData = static function (array $vendor) use ($app): array {
+/** Clinics with the laboratory suite also show their branches, the test list when the clinic turned it on, and the home collection request. @return ?array<string,mixed> */
+$labData = static function (array $vendor) use ($app): ?array {
+    if (!\Selfcare\Lab::supports((string) $vendor['type_slug'])) {
+        return null;
+    }
+    $tid = (string) $vendor['id'];
+    $db = $app->db;
+    try {
+        $bill = new \Selfcare\Billing($db);
+        $branches = $db->all('SELECT id, name, address, phone, email, currency FROM sc_branches WHERE tenant_id = ? AND active = 1 ORDER BY is_main DESC, sort_order, id', [$tid]);
+        if (!$branches) {
+            return null;
+        }
+        $tests = [];
+        if ($bill->setting($tid, 'lab_public_tests', '0') === '1') {
+            foreach ($db->all('SELECT t.name, t.code, t.specimen, t.price, t.tat_hours, d.name dept FROM sc_lab_tests t LEFT JOIN sc_lab_departments d ON d.id = t.dept_id WHERE t.tenant_id = ? AND t.active = 1 ORDER BY d.sort_order, d.name, t.name', [$tid]) as $r) {
+                $tests[(string) ($r['dept'] ?: 'Other')][] = $r;
+            }
+        }
+        return ['branches' => $branches, 'tests' => $tests, 'home' => $bill->setting($tid, 'lab_public_home', '1') === '1', 'currency' => \Selfcare\Currency::forTenant($tid)];
+    } catch (\Throwable) {
+        return null;
+    }
+};
+
+$siteData = static function (array $vendor) use ($app, $labData): array {
     $db = $app->db;
     $tid = (string) $vendor['id'];
     $type = $app->typeRow((string) $vendor['type_slug']);
@@ -45,6 +70,7 @@ $siteData = static function (array $vendor) use ($app): array {
         ],
         'free' => $db->all('SELECT * FROM free_services WHERE tenant_id = ? AND is_active = 1 ORDER BY sort_order, id DESC', [$tid]),
         'doctors' => $db->all('SELECT d.id, u.first_name, u.last_name, d.specialist FROM doctors d JOIN users u ON u.id = d.user_id WHERE d.tenant_id = ? AND u.status = 1 ORDER BY u.first_name', [$tid]),
+        'lab' => $labData($vendor),
         'user' => $app->auth->user(),
         'portalUrl' => url('portal'),
         'suffixMode' => $app->tenant->suffix() !== '',
@@ -134,6 +160,43 @@ $app->router->get('/doctor/{id}', static function (array $p) use ($app, $siteDoc
     }
     $siteDoctor($app->hostVendor, (int) $p['id']);
 });
+$siteHomeCollection = static function (array $vendor) use ($app, $siteUrlFor): void {
+    $back = $siteUrlFor($vendor, '') . '#home-collection';
+    $tid = (string) $vendor['id'];
+    if (($_POST['website'] ?? '') !== '' || !\Selfcare\Lab::supports((string) $vendor['type_slug']) || (new \Selfcare\Billing($app->db))->setting($tid, 'lab_public_home', '1') !== '1') {
+        redirect($back);
+    }
+    $name = mb_substr(trim((string) ($_POST['name'] ?? '')), 0, 160);
+    $phone = trim((string) ($_POST['phone'] ?? ''));
+    $addr = mb_substr(trim((string) ($_POST['address'] ?? '')), 0, 255);
+    $date = (string) ($_POST['preferred_date'] ?? '');
+    if ($app->throttle->tooMany('request', $app->ip(), 8, 3600)) {
+        flash('You sent several requests already. Please call us or try again later.', 'bad');
+        redirect($back);
+    }
+    if ($name === '' || !preg_match('/^[0-9+()\-\s]{6,25}$/', $phone) || $addr === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date < date('Y-m-d')) {
+        keep_old($_POST);
+        flash('Please check your name, phone, address and a date from today onwards.', 'bad');
+        redirect($back);
+    }
+    $b = (int) ($_POST['branch_id'] ?? 0);
+    if (!$app->db->val('SELECT COUNT(*) FROM sc_branches WHERE id = ? AND tenant_id = ? AND active = 1', [$b, $tid])) {
+        $b = (int) $app->db->val('SELECT id FROM sc_branches WHERE tenant_id = ? AND active = 1 ORDER BY is_main DESC, id LIMIT 1', [$tid]);
+    }
+    if ($b === 0) {
+        redirect($back);
+    }
+    $app->throttle->hit('request', $app->ip());
+    $app->db->insert('sc_lab_home', ['tenant_id' => $tid, 'branch_id' => $b, 'req_no' => 'WEB-' . date('ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)), 'name' => $name, 'phone' => mb_substr($phone, 0, 60), 'address' => $addr, 'location_note' => mb_substr(trim((string) ($_POST['message'] ?? '')), 0, 255) ?: null, 'collect_at' => $date . ' 09:00:00', 'status' => 'scheduled', 'created_at' => date('Y-m-d H:i:s')]);
+    flash('Thank you. Your home collection request is with us. We will call you to confirm the time.', 'ok');
+    redirect($back);
+};
+$app->router->post('/home-collection', static function () use ($app, $siteHomeCollection): void {
+    if ($app->hostVendor === null) {
+        $app->error(404, 'Not found');
+    }
+    $siteHomeCollection($app->hostVendor);
+});
 $app->router->post('/request', static function () use ($app, $siteRequest): void {
     if ($app->hostVendor === null) {
         $app->error(404, 'We could not find that page.');
@@ -154,6 +217,9 @@ $app->router->get('/h/{slug}', static function (array $p) use ($app, $vendorBySl
 });
 $app->router->get('/h/{slug}/doctor/{id}', static function (array $p) use ($vendorBySlug, $siteDoctor): void {
     $siteDoctor($vendorBySlug((string) $p['slug']), (int) $p['id']);
+});
+$app->router->post('/h/{slug}/home-collection', static function (array $p) use ($vendorBySlug, $siteHomeCollection): void {
+    $siteHomeCollection($vendorBySlug((string) $p['slug']));
 });
 $app->router->post('/h/{slug}/request', static function (array $p) use ($vendorBySlug, $siteRequest): void {
     $siteRequest($vendorBySlug((string) $p['slug']));

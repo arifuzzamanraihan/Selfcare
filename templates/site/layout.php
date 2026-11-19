@@ -26,7 +26,7 @@ $main = static fn (string $p = ''): string => $app->tenant->mainUrl($p);
     <button class="sc-theme" type="button" data-theme-toggle aria-label="Switch light or dark mode"><span class="i-moon"><?= icon('moon', 18) ?></span><span class="i-sun"><?= icon('sun', 18) ?></span></button>
     <div class="sc-nav-cta">
       <a class="sc-btn sc-btn-primary sc-btn-sm" href="#request"><?= e((string) $tpl['request']['cta']) ?></a>
-      <a class="sc-btn sc-btn-soft sc-btn-sm" href="<?= e($user ? $portalUrl : \Selfcare\url('login')) ?>"><?= $user ? 'Portal' : 'Sign in' ?></a>
+      <a class="sc-btn sc-btn-soft sc-btn-sm" href="<?= e($user ? $portalUrl : $app->tenant->mainUrl('login')) ?>"><?= $user ? 'Portal' : 'Sign in' ?></a>
     </div>
   </nav>
 </div></header>

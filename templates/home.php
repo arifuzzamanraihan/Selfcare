@@ -28,18 +28,21 @@ if ($acc !== '') { $title_html = str_replace(e($acc), '<span class="acc">' . e($
   </div>
 </div></section>
 
-<section class="sc-section alt" id="how"><div class="sc-wrap">
-  <div class="sc-center rv"><span class="sc-eyebrow">How it works</span><h2><?= e($S('steps_title')) ?></h2></div>
-  <div class="rv" style="margin:24px 0"><?= $app->view->partial('partials/art', ['name' => 'how']) ?></div>
-  <div class="sc-steps"><?php foreach ($app->site->items(null, 'steps') as $s): ?><div class="sc-step rv"><h3><?= e($s['title']) ?></h3><p class="d-mute"><?= e((string) $s['body']) ?></p></div><?php endforeach; ?></div>
-</div></section>
-
-<section class="sc-section" id="features"><div class="sc-wrap">
+<section class="sc-section alt" id="features"><div class="sc-wrap">
   <div class="sc-center rv"><span class="sc-eyebrow">Features</span><h2><?= e($S('features_title')) ?></h2></div>
   <div class="sc-grid g3" style="margin-top:32px"><?php foreach ($app->site->items(null, 'features') as $f): ?>
     <div class="sc-card rv"><div class="sc-ico"><?= icon((string) ($f['meta'] ?: 'layers'), 22) ?></div><h3><?= e($f['title']) ?></h3><p><?= e((string) $f['body']) ?></p></div>
   <?php endforeach; ?></div>
 </div></section>
+
+<section class="sc-section" id="how"><div class="sc-wrap">
+  <div class="sc-center rv"><span class="sc-eyebrow">How it works</span><h2><?= e($S('steps_title')) ?></h2></div>
+  <div class="rv" style="margin:24px 0"><?= $app->view->partial('partials/art', ['name' => 'how']) ?></div>
+  <div class="sc-steps"><?php foreach ($app->site->items(null, 'steps') as $s): ?><div class="sc-step rv"><h3><?= e($s['title']) ?></h3><p class="d-mute"><?= e((string) $s['body']) ?></p></div><?php endforeach; ?></div>
+</div></section>
+
+<?php $vc = \Selfcare\Currency::visitor(); ?>
+<?= $app->view->partial('partials/pricing', ['plans' => $plans, 'audiences' => $audiences ?? [], 'S' => $S, 'main' => $main, 'vc' => $vc]) ?>
 
 <section class="sc-section alt" id="providers"><div class="sc-wrap">
   <div class="sc-center rv"><span class="sc-eyebrow">Registered providers</span><h2><?= e($S('directory_title')) ?></h2><p class="sc-lead"><?= e($S('directory_text')) ?></p></div>
@@ -60,21 +63,18 @@ if ($acc !== '') { $title_html = str_replace(e($acc), '<span class="acc">' . e($
 </div></section>
 <?php endif; ?>
 
-<?php $vc = \Selfcare\Currency::visitor(); ?>
-<?= $app->view->partial('partials/pricing', ['plans' => $plans, 'audiences' => $audiences ?? [], 'S' => $S, 'main' => $main, 'vc' => $vc]) ?>
-
-<section class="sc-section" id="testimonials"><div class="sc-wrap">
+<?php if ($app->site->items(null, 'testimonials')): ?><section class="sc-section alt" id="testimonials"><div class="sc-wrap">
   <div class="sc-grid g3"><?php foreach ($app->site->items(null, 'testimonials') as $t): ?>
     <figure class="sc-card rv" style="margin:0"><p style="color:var(--ink)">&ldquo;<?= e((string) $t['body']) ?>&rdquo;</p><figcaption class="sc-meta"><b style="color:var(--ink)"><?= e($t['title']) ?></b> <?= e((string) $t['meta']) ?></figcaption></figure>
   <?php endforeach; ?></div>
-</div></section>
+</div></section><?php endif; ?>
 
-<section class="sc-section alt" id="faq"><div class="sc-wrap" style="max-width:780px">
+<section class="sc-section" id="faq"><div class="sc-wrap" style="max-width:780px">
   <div class="sc-center rv"><span class="sc-eyebrow">FAQ</span><h2><?= e($S('faq_title')) ?></h2></div>
   <div class="sc-faq rv" style="margin-top:24px"><?php foreach ($app->site->items(null, 'faq') as $q): ?><details><summary><?= e($q['title']) ?></summary><p><?= e((string) $q['body']) ?></p></details><?php endforeach; ?></div>
 </div></section>
 
-<section class="sc-section" id="contact"><div class="sc-wrap" style="max-width:640px">
+<section class="sc-section alt" id="contact"><div class="sc-wrap" style="max-width:640px">
   <div class="sc-center rv"><h2>Talk to us</h2><p class="sc-lead">Questions about plans or a custom set-up? Send a message.</p></div>
   <form class="sc-form rv" method="post" action="<?= e($main('contact')) ?>" style="margin-top:20px"><?= \Selfcare\csrf_field() ?>
     <input class="sc-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">

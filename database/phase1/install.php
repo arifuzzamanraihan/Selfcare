@@ -60,6 +60,18 @@ if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NUL
         $id ? $db->run("UPDATE front_settings SET `value` = ?, updated_at = NOW() WHERE id = ?", [$v, $id]) : $db->insert('front_settings', ['key' => $k, 'value' => $v, 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
     }
 }
+// one time: the main website copy is organised around the real modules (and carries no invented testimonials)
+if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'site_copy_v2' LIMIT 1") !== '1') {
+    $def = require __DIR__ . '/../../core/config/site.php';
+    foreach (['features', 'steps', 'faq', 'testimonials'] as $sec) {
+        $db->run('DELETE FROM sc_items WHERE tenant_id IS NULL AND section = ?', [$sec]);
+        foreach ($def[$sec] ?? [] as $i => $r) {
+            $db->insert('sc_items', ['tenant_id' => null, 'section' => $sec, 'title' => $r['title'], 'body' => $r['body'] ?? null, 'meta' => $r['meta'] ?? null, 'sort_order' => $i, 'is_active' => 1]);
+        }
+    }
+    $db->insert('front_settings', ['key' => 'site_copy_v2', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+    echo "main website copy refreshed\n";
+}
 // one time: subscription plans that were priced in US dollars are priced in Pakistani Rupees (clean amounts, nearest 500)
 if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'plans_pkr_v1' LIMIT 1") !== '1') {
     $rate = Selfcare\Currency::rate('PKR');
