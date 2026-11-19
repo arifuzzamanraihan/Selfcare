@@ -49,7 +49,7 @@ final class App
         self::$i = $this;
         $this->env = new Env();
         $this->env->load($root . '/.env');
-        date_default_timezone_set($this->env->get('APP_TIMEZONE', 'Asia/Dhaka'));
+        date_default_timezone_set($this->env->get('APP_TIMEZONE', 'Asia/Karachi'));
         $this->db = new Database($this->env);
         $this->db->run('SET time_zone = ?', [date('P')]);
         $this->auth = new Auth($this->db);

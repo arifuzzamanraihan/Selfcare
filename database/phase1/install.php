@@ -56,5 +56,16 @@ if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NUL
         $id ? $db->run("UPDATE front_settings SET `value` = ?, updated_at = NOW() WHERE id = ?", [$v, $id]) : $db->insert('front_settings', ['key' => $k, 'value' => $v, 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
     }
 }
+// one time: subscription plans that were priced in US dollars are priced in Pakistani Rupees (clean amounts, nearest 500)
+if ((string) $db->val("SELECT `value` FROM front_settings WHERE tenant_id IS NULL AND `key` = 'plans_pkr_v1' LIMIT 1") !== '1') {
+    $rate = Selfcare\Currency::rate('PKR');
+    foreach ($db->all("SELECT id, price, price_year FROM sc_plans WHERE currency = 'USD'") as $pl) {
+        $m = (float) $pl['price'];
+        $mp = $m > 0 ? round($m * $rate / 500) * 500 : 0;
+        $yp = $pl['price_year'] !== null && $m > 0 ? round($mp * ((float) $pl['price_year'] / $m)) : $pl['price_year'];
+        $db->run("UPDATE sc_plans SET currency = 'PKR', price = ?, price_year = ? WHERE id = ?", [$mp, $yp, $pl['id']]);
+    }
+    $db->insert('front_settings', ['key' => 'plans_pkr_v1', 'value' => '1', 'type' => 'text', 'tenant_id' => null, 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+}
 echo "vendor types added: " . Selfcare\VendorTypes::seed($db) . "\n";
 echo "done\n";

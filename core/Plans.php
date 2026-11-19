@@ -23,11 +23,11 @@ final class Plans
         }
         $cols = ['name', 'description', 'currency', 'price', 'price_year', 'price_label', 'duration_days', 'max_staff', 'max_branches', 'max_patients', 'max_appointments', 'storage_gb', 'sms_per_month', 'email_per_month', 'custom_domains', 'custom_roles', 'audit_days', 'support_level', 'modules', 'is_active', 'is_featured', 'sort_order'];
         $rows = [
-            ['Free', 'Free forever, with a Self Care badge. Data export always allowed.', 'USD', 0, 0, NULL, NULL, 3, 1, 100, 100, 0.5, 0, 100, 0, 0, 30, 'Community', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 1],
-            ['Starter', 'For small providers going online.', 'USD', 29, 290, NULL, NULL, 10, 1, 3000, 1000, 5, 100, 1000, 0, 3, 90, 'Email', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 2],
-            ['Professional', 'For growing hospitals and multi-service providers.', 'USD', 99, 990, NULL, NULL, 40, 3, 25000, 10000, 50, 1000, 10000, 1, 15, 365, 'Priority email and chat', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement', 1, 1, 3],
-            ['Business', 'For busy multi-branch providers.', 'USD', 249, 2490, NULL, NULL, 150, 10, 150000, 50000, 250, 5000, 50000, 3, 50, 1095, 'Named manager', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement,insurance', 1, 0, 4],
-            ['Enterprise', 'Custom limits, contract and support.', 'USD', 0, NULL, 'Custom', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SLA', '', 1, 0, 5],
+            ['Free', 'Free forever, with a Self Care badge. Data export always allowed.', 'PKR', 0, 0, NULL, NULL, 3, 1, 100, 100, 0.5, 0, 100, 0, 0, 30, 'Community', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 1],
+            ['Starter', 'For small providers going online.', 'PKR', 8000, 80000, NULL, NULL, 10, 1, 3000, 1000, 5, 100, 1000, 0, 3, 90, 'Email', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog', 1, 0, 2],
+            ['Professional', 'For growing hospitals and multi-service providers.', 'PKR', 27500, 275000, NULL, NULL, 40, 3, 25000, 10000, 50, 1000, 10000, 1, 15, 365, 'Priority email and chat', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement', 1, 1, 3],
+            ['Business', 'For busy multi-branch providers.', 'PKR', 69500, 695000, NULL, NULL, 150, 10, 150000, 50000, 250, 5000, 50000, 3, 50, 1095, 'Named manager', 'doctors,patients,staff,website,free_services,messages,billing,documents,reports,access,catalog,ipd,procurement,insurance', 1, 0, 4],
+            ['Enterprise', 'Custom limits, contract and support.', 'PKR', 0, NULL, 'Custom', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SLA', '', 1, 0, 5],
         ];
         foreach ($rows as $r) {
             $db->insert('sc_plans', array_combine($cols, $r));

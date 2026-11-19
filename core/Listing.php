@@ -193,7 +193,7 @@ final class Listing
             case 'bool':
                 return (int) $v === 1 ? '<span class="d-badge is-ok">Yes</span>' : '<span class="d-badge is-mute">No</span>';
             case 'money':
-                return e(money((float) $v, (string) ($row['currency'] ?? 'USD')));
+                return e(money((float) $v, (string) ($row['currency'] ?? Currency::platform())));
             case 'badge':
                 $tone = $c['badges'][$key][(string) $v] ?? 'mute';
                 return '<span class="d-badge is-' . e($tone) . '">' . e(ucfirst((string) $v)) . '</span>';

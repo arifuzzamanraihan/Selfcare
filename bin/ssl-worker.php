@@ -23,7 +23,7 @@ $env->load($root . '/.env');
 if ($env->get('SSL_AUTOMATION') !== '1') {
     exit(0);
 }
-date_default_timezone_set($env->get('APP_TIMEZONE', 'Asia/Dhaka')); // the same clock as the web app: next_try_at is written by both
+date_default_timezone_set($env->get('APP_TIMEZONE', 'Asia/Karachi')); // the same clock as the web app: next_try_at is written by both
 $db = new Database($env);
 $db->run('SET time_zone = ?', [date('P')]);
 $tenant = new Tenant($env, $db);

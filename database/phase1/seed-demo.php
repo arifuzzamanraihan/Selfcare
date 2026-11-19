@@ -309,7 +309,7 @@ foreach ($vendors as $vi => [$slug, $typeSlug, $name, $city, $street, $phone, $p
         $db->insert('sc_messages', ['tenant_id' => $t, 'name' => $r[0], 'email' => 'visitor' . $i . '@mail.example', 'message' => $r[1], 'is_read' => $r[2], 'created_at' => date('Y-m-d H:i:s', strtotime('-' . $i . ' days'))]);
     }
     // settings
-    $bill->setSetting($t, 'currency', 'USD');
+    $bill->setSetting($t, 'currency', 'PKR');
     if ($typeSlug === 'hospital') {
         $bill->setSetting($t, 'bed_capacity', (string) (60 + $vi * 20));
         $bill->setSetting($t, 'doctor_commission_pct', '30');

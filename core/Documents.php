@@ -57,7 +57,7 @@ final class Documents
     }
 
     /** "Five Hundred Dollars and Fifty Cents Only". */
-    public static function amountWords(float $amount, string $currency = 'USD'): string
+    public static function amountWords(float $amount, ?string $currency = null): string
     {
         return Currency::words($amount, $currency);
     }
