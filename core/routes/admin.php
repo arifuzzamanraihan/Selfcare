@@ -874,9 +874,19 @@ $app->router->post('/admin/currencies/default', static function () use ($app, $a
     if ($row === null) {
         $go('', url('admin/currencies'), 'Choose one of the enabled currencies.');
     }
+    $tz = (string) ($_POST['timezone'] ?? '');
+    if ($tz !== '' && !in_array($tz, \DateTimeZone::listIdentifiers(), true)) {
+        $go('', url('admin/currencies'), 'Choose a valid time zone.');
+    }
+    $oldC = \Selfcare\Currency::platform();
+    $oldTz = (string) $app->site->get(null, 'default_timezone', '');
     $app->site->set(null, 'platform_currency', $c);
-    $app->access->log('_platform', (int) $u['id'], null, null, 'platform_currency', null, $c);
-    $go('Platform currency is now ' . $c . '. New plans and subscription invoices use it.', url('admin/currencies'));
+    $app->access->log('_platform', (int) $u['id'], null, null, 'platform_currency', $oldC, $c);
+    if ($tz !== '') {
+        $app->site->set(null, 'default_timezone', $tz);
+        $app->access->log('_platform', (int) $u['id'], null, null, 'platform_timezone', $oldTz, $tz);
+    }
+    $go('Platform currency is ' . $c . ($tz !== '' ? ' and time zone is ' . $tz : '') . '. The website pricing, plans and subscription invoices use them. Vendors can set their own under Bills and legal details.', url('admin/currencies'));
 });
 $mount('/admin/types', $typeMod, 'types', static function () use ($app, $card): string {
     $by = [];
@@ -1202,10 +1212,15 @@ $app->router->get('/admin/reports/{key}', static function (array $a) use ($app, 
 
 $mount('/admin/currencies', $currencyMod, 'currencies', static function () use ($app, $card): string {
     $o = '';
+    $curTz = (string) $app->site->get(null, 'default_timezone', '') ?: date_default_timezone_get();
+    $tzo = '';
+    foreach (\DateTimeZone::listIdentifiers() as $z) {
+        $tzo .= '<option value="' . e($z) . '"' . ($z === $curTz ? ' selected' : '') . '>' . e($z) . '</option>';
+    }
     foreach (\Selfcare\Currency::all(true) as $c => $r) {
         $o .= '<option value="' . e($c) . '"' . ($c === \Selfcare\Currency::platform() ? ' selected' : '') . '>' . e($r['name'] . ' (' . trim((string) $r['symbol']) . ')') . '</option>';
     }
-    return $card('Platform currency', '<p class="d-help">Used for the plans on the website and for subscription invoices. Each vendor picks its own currency for its own bills under Bills and legal details. Example: ' . e(\Selfcare\Currency::fmt(1250000.5)) . ' and in words: ' . e(\Selfcare\Currency::words(1250.5)) . '.</p><form class="d-form" method="post" action="' . e(url('admin/currencies/default')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pc">Default currency</label><select id="pc" name="currency">' . $o . '</select></div></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save default</button></div></form>');
+    return $card('Platform currency', '<p class="d-help">Used for the plans on the website and for subscription invoices. Each vendor picks its own currency for its own bills under Bills and legal details. Example: ' . e(\Selfcare\Currency::fmt(1250000.5)) . ' and in words: ' . e(\Selfcare\Currency::words(1250.5)) . '.</p><form class="d-form" method="post" action="' . e(url('admin/currencies/default')) . '">' . csrf_field() . '<div class="d-form-grid"><div class="d-field"><label for="pc">Platform currency</label><select id="pc" name="currency">' . $o . '</select></div><div class="d-field"><label for="ptz">Platform time zone</label><select id="ptz" name="timezone">' . $tzo . '</select></div></div><div class="d-form-actions d-form-actions-sticky"><button class="d-btn d-btn-primary" type="submit">Save defaults</button></div></form>');
 });
 
 // ------------------------------------------------------------------ email delivery log and retry
